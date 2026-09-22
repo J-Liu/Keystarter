@@ -30,16 +30,18 @@ final class StatusBarController {
             button.image = nil
         case "light":
             // Light-colored icon (white)
-            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            let config = NSImage.SymbolConfiguration(paletteColors: [.white])
+            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")?
+                .withSymbolConfiguration(config)
             image?.isTemplate = false
             button.image = image
-            button.contentTintColor = .white
         case "dark":
             // Dark-colored icon (black)
-            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            let config = NSImage.SymbolConfiguration(paletteColors: [.black])
+            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")?
+                .withSymbolConfiguration(config)
             image?.isTemplate = false
             button.image = image
-            button.contentTintColor = .black
         default: // system
             let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
             image?.isTemplate = true

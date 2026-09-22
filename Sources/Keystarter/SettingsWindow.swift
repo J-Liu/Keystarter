@@ -76,6 +76,13 @@ final class SettingsWindow: NSWindow {
         }
         view.addSubview(hotkeyRecorder)
 
+        // Hotkey hint label
+        let hotkeyHint = NSTextField(labelWithString: "Click to record")
+        hotkeyHint.frame = NSRect(x: 270, y: 280, width: 150, height: 24)
+        hotkeyHint.textColor = .secondaryLabelColor
+        hotkeyHint.font = .systemFont(ofSize: 12)
+        view.addSubview(hotkeyHint)
+
         // Status Bar Icon
         let statusBarLabel = NSTextField(labelWithString: "Status Bar:")
         statusBarLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
