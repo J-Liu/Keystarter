@@ -22,17 +22,20 @@ final class StatusBarController {
     private func setupIcon() {
         guard let button = statusItem.button else { return }
 
+        // Clear previous tint
+        button.contentTintColor = nil
+
         switch currentTheme {
         case "hidden":
             button.image = nil
         case "light":
-            // Light-colored icon for dark backgrounds (dark mode menu bar)
+            // Light-colored icon (white)
             let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
             image?.isTemplate = false
             button.image = image
             button.contentTintColor = .white
         case "dark":
-            // Dark-colored icon for light backgrounds (light mode menu bar)
+            // Dark-colored icon (black)
             let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
             image?.isTemplate = false
             button.image = image

@@ -1,15 +1,15 @@
 #!/bin/bash
-# build-app.sh
+# build.sh
 # Builds the Keystarter Swift package and packages it into a proper .app bundle.
-# Usage: ./scripts/build-app.sh
+# Usage: ./build.sh
 
 set -euo pipefail
 
 APP_NAME="Keystarter"
 BUILD_CONFIG="release"
 
-# Resolve project root (script lives in scripts/)
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve project root (script is in root)
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT_DIR"
 
 # 1. Build the binary
@@ -22,8 +22,8 @@ if [ ! -f "$BINARY_PATH" ]; then
     exit 1
 fi
 
-# 2. Assemble .app bundle structure
-APP_BUNDLE="${ROOT_DIR}/build/${APP_NAME}.app"
+# 2. Assemble .app bundle structure (in root directory)
+APP_BUNDLE="${ROOT_DIR}/${APP_NAME}.app"
 echo "==> Assembling ${APP_BUNDLE}..."
 
 rm -rf "$APP_BUNDLE"
@@ -43,4 +43,3 @@ codesign --force --deep --sign - "$APP_BUNDLE"
 echo ""
 echo "==> Done: ${APP_BUNDLE}"
 echo "    Run:  open \"${APP_BUNDLE}\""
-
