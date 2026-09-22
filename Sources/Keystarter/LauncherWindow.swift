@@ -40,6 +40,14 @@ final class LauncherWindow: NSWindow {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         setupUI()
+        NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isVisible else { return event }
+            if event.keyCode == 53 { // Esc
+                self.hide()
+                return nil
+            }
+            return event
+        }
         loadApplications()
     }
 
@@ -242,6 +250,15 @@ final class LauncherWindow: NSWindow {
 extension LauncherWindow: NSSearchFieldDelegate {
     func controlTextDidChange(_ obj: Notification) {
         filterResults(with: searchField.stringValue)
+    }
+
+    /// Esc pressed while search field is focused
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+            hide()
+            return true
+        }
+        return false
     }
 }
 
