@@ -2,7 +2,6 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
-import Carbon.HIToolbox
 
 /// Settings window with tabs for configuration.
 final class SettingsWindow: NSWindow {
@@ -71,9 +70,9 @@ final class SettingsWindow: NSWindow {
         let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
         let savedModifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
         if savedKeyCode > 0 {
-            hotkeyRecorder.setShortcut(keyCode: UInt32(savedKeyCode), modifiers: UInt32(savedModifiers))
+            hotkeyRecorder.setShortcut(keyCode: UInt16(savedKeyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(savedModifiers)))
         } else {
-            hotkeyRecorder.setShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey))
+            hotkeyRecorder.setShortcut(keyCode: UInt16(49), modifiers: .command) // Space + Command
         }
         view.addSubview(hotkeyRecorder)
 

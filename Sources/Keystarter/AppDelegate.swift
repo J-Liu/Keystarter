@@ -2,7 +2,6 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
-import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -26,8 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Register global hotkey with saved or default settings
         let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
         let savedModifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
-        let keyCode = savedKeyCode > 0 ? UInt32(savedKeyCode) : UInt32(kVK_Space)
-        let modifiers = savedModifiers > 0 ? UInt32(savedModifiers) : UInt32(cmdKey)
+        let keyCode = savedKeyCode > 0 ? UInt16(savedKeyCode) : UInt16(49) // Space
+        var modifiers: NSEvent.ModifierFlags = .command
+        if savedModifiers > 0 {
+            modifiers = NSEvent.ModifierFlags(rawValue: UInt(savedModifiers))
+        }
 
         hotkeyManager = HotkeyManager { [weak self] in
             self?.launcherWindow?.toggle()
@@ -54,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let keyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
             let modifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
             if keyCode > 0 {
-                self?.updateHotkey(keyCode: UInt32(keyCode), modifiers: UInt32(modifiers))
+                self?.updateHotkey(keyCode: UInt16(keyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(modifiers)))
             }
         }
         wizard.makeKeyAndOrderFront(nil)
@@ -62,11 +64,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Update the global hotkey.
-    func updateHotkey(keyCode: UInt32, modifiers: UInt32) {
+    func updateHotkey(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         hotkeyManager?.unregister()
         hotkeyManager?.register(keyCode: keyCode, modifiers: modifiers)
         UserDefaults.standard.set(Int(keyCode), forKey: "hotkey.keyCode")
-        UserDefaults.standard.set(Int(modifiers), forKey: "hotkey.modifiers")
+        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "hotkey.modifiers")
     }
 
     /// Update the status bar icon theme.

@@ -2,15 +2,14 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
-import Carbon
 
 /// A button that records keyboard shortcuts.
 final class HotkeyRecorderButton: NSButton {
 
     var onKeyRecorded: ((HotkeyRecorderButton) -> Void)?
     private var isRecording = false
-    private var recordedKeyCode: UInt32 = 0
-    private var recordedModifiers: UInt32 = 0
+    private var recordedKeyCode: UInt16 = 0
+    private var recordedModifiers: NSEvent.ModifierFlags = []
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -30,7 +29,7 @@ final class HotkeyRecorderButton: NSButton {
     }
 
     /// Set the displayed shortcut.
-    func setShortcut(keyCode: UInt32, modifiers: UInt32) {
+    func setShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         recordedKeyCode = keyCode
         recordedModifiers = modifiers
         self.title = formatShortcut(keyCode: keyCode, modifiers: modifiers)
@@ -49,16 +48,12 @@ final class HotkeyRecorderButton: NSButton {
             return
         }
 
-        let keyCode = UInt32(event.keyCode)
-        var modifiers = UInt32(0)
-
-        if event.modifierFlags.contains(.command) { modifiers |= UInt32(cmdKey) }
-        if event.modifierFlags.contains(.option) { modifiers |= UInt32(optionKey) }
-        if event.modifierFlags.contains(.control) { modifiers |= UInt32(controlKey) }
-        if event.modifierFlags.contains(.shift) { modifiers |= UInt32(shiftKey) }
+        let keyCode = event.keyCode
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
         // Require at least one modifier
-        if modifiers == 0 {
+        if !modifiers.contains(.command) && !modifiers.contains(.option) &&
+           !modifiers.contains(.control) && !modifiers.contains(.shift) {
             NSSound.beep()
             return
         }
@@ -83,13 +78,13 @@ final class HotkeyRecorderButton: NSButton {
         }
     }
 
-    private func formatShortcut(keyCode: UInt32, modifiers: UInt32) -> String {
+    private func formatShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> String {
         var parts: [String] = []
 
-        if modifiers & UInt32(controlKey) != 0 { parts.append("⌃") }
-        if modifiers & UInt32(optionKey) != 0 { parts.append("⌥") }
-        if modifiers & UInt32(shiftKey) != 0 { parts.append("⇧") }
-        if modifiers & UInt32(cmdKey) != 0 { parts.append("⌘") }
+        if modifiers.contains(.control) { parts.append("⌃") }
+        if modifiers.contains(.option) { parts.append("⌥") }
+        if modifiers.contains(.shift) { parts.append("⇧") }
+        if modifiers.contains(.command) { parts.append("⌘") }
 
         // Convert keyCode to character
         let keyChar = keyCodeToString(keyCode)
@@ -98,7 +93,7 @@ final class HotkeyRecorderButton: NSButton {
         return parts.joined()
     }
 
-    private func keyCodeToString(_ keyCode: UInt32) -> String {
+    private func keyCodeToString(_ keyCode: UInt16) -> String {
         // Common key mappings
         switch keyCode {
         case 0: return "A"
@@ -187,6 +182,6 @@ final class HotkeyRecorderButton: NSButton {
         }
     }
 
-    var keyCode: UInt32 { recordedKeyCode }
-    var modifiers: UInt32 { recordedModifiers }
+    var keyCode: UInt16 { recordedKeyCode }
+    var modifiers: NSEvent.ModifierFlags { recordedModifiers }
 }

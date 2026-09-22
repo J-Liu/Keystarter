@@ -2,7 +2,6 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
-import Carbon.HIToolbox
 
 /// First launch setup wizard.
 final class SetupWizardWindow: NSWindow {
@@ -85,7 +84,7 @@ final class SetupWizardWindow: NSWindow {
             stepLabel.stringValue = "Step 1 of 3: Hotkey"
             descriptionLabel.stringValue = "Set a global hotkey to open Keystarter from anywhere.\n\nDefault: ⌘ Space"
             hotkeyRecorder.isHidden = false
-            hotkeyRecorder.setShortcut(keyCode: 49, modifiers: UInt32(cmdKey)) // ⌘ Space
+            hotkeyRecorder.setShortcut(keyCode: UInt16(49), modifiers: .command) // Space + Command
             nextButton.title = "Next"
 
         case 1:
@@ -113,7 +112,7 @@ final class SetupWizardWindow: NSWindow {
                 let keyCode = hotkeyRecorder.keyCode
                 let modifiers = hotkeyRecorder.modifiers
                 UserDefaults.standard.set(Int(keyCode), forKey: "hotkey.keyCode")
-                UserDefaults.standard.set(Int(modifiers), forKey: "hotkey.modifiers")
+                UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "hotkey.modifiers")
                 delegate.updateHotkey(keyCode: keyCode, modifiers: modifiers)
             }
             showStep(1)
