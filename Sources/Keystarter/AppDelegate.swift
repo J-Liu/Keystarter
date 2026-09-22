@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var launcherWindow: LauncherWindow?
     private var hotkeyManager: HotkeyManager?
+    private var statusBarController: StatusBarController?
     var indexDB: IndexDatabase?
     private var indexScanner: IndexScanner?
     private var indexWatcher: IndexWatcher?
@@ -14,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenu()
+        setupStatusBar()
         setupIndex()
 
         // Create the launcher window (hidden initially)
@@ -49,6 +51,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenuItem.submenu = appMenu
 
         NSApp.mainMenu = mainMenu
+    }
+
+    private func setupStatusBar() {
+        statusBarController = StatusBarController()
+    }
+
+    func showLauncher() {
+        launcherWindow?.show()
     }
 
     private func setupIndex() {
