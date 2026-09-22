@@ -22,6 +22,14 @@
     <true/>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>SUEnableDownloaderService</key>
+    <true/>
+    <key>SUEnableJavaScript</key>
+    <true/>
+    <key>SUFeedURL</key>
+    <string>https://keystarter.app/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>REPLACE_WITH_YOUR_PUBLIC_KEY</string>
 </dict>
 </plist>
 
