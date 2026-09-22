@@ -30,7 +30,6 @@ playground.xcworkspace
 # .swiftpm
 
 .build/
-Keystarter.app/
 
 # CocoaPods
 #
