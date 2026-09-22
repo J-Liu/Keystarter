@@ -26,11 +26,13 @@ final class StatusBarController {
         case "hidden":
             button.image = nil
         case "light":
-            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
-            button.contentTintColor = .black
-        case "dark":
+            // Light-colored icon for dark status bar backgrounds
             button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
             button.contentTintColor = .white
+        case "dark":
+            // Dark-colored icon for light status bar backgrounds
+            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            button.contentTintColor = .black
         default: // system
             button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
             button.image?.isTemplate = true

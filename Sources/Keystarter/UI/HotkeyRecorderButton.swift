@@ -28,6 +28,14 @@ final class HotkeyRecorderButton: NSButton {
         self.action = #selector(startRecording)
     }
 
+    override var acceptsFirstResponder: Bool { true }
+
+    // Prevent Space from triggering button action while recording
+    override func performClick(_ sender: Any?) {
+        if isRecording { return }
+        super.performClick(sender)
+    }
+
     /// Set the displayed shortcut.
     func setShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         recordedKeyCode = keyCode

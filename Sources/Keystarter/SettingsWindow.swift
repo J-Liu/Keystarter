@@ -217,6 +217,8 @@ final class SettingsWindow: NSWindow {
     private func setupKeyHandlers() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isVisible else { return event }
+            // Don't intercept keys when hotkey recorder is active
+            if self.firstResponder is HotkeyRecorderButton { return event }
             if event.keyCode == 53 { // Esc
                 self.close()
                 return nil
