@@ -8,20 +8,43 @@ final class StatusBarController {
 
     private let statusItem: NSStatusItem
     private let menu: NSMenu
+    private var currentTheme: String = "system"
 
     init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         menu = NSMenu()
+        currentTheme = UserDefaults.standard.string(forKey: "statusBar.theme") ?? "system"
 
         setupIcon()
         setupMenu()
     }
 
     private func setupIcon() {
-        // Use a simple keyboard-like icon
-        if let button = statusItem.button {
+        guard let button = statusItem.button else { return }
+
+        switch currentTheme {
+        case "hidden":
+            button.image = nil
+        case "light":
+            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            button.contentTintColor = .black
+        case "dark":
+            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            button.contentTintColor = .white
+        default: // system
             button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
             button.image?.isTemplate = true
+        }
+    }
+
+    /// Update the status bar icon theme.
+    func updateTheme(_ theme: String) {
+        currentTheme = theme
+        if theme == "hidden" {
+            statusItem.isVisible = false
+        } else {
+            statusItem.isVisible = true
+            setupIcon()
         }
     }
 

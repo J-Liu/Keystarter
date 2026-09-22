@@ -17,13 +17,8 @@ final class HotkeyManager {
         self.callback = callback
     }
 
-    /// Register Cmd + Space as the global hotkey.
-    func register() {
-        // Key code for Space
-        let keyCode = UInt32(kVK_Space)
-        // Modifier: Command
-        let modifiers = UInt32(cmdKey)
-
+    /// Register the global hotkey with custom key and modifiers.
+    func register(keyCode: UInt32 = UInt32(kVK_Space), modifiers: UInt32 = UInt32(cmdKey)) {
         var hotKeyID = EventHotKeyID()
         hotKeyID.signature = OSType(0x4B535452) // 'KSTR'
         hotKeyID.id = 1

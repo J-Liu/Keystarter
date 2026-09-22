@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon.HIToolbox
 
 /// Settings window with tabs for configuration.
 final class SettingsWindow: NSWindow {
@@ -9,6 +10,7 @@ final class SettingsWindow: NSWindow {
     private var tabView: NSTabView!
     private var generalTab: NSView!
     private var aboutTab: NSView!
+    private var hotkeyRecorder: HotkeyRecorderButton!
 
     init() {
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
@@ -61,17 +63,42 @@ final class SettingsWindow: NSWindow {
         hotkeyLabel.frame = NSRect(x: 0, y: 280, width: 100, height: 24)
         view.addSubview(hotkeyLabel)
 
-        let hotkeyField = NSTextField(labelWithString: "⌘ Space")
-        hotkeyField.frame = NSRect(x: 110, y: 280, width: 200, height: 24)
-        hotkeyField.textColor = .secondaryLabelColor
-        view.addSubview(hotkeyField)
+        hotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: 110, y: 276, width: 150, height: 32))
+        hotkeyRecorder.onKeyRecorded = { [weak self] recorder in
+            self?.hotkeyChanged(recorder: recorder)
+        }
+        // Load saved hotkey
+        let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
+        let savedModifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
+        if savedKeyCode > 0 {
+            hotkeyRecorder.setShortcut(keyCode: UInt32(savedKeyCode), modifiers: UInt32(savedModifiers))
+        } else {
+            hotkeyRecorder.setShortcut(keyCode: UInt32(kVK_Space), modifiers: UInt32(cmdKey))
+        }
+        view.addSubview(hotkeyRecorder)
+
+        // Status Bar Icon
+        let statusBarLabel = NSTextField(labelWithString: "Status Bar:")
+        statusBarLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
+        view.addSubview(statusBarLabel)
+
+        let statusBarPopup = NSPopUpButton(frame: NSRect(x: 110, y: 226, width: 200, height: 32))
+        statusBarPopup.addItem(withTitle: "System Default")
+        statusBarPopup.addItem(withTitle: "Light")
+        statusBarPopup.addItem(withTitle: "Dark")
+        statusBarPopup.addItem(withTitle: "Hidden")
+        let savedTheme = UserDefaults.standard.string(forKey: "statusBar.theme") ?? "system"
+        statusBarPopup.selectItem(withTitle: themeName(for: savedTheme))
+        statusBarPopup.target = self
+        statusBarPopup.action = #selector(statusBarThemeChanged(_:))
+        view.addSubview(statusBarPopup)
 
         // Corner Radius
         let radiusLabel = NSTextField(labelWithString: "Corner Radius:")
-        radiusLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
+        radiusLabel.frame = NSRect(x: 0, y: 180, width: 100, height: 24)
         view.addSubview(radiusLabel)
 
-        let radiusSlider = NSSlider(frame: NSRect(x: 110, y: 230, width: 200, height: 24))
+        let radiusSlider = NSSlider(frame: NSRect(x: 110, y: 180, width: 200, height: 24))
         radiusSlider.minValue = 0
         radiusSlider.maxValue = 24
         radiusSlider.doubleValue = Double(AppearanceSettings.cornerRadius)
@@ -80,16 +107,16 @@ final class SettingsWindow: NSWindow {
         view.addSubview(radiusSlider)
 
         let radiusValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
-        radiusValue.frame = NSRect(x: 320, y: 230, width: 40, height: 24)
+        radiusValue.frame = NSRect(x: 320, y: 180, width: 40, height: 24)
         radiusValue.identifier = NSUserInterfaceItemIdentifier("radiusValue")
         view.addSubview(radiusValue)
 
         // Opacity
         let opacityLabel = NSTextField(labelWithString: "Opacity:")
-        opacityLabel.frame = NSRect(x: 0, y: 180, width: 100, height: 24)
+        opacityLabel.frame = NSRect(x: 0, y: 130, width: 100, height: 24)
         view.addSubview(opacityLabel)
 
-        let opacitySlider = NSSlider(frame: NSRect(x: 110, y: 180, width: 200, height: 24))
+        let opacitySlider = NSSlider(frame: NSRect(x: 110, y: 130, width: 200, height: 24))
         opacitySlider.minValue = 0.5
         opacitySlider.maxValue = 1.0
         opacitySlider.doubleValue = Double(AppearanceSettings.opacity)
@@ -98,23 +125,9 @@ final class SettingsWindow: NSWindow {
         view.addSubview(opacitySlider)
 
         let opacityValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
-        opacityValue.frame = NSRect(x: 320, y: 180, width: 50, height: 24)
+        opacityValue.frame = NSRect(x: 320, y: 130, width: 50, height: 24)
         opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
         view.addSubview(opacityValue)
-
-        // Material
-        let materialLabel = NSTextField(labelWithString: "Appearance:")
-        materialLabel.frame = NSRect(x: 0, y: 130, width: 100, height: 24)
-        view.addSubview(materialLabel)
-
-        let materialPopup = NSPopUpButton(frame: NSRect(x: 110, y: 130, width: 200, height: 24))
-        for material in AppearanceSettings.Material.allCases {
-            materialPopup.addItem(withTitle: material.rawValue)
-        }
-        materialPopup.selectItem(withTitle: AppearanceSettings.material.rawValue)
-        materialPopup.target = self
-        materialPopup.action = #selector(materialChanged(_:))
-        view.addSubview(materialPopup)
 
         // Clear History button
         let clearButton = NSButton(frame: NSRect(x: 0, y: 60, width: 200, height: 32))
@@ -133,6 +146,31 @@ final class SettingsWindow: NSWindow {
         view.addSubview(rebuildButton)
 
         return view
+    }
+
+    private func themeName(for key: String) -> String {
+        switch key {
+        case "light": return "Light"
+        case "dark": return "Dark"
+        case "hidden": return "Hidden"
+        default: return "System Default"
+        }
+    }
+
+    private func hotkeyChanged(recorder: HotkeyRecorderButton) {
+        (NSApp.delegate as? AppDelegate)?.updateHotkey(keyCode: recorder.keyCode, modifiers: recorder.modifiers)
+    }
+
+    @objc private func statusBarThemeChanged(_ sender: NSPopUpButton) {
+        let theme: String
+        switch sender.title {
+        case "Light": theme = "light"
+        case "Dark": theme = "dark"
+        case "Hidden": theme = "hidden"
+        default: theme = "system"
+        }
+        UserDefaults.standard.set(theme, forKey: "statusBar.theme")
+        (NSApp.delegate as? AppDelegate)?.updateStatusBarTheme(theme)
     }
 
     private func createAboutTab() -> NSView {
@@ -213,12 +251,6 @@ final class SettingsWindow: NSWindow {
         if let label = generalViewWithIdentifier("opacityValue") {
             label.stringValue = "\(Int(sender.doubleValue * 100))%"
         }
-    }
-
-    @objc private func materialChanged(_ sender: NSPopUpButton) {
-        guard let material = AppearanceSettings.Material(rawValue: sender.title) else { return }
-        AppearanceSettings.material = material
-        AppearanceSettings.save()
     }
 
     @objc private func clearHistory() {

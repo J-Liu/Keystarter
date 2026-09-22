@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon.HIToolbox
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -22,17 +23,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Create the launcher window (hidden initially)
         launcherWindow = LauncherWindow()
 
-        // Register global hotkey: Cmd + Space
+        // Register global hotkey with saved or default settings
+        let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
+        let savedModifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
+        let keyCode = savedKeyCode > 0 ? UInt32(savedKeyCode) : UInt32(kVK_Space)
+        let modifiers = savedModifiers > 0 ? UInt32(savedModifiers) : UInt32(cmdKey)
+
         hotkeyManager = HotkeyManager { [weak self] in
             self?.launcherWindow?.toggle()
         }
-        hotkeyManager?.register()
+        hotkeyManager?.register(keyCode: keyCode, modifiers: modifiers)
 
         PluginManager.shared.register(DictionaryPlugin())
         PluginManager.shared.register(TranslatePlugin())
 
         // Load Alfred workflows
         AlfredWorkflowManager.shared.loadAll()
+
+        // Show setup wizard on first launch
+        if PermissionManager.shared.isFirstLaunch {
+            showSetupWizard()
+        }
+    }
+
+    /// Show the first-time setup wizard.
+    private func showSetupWizard() {
+        let wizard = SetupWizardWindow()
+        wizard.onComplete = { [weak self] in
+            // Reload hotkey settings after wizard
+            let keyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
+            let modifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
+            if keyCode > 0 {
+                self?.updateHotkey(keyCode: UInt32(keyCode), modifiers: UInt32(modifiers))
+            }
+        }
+        wizard.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Update the global hotkey.
+    func updateHotkey(keyCode: UInt32, modifiers: UInt32) {
+        hotkeyManager?.unregister()
+        hotkeyManager?.register(keyCode: keyCode, modifiers: modifiers)
+        UserDefaults.standard.set(Int(keyCode), forKey: "hotkey.keyCode")
+        UserDefaults.standard.set(Int(modifiers), forKey: "hotkey.modifiers")
+    }
+
+    /// Update the status bar icon theme.
+    func updateStatusBarTheme(_ theme: String) {
+        statusBarController?.updateTheme(theme)
     }
 
     /// Minimal menu so Cmd+Q works and the app behaves like a normal macOS app.
