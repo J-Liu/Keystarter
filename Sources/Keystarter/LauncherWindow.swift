@@ -210,8 +210,21 @@ final class LauncherWindow: NSWindow {
             }
         }
 
+        var fileResults: [LaunchItem] = []
+        if !query.isEmpty, let db = (NSApp.delegate as? AppDelegate)?.indexDB {
+            let files = db.search(query)
+            fileResults = files.map { file in
+                LaunchItem(
+                    name: file.name,
+                    path: file.path,
+                    type: .file
+                )
+            }
+        }
+
         // 3. Merge: plugin results first, then apps
         merged += appResults
+        merged += fileResults
 
         filteredResults = merged
         tableView.reloadData()
