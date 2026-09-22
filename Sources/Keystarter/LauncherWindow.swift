@@ -268,13 +268,24 @@ extension LauncherWindow: NSSearchFieldDelegate {
         filterResults(with: searchField.stringValue)
     }
 
-    /// Esc pressed while search field is focused
+    /// Handle keyboard shortcuts while search field is focused
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
+        switch commandSelector {
+        case #selector(NSResponder.cancelOperation(_:)):
             hide()
             return true
+        case #selector(NSResponder.moveUp(_:)):
+            moveSelection(by: -1)
+            return true
+        case #selector(NSResponder.moveDown(_:)):
+            moveSelection(by: 1)
+            return true
+        case #selector(NSResponder.insertNewline(_:)):
+            executeSelected()
+            return true
+        default:
+            return false
         }
-        return false
     }
 }
 

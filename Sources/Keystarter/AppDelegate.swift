@@ -39,11 +39,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "Close",
-            action: #selector(NSWindow.performClose(_:)),
-            keyEquivalent: "w"
-        )
-        appMenu.addItem(
             withTitle: "Quit Keystarter",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
