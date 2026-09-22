@@ -6,7 +6,7 @@ import AppKit
 /// User-configurable appearance settings.
 enum AppearanceSettings {
 
-    static var windowWidth: CGFloat = 600
+    static var windowWidth: CGFloat = 800
     static var windowHeight: CGFloat = 400
     static var cornerRadius: CGFloat = 12
     static var opacity: CGFloat = 0.95  // 0.0 - 1.0

@@ -20,16 +20,20 @@ struct PluginResult {
     let title: String
     let subtitle: String?
     let icon: NSImage?
+    /// Full detail text shown in preview panel.
+    let detailText: String?
     /// Called when the user presses Enter.
     let action: () -> Void
 
     init(title: String,
          subtitle: String? = nil,
          icon: NSImage? = nil,
+         detailText: String? = nil,
          action: @escaping () -> Void = {}) {
         self.title = title
         self.subtitle = subtitle
         self.icon = icon
+        self.detailText = detailText
         self.action = action
     }
 }

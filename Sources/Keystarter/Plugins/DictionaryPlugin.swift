@@ -5,7 +5,7 @@ import AppKit
 import CoreServices
 
 /// Queries the macOS system dictionary via Dictionary Services.
-/// Returns the definition as plain text, shown directly in the launcher.
+/// Returns the full definition shown in the preview panel.
 final class DictionaryPlugin: Plugin {
 
     let keyword = "dict"
@@ -21,7 +21,7 @@ final class DictionaryPlugin: Plugin {
             return [PluginResult(title: "No definition found for \"\(word)\"")]
         }
 
-        // Split definition into lines for readability
+        // Show first line as title, full definition in preview
         let lines = definition
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
@@ -31,14 +31,11 @@ final class DictionaryPlugin: Plugin {
             return [PluginResult(title: "No definition found for \"\(word)\"")]
         }
 
-        // First line as title, rest as subtitle
-        let title = lines[0]
-        let subtitle = lines.dropFirst().joined(separator: "\n")
-
         return [PluginResult(
-            title: title,
-            subtitle: subtitle.isEmpty ? nil : subtitle,
+            title: lines[0],
+            subtitle: lines.count > 1 ? "\(lines.count - 1) more lines" : nil,
             icon: NSImage(systemSymbolName: "book", accessibilityDescription: nil),
+            detailText: definition,
             action: {
                 // Copy full definition to clipboard on Enter
                 let pasteboard = NSPasteboard.general

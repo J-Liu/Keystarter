@@ -10,6 +10,8 @@ final class LauncherWindow: NSWindow {
     private var searchField: NSSearchField!
     private var tableView: NSTableView!
     private var scrollView: NSScrollView!
+    private var previewScrollView: NSScrollView!
+    private var previewTextView: NSTextView!
 
     /// Data source for the result list.
     private var results: [LaunchItem] = []
@@ -18,7 +20,7 @@ final class LauncherWindow: NSWindow {
     init() {
         // Initial frame: centered, fixed size
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        let width: CGFloat = 600
+        let width: CGFloat = 800
         let height: CGFloat = 400
         let x = screenFrame.midX - width / 2
         let y = screenFrame.midY - height / 2 + 100
@@ -103,14 +105,15 @@ final class LauncherWindow: NSWindow {
         }
         container.addSubview(searchField)
 
-        // Scroll view + table view
+        // Results list (left side)
+        let listWidth: CGFloat = 300
         scrollView = NSScrollView(frame: NSRect(
             x: 16,
             y: 16,
-            width: container.bounds.width - 32,
+            width: listWidth,
             height: container.bounds.height - 80
         ))
-        scrollView.autoresizingMask = [.width, .height]
+        scrollView.autoresizingMask = [.maxXMargin, .height]
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
@@ -131,6 +134,28 @@ final class LauncherWindow: NSWindow {
 
         scrollView.documentView = tableView
         container.addSubview(scrollView)
+
+        // Preview panel (right side)
+        previewScrollView = NSScrollView(frame: NSRect(
+            x: listWidth + 32,
+            y: 16,
+            width: container.bounds.width - listWidth - 48,
+            height: container.bounds.height - 80
+        ))
+        previewScrollView.autoresizingMask = [.width, .height]
+        previewScrollView.hasVerticalScroller = true
+        previewScrollView.drawsBackground = false
+        previewScrollView.borderType = .noBorder
+
+        previewTextView = NSTextView(frame: previewScrollView.bounds)
+        previewTextView.isEditable = false
+        previewTextView.isSelectable = true
+        previewTextView.drawsBackground = false
+        previewTextView.font = .systemFont(ofSize: 14)
+        previewTextView.textContainerInset = NSSize(width: 8, height: 8)
+
+        previewScrollView.documentView = previewTextView
+        container.addSubview(previewScrollView)
     }
 
     // MARK: - Show / Hide
@@ -149,6 +174,7 @@ final class LauncherWindow: NSWindow {
         searchField.stringValue = ""
         filteredResults = results
         tableView.reloadData()
+        updatePreview()
 
         // Center on the screen with mouse cursor (multi-monitor support)
         centerOnMouseScreen()
@@ -221,6 +247,21 @@ final class LauncherWindow: NSWindow {
         item.execute()
     }
 
+    private func updatePreview() {
+        let row = tableView.selectedRow
+        guard row >= 0 && row < filteredResults.count else {
+            previewTextView.string = ""
+            return
+        }
+
+        let item = filteredResults[row]
+        if let detail = item.detailText, !detail.isEmpty {
+            previewTextView.string = detail
+        } else {
+            previewTextView.string = item.name
+        }
+    }
+
     // MARK: - Filtering
 
     private func filterResults(with query: String) {
@@ -234,7 +275,8 @@ final class LauncherWindow: NSWindow {
                     path: result.subtitle ?? "",
                     type: .command,
                     pluginAction: result.action,
-                    pluginIcon: result.icon
+                    pluginIcon: result.icon,
+                    detailText: result.detailText
                 )
             }
         }
@@ -290,6 +332,7 @@ final class LauncherWindow: NSWindow {
         if !filteredResults.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
+        updatePreview()
     }
 
     // MARK: - Load Applications
@@ -394,7 +437,7 @@ extension LauncherWindow: NSTableViewDataSource, NSTableViewDelegate {
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
-        // Reserved for preview panel later
+        updatePreview()
     }
 }
 

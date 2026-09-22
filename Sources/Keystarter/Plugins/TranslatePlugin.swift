@@ -68,6 +68,7 @@ final class TranslatePlugin: Plugin {
             title: translation,
             subtitle: "\(text) → \(target)",
             icon: NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: nil),
+            detailText: "\(text)\n\n\(translation)",
             action: {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()

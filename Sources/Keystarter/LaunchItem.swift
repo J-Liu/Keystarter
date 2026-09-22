@@ -19,6 +19,8 @@ struct LaunchItem {
     var pluginAction: (() -> Void)?
     /// Optional icon for plugin results.
     var pluginIcon: NSImage?
+    /// Optional detail text for preview panel.
+    var detailText: String?
 
     var icon: NSImage? {
         if let pluginIcon = pluginIcon { return pluginIcon }
