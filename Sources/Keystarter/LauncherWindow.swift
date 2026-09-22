@@ -163,10 +163,10 @@ final class LauncherWindow: NSWindow {
         gridScrollView = NSScrollView(frame: NSRect(
             x: 16,
             y: 16,
-            width: 468,
+            width: container.bounds.width - 32,
             height: container.bounds.height - 80
         ))
-        gridScrollView.autoresizingMask = [.maxXMargin, .height]
+        gridScrollView.autoresizingMask = [.width, .height]
         gridScrollView.hasVerticalScroller = true
         gridScrollView.drawsBackground = false
         gridScrollView.borderType = .noBorder
@@ -180,7 +180,7 @@ final class LauncherWindow: NSWindow {
         scrollView = NSScrollView(frame: NSRect(
             x: 16,
             y: 16,
-            width: 468,
+            width: container.bounds.width - 320,
             height: container.bounds.height - 80
         ))
         scrollView.autoresizingMask = [.maxXMargin, .height]
@@ -224,9 +224,10 @@ final class LauncherWindow: NSWindow {
         isSearchMode = false
         gridScrollView.isHidden = false
         scrollView.isHidden = true
+        previewScrollView.isHidden = true // Hide preview in grid mode
         loadRecentApps()
         updateGridView()
-        updatePreview()
+        previewTextView.string = ""
 
         // Center on the screen with mouse cursor (multi-monitor support)
         centerOnMouseScreen()
@@ -337,9 +338,9 @@ final class LauncherWindow: NSWindow {
             subview.removeFromSuperview()
         }
 
-        let itemWidth: CGFloat = 80
-        let itemHeight: CGFloat = 90
-        let spacing: CGFloat = 16
+        let itemWidth: CGFloat = 100
+        let itemHeight: CGFloat = 110
+        let spacing: CGFloat = 20
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
@@ -353,9 +354,9 @@ final class LauncherWindow: NSWindow {
             totalHeight += 30 // separator and spacing
         }
 
-        // All apps section
+        // All apps section - show all apps
         totalHeight += 20 // label height
-        let allAppsCount = min(results.count, 50)
+        let allAppsCount = results.count
         let allRows = Int(ceil(Double(allAppsCount) / Double(columns)))
         totalHeight += CGFloat(allRows) * (itemHeight + spacing)
         totalHeight += 40 // bottom padding
@@ -415,7 +416,7 @@ final class LauncherWindow: NSWindow {
 
         x = 20
         index = 0
-        for app in results.prefix(50) { // Limit to 50 apps for performance
+        for app in results { // Show all apps
             let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
             itemView.frame = NSRect(x: x, y: y - itemHeight, width: itemWidth, height: itemHeight)
             gridView.addSubview(itemView)
@@ -432,11 +433,11 @@ final class LauncherWindow: NSWindow {
     private func createGridItemView(app: LaunchItem, size: NSSize) -> NSView {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
 
-        // Icon
-        let iconSize: CGFloat = 48
+        // Icon - larger size
+        let iconSize: CGFloat = 64
         let imageView = NSImageView(frame: NSRect(
             x: (size.width - iconSize) / 2,
-            y: size.height - iconSize - 5,
+            y: size.height - iconSize - 10,
             width: iconSize,
             height: iconSize
         ))
@@ -444,11 +445,11 @@ final class LauncherWindow: NSWindow {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         view.addSubview(imageView)
 
-        // Name
+        // Name - larger font
         let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 0, y: 0, width: size.width, height: 30)
+        nameField.frame = NSRect(x: 0, y: 0, width: size.width, height: 36)
         nameField.alignment = .center
-        nameField.font = .systemFont(ofSize: 10)
+        nameField.font = .systemFont(ofSize: 12)
         nameField.lineBreakMode = .byTruncatingTail
         nameField.maximumNumberOfLines = 2
         view.addSubview(nameField)
@@ -475,6 +476,7 @@ final class LauncherWindow: NSWindow {
             isSearchMode = false
             gridScrollView.isHidden = false
             scrollView.isHidden = true
+            previewScrollView.isHidden = true // Hide preview in grid mode
             updateGridView()
             previewTextView.string = ""
             return
@@ -483,6 +485,7 @@ final class LauncherWindow: NSWindow {
         isSearchMode = true
         gridScrollView.isHidden = true
         scrollView.isHidden = false
+        previewScrollView.isHidden = false // Show preview in search mode
 
         var merged: [LaunchItem] = []
 
