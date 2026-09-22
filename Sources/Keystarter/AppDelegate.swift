@@ -27,6 +27,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         PluginManager.shared.register(DictionaryPlugin())
         PluginManager.shared.register(TranslatePlugin())
+
+        // Load Alfred workflows
+        AlfredWorkflowManager.shared.loadAll()
     }
 
     /// Minimal menu so Cmd+Q works and the app behaves like a normal macOS app.
