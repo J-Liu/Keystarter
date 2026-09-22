@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var launcherWindow: LauncherWindow?
     private var hotkeyManager: HotkeyManager?
     private var statusBarController: StatusBarController?
+    private var settingsWindow: SettingsWindow?
     var indexDB: IndexDatabase?
     private var indexScanner: IndexScanner?
     private var indexWatcher: IndexWatcher?
@@ -59,6 +60,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showLauncher() {
         launcherWindow?.show()
+    }
+
+    func showSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindow()
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func rebuildIndex() {
+        guard let db = indexDB else { return }
+        indexWatcher?.stop()
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let scanner = IndexScanner(db: db)
+            let roots = [
+                NSHomeDirectory() + "/Documents",
+                NSHomeDirectory() + "/Desktop",
+                NSHomeDirectory() + "/Downloads"
+            ]
+            print("[Index] Rebuilding...")
+            scanner.scan(roots: roots)
+            print("[Index] Rebuild complete.")
+
+            DispatchQueue.main.async {
+                self?.indexWatcher?.start(roots: roots)
+            }
+        }
     }
 
     private func setupIndex() {

@@ -67,6 +67,11 @@ final class LauncherWindow: NSWindow {
         filterResults(with: searchField.stringValue)
     }
 
+    @objc private func openSettings() {
+        hide()
+        (NSApp.delegate as? AppDelegate)?.showSettings()
+    }
+
     // MARK: - UI Setup
 
     private func setupUI() {
@@ -88,7 +93,7 @@ final class LauncherWindow: NSWindow {
         searchField = NSSearchField(frame: NSRect(
             x: 16,
             y: container.bounds.height - 56,
-            width: container.bounds.width - 32,
+            width: container.bounds.width - 64,
             height: 40
         ))
         searchField.autoresizingMask = [.width, .minYMargin]
@@ -104,6 +109,22 @@ final class LauncherWindow: NSWindow {
             cell.sendsSearchStringImmediately = true
         }
         container.addSubview(searchField)
+
+        // Settings button (gear icon)
+        let settingsButton = NSButton(frame: NSRect(
+            x: container.bounds.width - 48,
+            y: container.bounds.height - 52,
+            width: 32,
+            height: 32
+        ))
+        settingsButton.image = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Settings")
+        settingsButton.bezelStyle = .regularSquare
+        settingsButton.isBordered = false
+        settingsButton.alphaValue = 0.5
+        settingsButton.autoresizingMask = [.minXMargin, .minYMargin]
+        settingsButton.target = self
+        settingsButton.action = #selector(openSettings)
+        container.addSubview(settingsButton)
 
         // Results list (left side)
         let listWidth: CGFloat = 300

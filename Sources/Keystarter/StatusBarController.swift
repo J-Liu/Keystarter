@@ -95,17 +95,14 @@ final class StatusBarController {
     }
 
     @objc private func openSettings() {
-        // Open settings window (placeholder)
-        let alert = NSAlert()
-        alert.messageText = "Settings"
-        alert.informativeText = "Settings panel is not implemented yet.\n\nYou can configure via defaults:\ndefaults write com.keystarter.app appearance.cornerRadius -float 16"
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        (NSApp.delegate as? AppDelegate)?.showSettings()
     }
 
     @objc private func showAbout() {
-        NSApp.orderFrontStandardAboutPanel(nil)
+        let settings = SettingsWindow()
+        settings.selectTab(withIdentifier: "about")
+        settings.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @objc private func quit() {
