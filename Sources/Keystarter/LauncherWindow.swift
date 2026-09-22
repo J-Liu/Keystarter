@@ -25,7 +25,7 @@ final class LauncherWindow: NSWindow {
         // Initial frame: centered, fixed size
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
         let width: CGFloat = 800
-        let height: CGFloat = 400
+        let height: CGFloat = screenFrame.height * 0.6
         let x = screenFrame.midX - width / 2
         let y = screenFrame.midY - height / 2 + 100
         let frame = NSRect(x: x, y: y, width: width, height: height)
@@ -230,7 +230,9 @@ final class LauncherWindow: NSWindow {
         previewTextView.string = ""
 
         // Scroll to top
-        gridScrollView.contentView.scroll(to: NSPoint(x: 0, y: gridView.bounds.height))
+        if gridView.bounds.height > gridScrollView.bounds.height {
+            gridScrollView.contentView.scroll(to: NSPoint(x: 0, y: gridView.bounds.height - gridScrollView.bounds.height))
+        }
 
         // Center on the screen with mouse cursor (multi-monitor support)
         centerOnMouseScreen()
@@ -341,13 +343,13 @@ final class LauncherWindow: NSWindow {
             subview.removeFromSuperview()
         }
 
-        let itemWidth: CGFloat = 100
-        let itemHeight: CGFloat = 110
+        let itemWidth: CGFloat = 110
+        let itemHeight: CGFloat = 130
         let spacing: CGFloat = 20
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
-        var totalHeight: CGFloat = 40 // top padding
+        var totalHeight: CGFloat = 20 // top padding
 
         // Recent apps section
         if !recentApps.isEmpty {
@@ -362,13 +364,14 @@ final class LauncherWindow: NSWindow {
         let allAppsCount = results.count
         let allRows = Int(ceil(Double(allAppsCount) / Double(columns)))
         totalHeight += CGFloat(allRows) * (itemHeight + spacing)
-        totalHeight += 40 // bottom padding
+        totalHeight += 20 // bottom padding
 
         // Set grid view frame
-        gridView.frame = NSRect(x: 0, y: 0, width: gridScrollView.bounds.width, height: max(gridScrollView.bounds.height, totalHeight))
+        let contentHeight = max(gridScrollView.bounds.height, totalHeight)
+        gridView.frame = NSRect(x: 0, y: 0, width: gridScrollView.bounds.width, height: contentHeight)
 
         // Start placing items from top
-        var y: CGFloat = gridView.bounds.height - 40
+        var y: CGFloat = contentHeight - 20
         var x: CGFloat = 20
         var index = 0
 
@@ -437,7 +440,7 @@ final class LauncherWindow: NSWindow {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
 
         // Icon - larger size
-        let iconSize: CGFloat = 64
+        let iconSize: CGFloat = 80
         let imageView = NSImageView(frame: NSRect(
             x: (size.width - iconSize) / 2,
             y: size.height - iconSize - 10,
@@ -450,9 +453,9 @@ final class LauncherWindow: NSWindow {
 
         // Name - larger font
         let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 0, y: 0, width: size.width, height: 36)
+        nameField.frame = NSRect(x: 4, y: 0, width: size.width - 8, height: 40)
         nameField.alignment = .center
-        nameField.font = .systemFont(ofSize: 12)
+        nameField.font = .systemFont(ofSize: 13)
         nameField.lineBreakMode = .byTruncatingTail
         nameField.maximumNumberOfLines = 2
         view.addSubview(nameField)
