@@ -26,17 +26,23 @@ final class StatusBarController {
         case "hidden":
             button.image = nil
         case "light":
-            // Light-colored icon for dark status bar backgrounds
-            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            // Light-colored icon for dark backgrounds (dark mode menu bar)
+            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            image?.isTemplate = false
+            button.image = image
             button.contentTintColor = .white
         case "dark":
-            // Dark-colored icon for light status bar backgrounds
-            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            // Dark-colored icon for light backgrounds (light mode menu bar)
+            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            image?.isTemplate = false
+            button.image = image
             button.contentTintColor = .black
         default: // system
-            button.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
-            button.image?.isTemplate = true
+            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+            image?.isTemplate = true
+            button.image = image
         }
+        button.needsDisplay = true
     }
 
     /// Update the status bar icon theme.

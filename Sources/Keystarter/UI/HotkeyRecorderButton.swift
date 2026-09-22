@@ -4,12 +4,17 @@
 import AppKit
 
 /// A button that records keyboard shortcuts.
+/// Uses its own event monitor to capture keys reliably.
 final class HotkeyRecorderButton: NSButton {
+
+    /// Class-level flag so SettingsWindow knows not to intercept keys.
+    static var isAnyRecording = false
 
     var onKeyRecorded: ((HotkeyRecorderButton) -> Void)?
     private var isRecording = false
     private var recordedKeyCode: UInt16 = 0
     private var recordedModifiers: NSEvent.ModifierFlags = []
+    private var eventMonitor: Any?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -30,13 +35,6 @@ final class HotkeyRecorderButton: NSButton {
 
     override var acceptsFirstResponder: Bool { true }
 
-    // Prevent Space from triggering button action while recording
-    override func performClick(_ sender: Any?) {
-        if isRecording { return }
-        super.performClick(sender)
-    }
-
-    /// Set the displayed shortcut.
     func setShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
         recordedKeyCode = keyCode
         recordedModifiers = modifiers
@@ -45,19 +43,43 @@ final class HotkeyRecorderButton: NSButton {
 
     @objc private func startRecording() {
         isRecording = true
+        HotkeyRecorderButton.isAnyRecording = true
         self.title = "Press shortcut..."
         self.state = .on
         window?.makeFirstResponder(self)
+
+        // Use our own event monitor to capture keys reliably
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, self.isRecording else { return event }
+            self.handleKeyEvent(event)
+            return nil
+        }
     }
 
-    override func keyDown(with event: NSEvent) {
-        guard isRecording else {
-            super.keyDown(with: event)
-            return
+    private func stopRecording() {
+        isRecording = false
+        HotkeyRecorderButton.isAnyRecording = false
+        self.state = .off
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
         }
+    }
 
+    private func handleKeyEvent(_ event: NSEvent) {
         let keyCode = event.keyCode
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+
+        // Esc cancels recording
+        if keyCode == 53 {
+            stopRecording()
+            if recordedKeyCode != 0 {
+                self.title = formatShortcut(keyCode: recordedKeyCode, modifiers: recordedModifiers)
+            } else {
+                self.title = "Click to record"
+            }
+            return
+        }
 
         // Require at least one modifier
         if !modifiers.contains(.command) && !modifiers.contains(.option) &&
@@ -69,21 +91,12 @@ final class HotkeyRecorderButton: NSButton {
         recordedKeyCode = keyCode
         recordedModifiers = modifiers
         self.title = formatShortcut(keyCode: keyCode, modifiers: modifiers)
-        self.state = .off
-        isRecording = false
-
+        stopRecording()
         onKeyRecorded?(self)
     }
 
-    override func cancelOperation(_ sender: Any?) {
-        // Esc pressed - cancel recording
-        isRecording = false
-        self.state = .off
-        if recordedKeyCode != 0 {
-            self.title = formatShortcut(keyCode: recordedKeyCode, modifiers: recordedModifiers)
-        } else {
-            self.title = "Click to record"
-        }
+    override func keyDown(with event: NSEvent) {
+        // Handled by event monitor
     }
 
     private func formatShortcut(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) -> String {
@@ -94,7 +107,6 @@ final class HotkeyRecorderButton: NSButton {
         if modifiers.contains(.shift) { parts.append("⇧") }
         if modifiers.contains(.command) { parts.append("⌘") }
 
-        // Convert keyCode to character
         let keyChar = keyCodeToString(keyCode)
         parts.append(keyChar)
 
@@ -102,7 +114,6 @@ final class HotkeyRecorderButton: NSButton {
     }
 
     private func keyCodeToString(_ keyCode: UInt16) -> String {
-        // Common key mappings
         switch keyCode {
         case 0: return "A"
         case 1: return "S"
@@ -177,11 +188,9 @@ final class HotkeyRecorderButton: NSButton {
         case 115: return "F2"
         case 116: return "F4"
         case 117: return "⌦"
-        case 118: return "F1"
-        case 119: return "F2"
-        case 120: return "F3"
-        case 121: return "F4"
-        case 122: return "F5"
+        case 120: return "F1"
+        case 121: return "F2"
+        case 122: return "F3"
         case 123: return "←"
         case 124: return "→"
         case 125: return "↓"
