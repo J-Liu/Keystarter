@@ -229,6 +229,9 @@ final class LauncherWindow: NSWindow {
         updateGridView()
         previewTextView.string = ""
 
+        // Scroll to top
+        gridScrollView.contentView.scroll(to: NSPoint(x: 0, y: gridView.bounds.height))
+
         // Center on the screen with mouse cursor (multi-monitor support)
         centerOnMouseScreen()
 
@@ -557,20 +560,43 @@ final class LauncherWindow: NSWindow {
         ]
 
         var items: [LaunchItem] = []
+        var seenPaths = Set<String>()
 
         for dir in appDirs {
-            guard let contents = try? fileManager.contentsOfDirectory(atPath: dir) else { continue }
-            for name in contents where name.hasSuffix(".app") {
-                let path = dir + "/" + name
-                let displayName = (name as NSString).deletingPathExtension
-                items.append(LaunchItem(name: displayName, path: path, type: .application))
-            }
+            scanDirectoryForApps(at: dir, fileManager: fileManager, items: &items, seenPaths: &seenPaths)
         }
 
         // Sort alphabetically
         items.sort { $0.name.lowercased() < $1.name.lowercased() }
         results = items
         filteredResults = items
+    }
+
+    private func scanDirectoryForApps(at path: String, fileManager: FileManager, items: inout [LaunchItem], seenPaths: inout Set<String>) {
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: path) else { return }
+
+        for name in contents {
+            // Skip hidden files and directories
+            if name.hasPrefix(".") { continue }
+
+            let fullPath = path + "/" + name
+            var isDir: ObjCBool = false
+            guard fileManager.fileExists(atPath: fullPath, isDirectory: &isDir) else { continue }
+
+            if isDir.boolValue {
+                // If it's a .app bundle, add it
+                if name.hasSuffix(".app") {
+                    if !seenPaths.contains(fullPath) {
+                        seenPaths.insert(fullPath)
+                        let displayName = (name as NSString).deletingPathExtension
+                        items.append(LaunchItem(name: displayName, path: fullPath, type: .application))
+                    }
+                } else {
+                    // Recursively scan subdirectories
+                    scanDirectoryForApps(at: fullPath, fileManager: fileManager, items: &items, seenPaths: &seenPaths)
+                }
+            }
+        }
     }
 }
 
