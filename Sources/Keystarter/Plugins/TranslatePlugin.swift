@@ -11,7 +11,17 @@ final class TranslatePlugin: Plugin {
     let pluginDescription = "Translate text between languages"
 
     private let defaultTarget = "zh-CN"
-    private let session = URLSession(configuration: .ephemeral)
+    private let session: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 5
+        return URLSession(configuration: config)
+    }()
+
+    // Cache for async results
+    private var cachedResult: String?
+    private var cachedInput: String?
+    private var lastRequestTime: Date?
+    private let minRequestInterval: TimeInterval = 1.0
 
     func query(_ input: String) -> [PluginResult] {
         let trimmed = input.trimmingCharacters(in: .whitespaces)
@@ -19,7 +29,12 @@ final class TranslatePlugin: Plugin {
             return [PluginResult(title: "Type text to translate")]
         }
 
-        // Parse optional target language: "en hello" -> target=en, text=hello
+        // Return cached result if available
+        if let cached = cachedResult, cachedInput == trimmed {
+            return makeResult(text: trimmed, translation: cached, target: defaultTarget)
+        }
+
+        // Parse optional target language
         let parts = trimmed.split(separator: " ", maxSplits: 1, omittingEmptySubsequences: true)
         var target = defaultTarget
         var text = trimmed
@@ -29,60 +44,69 @@ final class TranslatePlugin: Plugin {
             text = String(parts[1])
         }
 
-        // MyMemory uses "zh-CN" format, but also accepts "zh"
-        let apiTarget = target == "zh" ? "zh-CN" : target
-
-        // Perform synchronous translation
-        guard let result = translateSync(text, to: apiTarget) else {
-            return [PluginResult(title: "Translation failed")]
+        // Throttle requests - don't spam the API
+        if let last = lastRequestTime, Date().timeIntervalSince(last) < minRequestInterval {
+            return [PluginResult(title: "Translating...", subtitle: text)]
         }
 
+        // Async translation
+        translateAsync(text, to: target) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.cachedResult = result
+                self?.cachedInput = trimmed
+                self?.lastRequestTime = Date()
+                // Trigger UI refresh
+                NotificationCenter.default.post(name: .translationComplete, object: nil)
+            }
+        }
+
+        return [PluginResult(title: "Translating...", subtitle: text)]
+    }
+
+    private func makeResult(text: String, translation: String, target: String) -> [PluginResult] {
         return [PluginResult(
-            title: result,
+            title: translation,
             subtitle: "\(text) → \(target)",
             icon: NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: nil),
             action: {
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
-                pasteboard.setString(result, forType: .string)
+                pasteboard.setString(translation, forType: .string)
             }
         )]
     }
-
-    // MARK: - Language Detection
 
     private func isLanguageCode(_ s: String) -> Bool {
         return (s.count == 2 || s.count == 5) && s.allSatisfy { $0.isLetter || $0 == "-" }
     }
 
-    // MARK: - MyMemory API
-
-    private func translateSync(_ text: String, to target: String) -> String? {
-        // MyMemory API: https://mymemory.translated.net/api/spec
-        // GET https://api.mymemory.translated.net/get?q=hello&langpair=en|zh-CN
-        let encodedText = text.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? text
+    private func translateAsync(_ text: String, to target: String, completion: @escaping (String?) -> Void) {
         let source = detectSource(text)
-        let urlString = "https://api.mymemory.translated.net/get?q=\(encodedText)&langpair=\(source)|\(target)"
+        let apiTarget = target == "zh" ? "zh-CN" : target
 
-        guard let url = URL(string: urlString) else { return nil }
+        // Build URL with proper encoding
+        var components = URLComponents(string: "https://api.mymemory.translated.net/get")
+        components?.queryItems = [
+            URLQueryItem(name: "q", value: text),
+            URLQueryItem(name: "langpair", value: "\(source)|\(apiTarget)")
+        ]
 
-        var result: String?
-        let semaphore = DispatchSemaphore(value: 0)
-
-        let task = session.dataTask(with: url) { data, _, _ in
-            if let data = data {
-                result = self.parseMyMemoryResponse(data)
-            }
-            semaphore.signal()
+        guard let url = components?.url else {
+            completion(nil)
+            return
         }
-        task.resume()
 
-        semaphore.wait()
-        return result
+        session.dataTask(with: url) { data, _, _ in
+            guard let data = data else {
+                completion(nil)
+                return
+            }
+            let result = self.parseMyMemoryResponse(data)
+            completion(result)
+        }.resume()
     }
 
     private func parseMyMemoryResponse(_ data: Data) -> String? {
-        // Response: {"responseData":{"translatedText":"你好"},"responseStatus":200}
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let responseData = json["responseData"] as? [String: Any],
               let translatedText = responseData["translatedText"] as? String else {
@@ -91,7 +115,6 @@ final class TranslatePlugin: Plugin {
         return translatedText
     }
 
-    /// Detect source language by checking for CJK characters.
     private func detectSource(_ text: String) -> String {
         for char in text {
             if char.isCJKCharacter {
@@ -102,15 +125,17 @@ final class TranslatePlugin: Plugin {
     }
 }
 
+extension Notification.Name {
+    static let translationComplete = Notification.Name("translationComplete")
+}
+
 private extension Character {
     var isCJKCharacter: Bool {
         for scalar in self.unicodeScalars {
             let value = scalar.value
-            // CJK Unified Ideographs ranges
             if (0x4E00...0x9FFF).contains(value) ||
                (0x3400...0x4DBF).contains(value) ||
-               (0x20000...0x2A6DF).contains(value) ||
-               (0x2A700...0x2B73F).contains(value) {
+               (0x20000...0x2A6DF).contains(value) {
                 return true
             }
         }

@@ -48,7 +48,21 @@ final class LauncherWindow: NSWindow {
             }
             return event
         }
+
+        // Listen for translation completion
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshResults),
+            name: .translationComplete,
+            object: nil
+        )
+
         loadApplications()
+    }
+
+    @objc private func refreshResults() {
+        // Re-filter to pick up async results
+        filterResults(with: searchField.stringValue)
     }
 
     // MARK: - UI Setup
