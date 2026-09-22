@@ -266,13 +266,26 @@ extension LauncherWindow: NSTableViewDataSource, NSTableViewDelegate {
         cell.addSubview(imageView)
 
         // Title
-        let textField = NSTextField(frame: NSRect(x: 48, y: 14, width: tableView.bounds.width - 64, height: 20))
-        textField.stringValue = item.name
-        textField.isEditable = false
-        textField.isBordered = false
-        textField.drawsBackground = false
-        textField.font = .systemFont(ofSize: 15, weight: .medium)
-        cell.addSubview(textField)
+        let titleField = NSTextField(frame: NSRect(x: 48, y: 26, width: tableView.bounds.width - 64, height: 18))
+        titleField.stringValue = item.name
+        titleField.isEditable = false
+        titleField.isBordered = false
+        titleField.drawsBackground = false
+        titleField.font = .systemFont(ofSize: 14, weight: .medium)
+        cell.addSubview(titleField)
+
+        // Subtitle
+        if !item.path.isEmpty && item.type == .command {
+            let subtitleField = NSTextField(frame: NSRect(x: 48, y: 6, width: tableView.bounds.width - 64, height: 18))
+            subtitleField.stringValue = item.path
+            subtitleField.isEditable = false
+            subtitleField.isBordered = false
+            subtitleField.drawsBackground = false
+            subtitleField.font = .systemFont(ofSize: 12)
+            subtitleField.textColor = .secondaryLabelColor
+            subtitleField.lineBreakMode = .byTruncatingTail
+            cell.addSubview(subtitleField)
+        }
 
         return cell
     }
