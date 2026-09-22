@@ -178,9 +178,11 @@ final class LauncherWindow: NSWindow {
     // MARK: - Filtering
 
     private func filterResults(with query: String) {
-        // 1. Try plugin dispatch first
+        var merged: [LaunchItem] = []
+
+        // 1. Plugin results (if any)
         if let pluginResults = PluginManager.shared.dispatch(query) {
-            filteredResults = pluginResults.map { result in
+            merged += pluginResults.map { result in
                 LaunchItem(
                     name: result.title,
                     path: result.subtitle ?? "",
@@ -189,28 +191,29 @@ final class LauncherWindow: NSWindow {
                     pluginIcon: result.icon
                 )
             }
-            tableView.reloadData()
-            if !filteredResults.isEmpty {
-                tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-            }
-            return
         }
 
-        // 2. Fall back to app filtering
+        // 2. App filtering (always runs)
+        let lowered = query.lowercased()
+        var appResults: [LaunchItem] = []
         if query.isEmpty {
-            filteredResults = results
+            appResults = results
         } else {
-            let lowered = query.lowercased()
-            filteredResults = results.filter { item in
+            appResults = results.filter { item in
                 item.name.lowercased().contains(lowered)
             }
-            filteredResults.sort { a, b in
+            appResults.sort { a, b in
                 let aPrefix = a.name.lowercased().hasPrefix(lowered)
                 let bPrefix = b.name.lowercased().hasPrefix(lowered)
                 if aPrefix != bPrefix { return aPrefix }
                 return a.name.count < b.name.count
             }
         }
+
+        // 3. Merge: plugin results first, then apps
+        merged += appResults
+
+        filteredResults = merged
         tableView.reloadData()
         if !filteredResults.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)

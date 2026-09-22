@@ -58,41 +58,15 @@ final class TranslatePlugin: Plugin {
 
     // MARK: - Translation Backend
 
-    /// Synchronous translation via MyMemory API.
-    /// This is a placeholder backend; swap for a local model or another
-    /// deterministic service later without touching the plugin interface.
     private func translate(_ text: String, to target: String) -> String? {
-        // Source language: auto-detect is not supported by MyMemory the same way,
-        // so we leave it empty and let the service guess.
-        let source = ""
-
-        var components = URLComponents(string: "https://api.mymemory.translated.net/get")!
-        components.queryItems = [
-            URLQueryItem(name: "q", value: text),
-            URLQueryItem(name: "langpair", value: "\(source)|\(target)")
-        ]
-
-        guard let url = components.url else { return nil }
-
-        // Synchronous request with short timeout.
-        // In production, move this off the main thread.
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 5
-
-        let semaphore = DispatchSemaphore(value: 0)
-        var translated: String?
-
-        URLSession.shared.dataTask(with: request) { data, _, _ in
-            defer { semaphore.signal() }
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let responseData = json["responseData"] as? [String: Any],
-                  let text = responseData["translatedText"] as? String
-            else { return }
-            translated = text
-        }.resume()
-
-        _ = semaphore.wait(timeout: .now() + 6)
-        return translated
+        let range = CFRangeMake(0, text.utf16.count)
+        guard let definition = DCSCopyTextDefinition(
+            nil,
+            text as CFString,
+            range
+        ) else {
+            return nil
+        }
+        return definition.takeRetainedValue() as String
     }
 }
