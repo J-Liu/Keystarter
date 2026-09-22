@@ -12,10 +12,14 @@ final class LauncherWindow: NSWindow {
     private var scrollView: NSScrollView!
     private var previewScrollView: NSScrollView!
     private var previewTextView: NSTextView!
+    private var gridView: NSView!
+    private var gridScrollView: NSScrollView!
+    private var isSearchMode = false
 
     /// Data source for the result list.
     private var results: [LaunchItem] = []
     private var filteredResults: [LaunchItem] = []
+    private var recentApps: [LaunchItem] = []
 
     init() {
         // Initial frame: centered, fixed size
@@ -126,41 +130,17 @@ final class LauncherWindow: NSWindow {
         settingsButton.action = #selector(openSettings)
         container.addSubview(settingsButton)
 
-        // Results list (left side)
-        let listWidth: CGFloat = 300
-        scrollView = NSScrollView(frame: NSRect(
-            x: 16,
-            y: 16,
-            width: listWidth,
-            height: container.bounds.height - 80
-        ))
-        scrollView.autoresizingMask = [.maxXMargin, .height]
-        scrollView.hasVerticalScroller = true
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
+        // Grid view (default view)
+        setupGridView(container: container)
 
-        tableView = NSTableView(frame: scrollView.bounds)
-        tableView.headerView = nil
-        tableView.backgroundColor = .clear
-        tableView.rowHeight = 48
-        tableView.selectionHighlightStyle = .regular
-        tableView.delegate = self
-        tableView.dataSource = self
-        tableView.target = self
-        tableView.doubleAction = #selector(tableDoubleClicked)
-
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
-        column.width = scrollView.bounds.width
-        tableView.addTableColumn(column)
-
-        scrollView.documentView = tableView
-        container.addSubview(scrollView)
+        // List view (search results)
+        setupListView(container: container)
 
         // Preview panel (right side)
         previewScrollView = NSScrollView(frame: NSRect(
-            x: listWidth + 32,
+            x: 500,
             y: 16,
-            width: container.bounds.width - listWidth - 48,
+            width: container.bounds.width - 516,
             height: container.bounds.height - 80
         ))
         previewScrollView.autoresizingMask = [.width, .height]
@@ -179,6 +159,54 @@ final class LauncherWindow: NSWindow {
         container.addSubview(previewScrollView)
     }
 
+    private func setupGridView(container: NSView) {
+        gridScrollView = NSScrollView(frame: NSRect(
+            x: 16,
+            y: 16,
+            width: 468,
+            height: container.bounds.height - 80
+        ))
+        gridScrollView.autoresizingMask = [.maxXMargin, .height]
+        gridScrollView.hasVerticalScroller = true
+        gridScrollView.drawsBackground = false
+        gridScrollView.borderType = .noBorder
+
+        gridView = NSView(frame: gridScrollView.bounds)
+        gridScrollView.documentView = gridView
+        container.addSubview(gridScrollView)
+    }
+
+    private func setupListView(container: NSView) {
+        scrollView = NSScrollView(frame: NSRect(
+            x: 16,
+            y: 16,
+            width: 468,
+            height: container.bounds.height - 80
+        ))
+        scrollView.autoresizingMask = [.maxXMargin, .height]
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.isHidden = true
+
+        tableView = NSTableView(frame: scrollView.bounds)
+        tableView.headerView = nil
+        tableView.backgroundColor = .clear
+        tableView.rowHeight = 48
+        tableView.selectionHighlightStyle = .regular
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.target = self
+        tableView.action = #selector(tableClicked)
+
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
+        column.width = scrollView.bounds.width
+        tableView.addTableColumn(column)
+
+        scrollView.documentView = tableView
+        container.addSubview(scrollView)
+    }
+
     // MARK: - Show / Hide
 
     /// Toggle visibility. If visible, hide. If hidden, show and focus.
@@ -193,8 +221,11 @@ final class LauncherWindow: NSWindow {
     func show() {
         // Reset search
         searchField.stringValue = ""
-        filteredResults = results
-        tableView.reloadData()
+        isSearchMode = false
+        gridScrollView.isHidden = false
+        scrollView.isHidden = true
+        loadRecentApps()
+        updateGridView()
         updatePreview()
 
         // Center on the screen with mouse cursor (multi-monitor support)
@@ -203,11 +234,6 @@ final class LauncherWindow: NSWindow {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         makeFirstResponder(searchField)
-
-        // Select first row
-        if !filteredResults.isEmpty {
-            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-        }
     }
 
     /// Center the window on the screen where the mouse cursor is located.
@@ -253,7 +279,7 @@ final class LauncherWindow: NSWindow {
         filterResults(with: searchField.stringValue)
     }
 
-    @objc private func tableDoubleClicked() {
+    @objc private func tableClicked() {
         executeSelected()
     }
 
@@ -268,24 +294,170 @@ final class LauncherWindow: NSWindow {
         item.execute()
     }
 
+    private func executeItem(_ item: LaunchItem) {
+        LaunchHistory.shared.record(identifier: item.path)
+        hide()
+        item.execute()
+    }
+
     private func updatePreview() {
-        let row = tableView.selectedRow
-        guard row >= 0 && row < filteredResults.count else {
+        if isSearchMode {
+            let row = tableView.selectedRow
+            guard row >= 0 && row < filteredResults.count else {
+                previewTextView.string = ""
+                return
+            }
+            let item = filteredResults[row]
+            if let detail = item.detailText, !detail.isEmpty {
+                previewTextView.string = detail
+            } else {
+                previewTextView.string = item.name
+            }
+        } else {
             previewTextView.string = ""
-            return
+        }
+    }
+
+    // MARK: - Grid View
+
+    private func loadRecentApps() {
+        // Get top 8 most frequently used apps
+        let topItems = LaunchHistory.shared.topIdentifiers(limit: 8)
+        recentApps = []
+        for (path, _) in topItems {
+            if let app = results.first(where: { $0.path == path }) {
+                recentApps.append(app)
+            }
+        }
+    }
+
+    private func updateGridView() {
+        // Clear existing subviews
+        for subview in gridView.subviews {
+            subview.removeFromSuperview()
         }
 
-        let item = filteredResults[row]
-        if let detail = item.detailText, !detail.isEmpty {
-            previewTextView.string = detail
-        } else {
-            previewTextView.string = item.name
+        let itemWidth: CGFloat = 80
+        let itemHeight: CGFloat = 90
+        let spacing: CGFloat = 16
+        let columns = Int(gridView.bounds.width / (itemWidth + spacing))
+
+        var y: CGFloat = gridView.bounds.height - itemHeight - 20
+        var x: CGFloat = 20
+        var index = 0
+
+        // Recent apps section
+        if !recentApps.isEmpty {
+            // Label for recent apps
+            let recentLabel = NSTextField(labelWithString: "Recent")
+            recentLabel.frame = NSRect(x: 20, y: y + itemHeight + 5, width: 100, height: 16)
+            recentLabel.font = .systemFont(ofSize: 12, weight: .medium)
+            recentLabel.textColor = .secondaryLabelColor
+            gridView.addSubview(recentLabel)
+
+            for app in recentApps {
+                let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
+                itemView.frame = NSRect(x: x, y: y, width: itemWidth, height: itemHeight)
+                gridView.addSubview(itemView)
+
+                index += 1
+                x += itemWidth + spacing
+                if index % columns == 0 {
+                    x = 20
+                    y -= itemHeight + spacing
+                }
+            }
+
+            // Separator line
+            y -= 10
+            let separator = NSView(frame: NSRect(x: 20, y: y, width: gridView.bounds.width - 40, height: 1))
+            separator.wantsLayer = true
+            separator.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
+            gridView.addSubview(separator)
+            y -= 20
         }
+
+        // All apps section
+        let allLabel = NSTextField(labelWithString: "All Apps")
+        allLabel.frame = NSRect(x: 20, y: y + 5, width: 100, height: 16)
+        allLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        allLabel.textColor = .secondaryLabelColor
+        gridView.addSubview(allLabel)
+        y -= itemHeight
+
+        x = 20
+        for app in results.prefix(50) { // Limit to 50 apps for performance
+            let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
+            itemView.frame = NSRect(x: x, y: y, width: itemWidth, height: itemHeight)
+            gridView.addSubview(itemView)
+
+            index += 1
+            x += itemWidth + spacing
+            if index % columns == 0 {
+                x = 20
+                y -= itemHeight + spacing
+            }
+        }
+
+        // Update grid view content size
+        gridView.frame = NSRect(x: 0, y: 0, width: gridScrollView.bounds.width, height: max(gridScrollView.bounds.height, CGFloat(-y + 100)))
+    }
+
+    private func createGridItemView(app: LaunchItem, size: NSSize) -> NSView {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
+
+        // Icon
+        let iconSize: CGFloat = 48
+        let imageView = NSImageView(frame: NSRect(
+            x: (size.width - iconSize) / 2,
+            y: size.height - iconSize - 5,
+            width: iconSize,
+            height: iconSize
+        ))
+        imageView.image = app.icon
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        view.addSubview(imageView)
+
+        // Name
+        let nameField = NSTextField(labelWithString: app.name)
+        nameField.frame = NSRect(x: 0, y: 0, width: size.width, height: 30)
+        nameField.alignment = .center
+        nameField.font = .systemFont(ofSize: 10)
+        nameField.lineBreakMode = .byTruncatingTail
+        nameField.maximumNumberOfLines = 2
+        view.addSubview(nameField)
+
+        // Make clickable
+        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(gridItemClicked(_:)))
+        view.addGestureRecognizer(clickGesture)
+        view.identifier = NSUserInterfaceItemIdentifier(app.path)
+
+        return view
+    }
+
+    @objc private func gridItemClicked(_ gesture: NSClickGestureRecognizer) {
+        guard let view = gesture.view,
+              let path = view.identifier?.rawValue,
+              let app = results.first(where: { $0.path == path }) else { return }
+        executeItem(app)
     }
 
     // MARK: - Filtering
 
     private func filterResults(with query: String) {
+        if query.isEmpty {
+            isSearchMode = false
+            gridScrollView.isHidden = false
+            scrollView.isHidden = true
+            updateGridView()
+            previewTextView.string = ""
+            return
+        }
+
+        isSearchMode = true
+        gridScrollView.isHidden = true
+        scrollView.isHidden = false
+
         var merged: [LaunchItem] = []
 
         // 1. Plugin results (if any)
@@ -305,35 +477,24 @@ final class LauncherWindow: NSWindow {
         // 2. App filtering (always runs)
         let lowered = query.lowercased()
         var appResults: [LaunchItem] = []
-        if query.isEmpty {
-            appResults = results
-            // Sort by frequency when showing all
-            appResults.sort { a, b in
-                let aCount = LaunchHistory.shared.count(for: a.path)
-                let bCount = LaunchHistory.shared.count(for: b.path)
-                if aCount != bCount { return aCount > bCount }
-                return a.name.lowercased() < b.name.lowercased()
-            }
-        } else {
-            appResults = results.filter { item in
-                item.name.lowercased().contains(lowered)
-            }
-            appResults.sort { a, b in
-                // Frequency weight
-                let aFreq = LaunchHistory.shared.count(for: a.path)
-                let bFreq = LaunchHistory.shared.count(for: b.path)
-                // Prefix match
-                let aPrefix = a.name.lowercased().hasPrefix(lowered)
-                let bPrefix = b.name.lowercased().hasPrefix(lowered)
-                // Sort: prefix > frequency > name length
-                if aPrefix != bPrefix { return aPrefix }
-                if aFreq != bFreq { return aFreq > bFreq }
-                return a.name.count < b.name.count
-            }
+        appResults = results.filter { item in
+            item.name.lowercased().contains(lowered)
+        }
+        appResults.sort { a, b in
+            // Frequency weight
+            let aFreq = LaunchHistory.shared.count(for: a.path)
+            let bFreq = LaunchHistory.shared.count(for: b.path)
+            // Prefix match
+            let aPrefix = a.name.lowercased().hasPrefix(lowered)
+            let bPrefix = b.name.lowercased().hasPrefix(lowered)
+            // Sort: prefix > frequency > name length
+            if aPrefix != bPrefix { return aPrefix }
+            if aFreq != bFreq { return aFreq > bFreq }
+            return a.name.count < b.name.count
         }
 
         var fileResults: [LaunchItem] = []
-        if !query.isEmpty, let db = (NSApp.delegate as? AppDelegate)?.indexDB {
+        if let db = (NSApp.delegate as? AppDelegate)?.indexDB {
             let files = db.search(query)
             fileResults = files.map { file in
                 LaunchItem(
@@ -398,13 +559,19 @@ extension LauncherWindow: NSSearchFieldDelegate {
             hide()
             return true
         case #selector(NSResponder.moveUp(_:)):
-            moveSelection(by: -1)
+            if isSearchMode {
+                moveSelection(by: -1)
+            }
             return true
         case #selector(NSResponder.moveDown(_:)):
-            moveSelection(by: 1)
+            if isSearchMode {
+                moveSelection(by: 1)
+            }
             return true
         case #selector(NSResponder.insertNewline(_:)):
-            executeSelected()
+            if isSearchMode {
+                executeSelected()
+            }
             return true
         default:
             return false
@@ -470,18 +637,24 @@ extension LauncherWindow {
         case 53: // Esc
             hide()
         case 36, 76: // Enter / Return
-            executeSelected()
+            if isSearchMode {
+                executeSelected()
+            }
         case 125: // Down arrow
-            moveSelection(by: 1)
+            if isSearchMode {
+                moveSelection(by: 1)
+            }
         case 126: // Up arrow
-            moveSelection(by: -1)
+            if isSearchMode {
+                moveSelection(by: -1)
+            }
         default:
             super.keyDown(with: event)
         }
     }
 
     private func moveSelection(by offset: Int) {
-        guard !filteredResults.isEmpty else { return }
+        guard isSearchMode, !filteredResults.isEmpty else { return }
         let current = tableView.selectedRow
         let next = max(0, min(filteredResults.count - 1, current + offset))
         tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
