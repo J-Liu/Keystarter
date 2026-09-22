@@ -54,13 +54,17 @@ final class LauncherWindow: NSWindow {
     // MARK: - UI Setup
 
     private func setupUI() {
+        // Load appearance settings
+        AppearanceSettings.load()
+
         // Container view with rounded corners
         let container = NSVisualEffectView(frame: contentView!.bounds)
-        container.material = .hudWindow
+        container.material = AppearanceSettings.material.nsMaterial
         container.blendingMode = .behindWindow
         container.state = .active
         container.wantsLayer = true
-        container.layer?.cornerRadius = 12
+        container.layer?.cornerRadius = AppearanceSettings.cornerRadius
+        container.layer?.opacity = Float(AppearanceSettings.opacity)
         container.autoresizingMask = [.width, .height]
         contentView = container
 
@@ -160,8 +164,8 @@ final class LauncherWindow: NSWindow {
         guard let screen = targetScreen else { return }
         let screenFrame = screen.visibleFrame
 
-        let width: CGFloat = 600
-        let height: CGFloat = 400
+        let width = AppearanceSettings.windowWidth
+        let height = AppearanceSettings.windowHeight
         let x = screenFrame.minX + (screenFrame.width - width) / 2
         let y = screenFrame.minY + (screenFrame.height - height) / 2 + 100
 
