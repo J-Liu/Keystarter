@@ -5,7 +5,7 @@ import AppKit
 import CoreServices
 
 /// Queries the macOS system dictionary via Dictionary Services.
-/// Returns the full definition shown in the preview panel.
+/// Returns the brief definition; provides option to open full dictionary.
 final class DictionaryPlugin: Plugin {
 
     let keyword = "dict"
@@ -31,16 +31,24 @@ final class DictionaryPlugin: Plugin {
             return [PluginResult(title: "No definition found for \"\(word)\"")]
         }
 
+        // Create result with option to open in Dictionary.app
+        let detail = """
+        \(definition)
+        
+        ────────────────────────
+        Press Enter to open in Dictionary.app
+        """
+
         return [PluginResult(
             title: lines[0],
             subtitle: lines.count > 1 ? "\(lines.count - 1) more lines" : nil,
             icon: NSImage(systemSymbolName: "book", accessibilityDescription: nil),
-            detailText: definition,
+            detailText: detail,
             action: {
-                // Copy full definition to clipboard on Enter
-                let pasteboard = NSPasteboard.general
-                pasteboard.clearContents()
-                pasteboard.setString(definition, forType: .string)
+                // Open in Dictionary.app
+                if let url = URL(string: "dict://\(word)") {
+                    NSWorkspace.shared.open(url)
+                }
             }
         )]
     }
