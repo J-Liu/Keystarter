@@ -132,6 +132,9 @@ final class LauncherWindow: NSWindow {
         filteredResults = results
         tableView.reloadData()
 
+        // Center on the screen with mouse cursor (multi-monitor support)
+        centerOnMouseScreen()
+
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         makeFirstResponder(searchField)
@@ -140,6 +143,29 @@ final class LauncherWindow: NSWindow {
         if !filteredResults.isEmpty {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
+    }
+
+    /// Center the window on the screen where the mouse cursor is located.
+    private func centerOnMouseScreen() {
+        let mouseLoc = NSEvent.mouseLocation
+        let screens = NSScreen.screens
+
+        // Find the screen containing the mouse
+        let targetScreen = screens.first { screen in
+            let frame = screen.frame
+            return mouseLoc.x >= frame.minX && mouseLoc.x <= frame.maxX &&
+                   mouseLoc.y >= frame.minY && mouseLoc.y <= frame.maxY
+        } ?? NSScreen.main
+
+        guard let screen = targetScreen else { return }
+        let screenFrame = screen.visibleFrame
+
+        let width: CGFloat = 600
+        let height: CGFloat = 400
+        let x = screenFrame.minX + (screenFrame.width - width) / 2
+        let y = screenFrame.minY + (screenFrame.height - height) / 2 + 100
+
+        setFrameOrigin(NSPoint(x: x, y: y))
     }
 
     func hide() {
@@ -171,6 +197,8 @@ final class LauncherWindow: NSWindow {
         let row = tableView.selectedRow
         guard row >= 0 && row < filteredResults.count else { return }
         let item = filteredResults[row]
+        // Record launch history
+        LaunchHistory.shared.record(identifier: item.path)
         hide()
         item.execute()
     }
@@ -198,14 +226,27 @@ final class LauncherWindow: NSWindow {
         var appResults: [LaunchItem] = []
         if query.isEmpty {
             appResults = results
+            // Sort by frequency when showing all
+            appResults.sort { a, b in
+                let aCount = LaunchHistory.shared.count(for: a.path)
+                let bCount = LaunchHistory.shared.count(for: b.path)
+                if aCount != bCount { return aCount > bCount }
+                return a.name.lowercased() < b.name.lowercased()
+            }
         } else {
             appResults = results.filter { item in
                 item.name.lowercased().contains(lowered)
             }
             appResults.sort { a, b in
+                // Frequency weight
+                let aFreq = LaunchHistory.shared.count(for: a.path)
+                let bFreq = LaunchHistory.shared.count(for: b.path)
+                // Prefix match
                 let aPrefix = a.name.lowercased().hasPrefix(lowered)
                 let bPrefix = b.name.lowercased().hasPrefix(lowered)
+                // Sort: prefix > frequency > name length
                 if aPrefix != bPrefix { return aPrefix }
+                if aFreq != bFreq { return aFreq > bFreq }
                 return a.name.count < b.name.count
             }
         }
