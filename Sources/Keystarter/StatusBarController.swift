@@ -33,6 +33,7 @@ final class StatusBarController {
             keyEquivalent: " "
         )
         openItem.keyEquivalentModifierMask = .command
+        openItem.target = self
         menu.addItem(openItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -43,6 +44,7 @@ final class StatusBarController {
             action: #selector(checkUpdates),
             keyEquivalent: ""
         )
+        updateItem.target = self
         menu.addItem(updateItem)
 
         // Settings
@@ -52,6 +54,7 @@ final class StatusBarController {
             keyEquivalent: ","
         )
         settingsItem.keyEquivalentModifierMask = .command
+        settingsItem.target = self
         menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -62,6 +65,7 @@ final class StatusBarController {
             action: #selector(showAbout),
             keyEquivalent: ""
         )
+        aboutItem.target = self
         menu.addItem(aboutItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -73,6 +77,7 @@ final class StatusBarController {
             keyEquivalent: "q"
         )
         quitItem.keyEquivalentModifierMask = .command
+        quitItem.target = self
         menu.addItem(quitItem)
 
         statusItem.menu = menu
