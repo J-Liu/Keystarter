@@ -131,6 +131,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    func showClipboardSettings() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindow()
+        }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        settingsWindow?.selectTab(withIdentifier: "clipboard")
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     func rebuildIndex() {
         guard let db = indexDB else { return }
         indexWatcher?.stop()

@@ -16,6 +16,7 @@ final class ClipboardPanel: NSPanel {
 
     private var scrollView: NSScrollView!
     private var tableView: NSTableView!
+    private var emptyView: NSView!
     private var entries: [ClipboardEntry] = []
     private var groups: [[ClipboardEntry]] = []
     private var currentGroup: Int = 0
@@ -23,7 +24,7 @@ final class ClipboardPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 320, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 190, height: 360),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -49,16 +50,24 @@ final class ClipboardPanel: NSPanel {
         container.autoresizingMask = [.width, .height]
         contentView = container
 
+        // Empty view
+        emptyView = NSView(frame: container.bounds)
+        emptyView.autoresizingMask = [.width, .height]
+        setupEmptyView()
+        container.addSubview(emptyView)
+
+        // Scroll view with table
         scrollView = NSScrollView(frame: container.bounds.insetBy(dx: 8, dy: 8))
         scrollView.autoresizingMask = [.width, .height]
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
+        scrollView.isHidden = true
 
         tableView = NSTableView(frame: scrollView.bounds)
         tableView.headerView = nil
         tableView.backgroundColor = .clear
-        tableView.rowHeight = 40
+        tableView.rowHeight = 36
         tableView.selectionHighlightStyle = .regular
         tableView.delegate = self
         tableView.dataSource = self
@@ -72,6 +81,35 @@ final class ClipboardPanel: NSPanel {
 
         scrollView.documentView = tableView
         container.addSubview(scrollView)
+    }
+
+    private func setupEmptyView() {
+        let y = emptyView.bounds.height - 60
+
+        let label = NSTextField(labelWithString: "No clipboard history")
+        label.frame = NSRect(x: 0, y: y, width: emptyView.bounds.width, height: 24)
+        label.alignment = .center
+        label.textColor = .secondaryLabelColor
+        emptyView.addSubview(label)
+
+        // Separator
+        let separator = NSView(frame: NSRect(x: 16, y: y - 24, width: emptyView.bounds.width - 32, height: 1))
+        separator.wantsLayer = true
+        separator.layer?.backgroundColor = NSColor.separatorColor.cgColor
+        emptyView.addSubview(separator)
+
+        // Settings button
+        let settingsButton = NSButton(frame: NSRect(x: 16, y: y - 56, width: emptyView.bounds.width - 32, height: 28))
+        settingsButton.title = "Settings..."
+        settingsButton.bezelStyle = .rounded
+        settingsButton.target = self
+        settingsButton.action = #selector(openSettings)
+        emptyView.addSubview(settingsButton)
+    }
+
+    @objc private func openSettings() {
+        orderOut(nil)
+        (NSApp.delegate as? AppDelegate)?.showClipboardSettings()
     }
 
     func toggle() {
@@ -90,17 +128,31 @@ final class ClipboardPanel: NSPanel {
     }
 
     private func loadEntries() {
-        guard let db = (NSApp.delegate as? AppDelegate)?.indexDB else { return }
-        entries = db.getClipboard(limit: 30).map {
+        guard let db = (NSApp.delegate as? AppDelegate)?.indexDB else {
+            emptyView.isHidden = false
+            scrollView.isHidden = true
+            return
+        }
+        
+        let maxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount")
+        let limit = maxCount > 0 ? maxCount : 500
+        entries = db.getClipboard(limit: limit).map {
             ClipboardEntry(id: $0.id, type: $0.type, content: $0.content, createdAt: $0.createdAt)
         }
+        
         // Group by 10
         groups = stride(from: 0, to: entries.count, by: 10).map {
             Array(entries[$0..<min($0 + 10, entries.count)])
         }
         currentGroup = 0
-        tableView.reloadData()
-        if !entries.isEmpty {
+        
+        if entries.isEmpty {
+            emptyView.isHidden = false
+            scrollView.isHidden = true
+        } else {
+            emptyView.isHidden = true
+            scrollView.isHidden = false
+            tableView.reloadData()
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
     }
@@ -248,23 +300,23 @@ extension ClipboardPanel: NSTableViewDataSource, NSTableViewDelegate {
         let cell = NSTableCellView()
 
         // Number
-        let numberField = NSTextField(frame: NSRect(x: 8, y: 10, width: 24, height: 20))
+        let numberField = NSTextField(frame: NSRect(x: 6, y: 8, width: 20, height: 20))
         numberField.stringValue = "\(numberInGroup)"
         numberField.isEditable = false
         numberField.isBordered = false
         numberField.drawsBackground = false
-        numberField.font = .systemFont(ofSize: 14, weight: .medium)
+        numberField.font = .systemFont(ofSize: 12, weight: .medium)
         numberField.textColor = .secondaryLabelColor
         numberField.alignment = .center
         cell.addSubview(numberField)
 
         // Content
-        let contentField = NSTextField(frame: NSRect(x: 36, y: 10, width: tableView.bounds.width - 52, height: 20))
+        let contentField = NSTextField(frame: NSRect(x: 28, y: 8, width: tableView.bounds.width - 36, height: 20))
         var content = entry.content
         if entry.type == "text" {
             // Truncate text
-            if content.count > 50 {
-                content = String(content.prefix(50)) + "..."
+            if content.count > 30 {
+                content = String(content.prefix(30)) + "..."
             }
         } else if entry.type == "image" {
             content = "📷 Image"
@@ -273,7 +325,7 @@ extension ClipboardPanel: NSTableViewDataSource, NSTableViewDelegate {
         contentField.isEditable = false
         contentField.isBordered = false
         contentField.drawsBackground = false
-        contentField.font = .systemFont(ofSize: 13)
+        contentField.font = .systemFont(ofSize: 11)
         contentField.lineBreakMode = .byTruncatingTail
         cell.addSubview(contentField)
 
@@ -297,7 +349,7 @@ class ClipboardRowView: NSTableRowView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         if showTopSeparator {
-            let sepRect = NSRect(x: 8, y: bounds.height - 1, width: bounds.width - 16, height: 1)
+            let sepRect = NSRect(x: 6, y: bounds.height - 1, width: bounds.width - 12, height: 1)
             NSColor.separatorColor.setFill()
             sepRect.fill()
         }

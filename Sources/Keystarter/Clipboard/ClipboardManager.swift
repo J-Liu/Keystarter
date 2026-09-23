@@ -34,6 +34,7 @@ final class ClipboardManager {
         let currentCount = NSPasteboard.general.changeCount
         guard currentCount != lastChangeCount else { return }
         lastChangeCount = currentCount
+        print("[Clipboard] Change detected: \(currentCount)")
         processClipboard()
     }
 
@@ -42,19 +43,27 @@ final class ClipboardManager {
 
         // Skip concealed content (passwords)
         if pasteboard.types?.contains(.init(rawValue: "org.nspasteboard.ConcealedType")) == true {
+            print("[Clipboard] Skipping concealed content")
             return
         }
 
         // Prefer text
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
+            print("[Clipboard] Text found: \(text.prefix(50))...")
             let hash = sha256(text)
-            _ = db?.insertClipboard(type: "text", content: text, hash: hash)
+            guard let database = db else {
+                print("[Clipboard] Database not ready")
+                return
+            }
+            let inserted = database.insertClipboard(type: "text", content: text, hash: hash)
+            print("[Clipboard] Inserted: \(inserted)")
             return
         }
 
         // Then image
         if UserDefaults.standard.bool(forKey: "clipboard.recordImages") {
             if let image = NSImage(pasteboard: pasteboard) {
+                print("[Clipboard] Image found")
                 guard let tiffData = image.tiffRepresentation,
                       let bitmap = NSBitmapImageRep(data: tiffData),
                       let pngData = bitmap.representation(using: .png, properties: [:]) else { return }

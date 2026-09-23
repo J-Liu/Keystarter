@@ -246,64 +246,47 @@ final class SettingsWindow: NSWindow {
         hotkeyHint.font = .systemFont(ofSize: 12)
         view.addSubview(hotkeyHint)
 
-        // Show groups
-        let groupsLabel = NSTextField(labelWithString: "Show Groups:")
-        groupsLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
-        view.addSubview(groupsLabel)
-
-        let groupsSlider = NSSlider(frame: NSRect(x: 110, y: 230, width: 150, height: 24))
-        groupsSlider.minValue = 1
-        groupsSlider.maxValue = 10
-        groupsSlider.integerValue = UserDefaults.standard.integer(forKey: "clipboard.groups") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.groups") : 3
-        groupsSlider.target = self
-        groupsSlider.action = #selector(clipboardGroupsChanged(_:))
-        view.addSubview(groupsSlider)
-
-        let groupsValue = NSTextField(labelWithString: "\(groupsSlider.integerValue)")
-        groupsValue.frame = NSRect(x: 270, y: 230, width: 40, height: 24)
-        groupsValue.identifier = NSUserInterfaceItemIdentifier("clipboardGroupsValue")
-        view.addSubview(groupsValue)
-
         // Max count
         let maxCountLabel = NSTextField(labelWithString: "Max Count:")
-        maxCountLabel.frame = NSRect(x: 0, y: 180, width: 100, height: 24)
+        maxCountLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
         view.addSubview(maxCountLabel)
 
-        let maxCountField = NSTextField(frame: NSRect(x: 110, y: 180, width: 80, height: 24))
+        let maxCountField = NSTextField(frame: NSRect(x: 110, y: 230, width: 80, height: 24))
         maxCountField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500)
         maxCountField.target = self
         maxCountField.action = #selector(clipboardMaxCountChanged(_:))
         view.addSubview(maxCountField)
 
-        let maxCountHint = NSTextField(labelWithString: "entries")
-        maxCountHint.frame = NSRect(x: 200, y: 180, width: 60, height: 24)
+        let maxCountHint = NSTextField(labelWithString: "entries (groups: \((UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500) / 10 + 1))")
+        maxCountHint.frame = NSRect(x: 200, y: 230, width: 150, height: 24)
         maxCountHint.textColor = .secondaryLabelColor
+        maxCountHint.identifier = NSUserInterfaceItemIdentifier("maxCountHint")
         view.addSubview(maxCountHint)
 
         // Max days
         let maxDaysLabel = NSTextField(labelWithString: "Max Days:")
-        maxDaysLabel.frame = NSRect(x: 0, y: 130, width: 100, height: 24)
+        maxDaysLabel.frame = NSRect(x: 0, y: 180, width: 100, height: 24)
         view.addSubview(maxDaysLabel)
 
-        let maxDaysField = NSTextField(frame: NSRect(x: 110, y: 130, width: 80, height: 24))
+        let maxDaysField = NSTextField(frame: NSRect(x: 110, y: 180, width: 80, height: 24))
         maxDaysField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxDays") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxDays") : 30)
         maxDaysField.target = self
         maxDaysField.action = #selector(clipboardMaxDaysChanged(_:))
         view.addSubview(maxDaysField)
 
         let maxDaysHint = NSTextField(labelWithString: "days")
-        maxDaysHint.frame = NSRect(x: 200, y: 130, width: 60, height: 24)
+        maxDaysHint.frame = NSRect(x: 200, y: 180, width: 60, height: 24)
         maxDaysHint.textColor = .secondaryLabelColor
         view.addSubview(maxDaysHint)
 
         // Record images
         let recordImagesCheckbox = NSButton(checkboxWithTitle: "Record images", target: self, action: #selector(clipboardRecordImagesChanged(_:)))
-        recordImagesCheckbox.frame = NSRect(x: 110, y: 80, width: 200, height: 24)
+        recordImagesCheckbox.frame = NSRect(x: 110, y: 130, width: 200, height: 24)
         recordImagesCheckbox.state = UserDefaults.standard.bool(forKey: "clipboard.recordImages") ? .on : .off
         view.addSubview(recordImagesCheckbox)
 
         // Clear button
-        let clearButton = NSButton(frame: NSRect(x: 0, y: 20, width: 180, height: 32))
+        let clearButton = NSButton(frame: NSRect(x: 0, y: 80, width: 180, height: 32))
         clearButton.title = "Clear Clipboard History"
         clearButton.bezelStyle = .rounded
         clearButton.target = self
@@ -319,17 +302,14 @@ final class SettingsWindow: NSWindow {
         (NSApp.delegate as? AppDelegate)?.updateClipboardHotkey(keyCode: recorder.keyCode, modifiers: recorder.modifiers)
     }
 
-    @objc private func clipboardGroupsChanged(_ sender: NSSlider) {
-        UserDefaults.standard.set(sender.integerValue, forKey: "clipboard.groups")
-        if let view = sender.superview,
-           let label = view.subviews.first(where: { $0.identifier?.rawValue == "clipboardGroupsValue" }) as? NSTextField {
-            label.stringValue = "\(sender.integerValue)"
-        }
-    }
-
     @objc private func clipboardMaxCountChanged(_ sender: NSTextField) {
         if let value = Int(sender.stringValue) {
             UserDefaults.standard.set(value, forKey: "clipboard.maxCount")
+            // Update groups hint
+            if let view = sender.superview,
+               let hint = view.subviews.first(where: { $0.identifier?.rawValue == "maxCountHint" }) as? NSTextField {
+                hint.stringValue = "entries (groups: \(value / 10 + 1))"
+            }
         }
     }
 
