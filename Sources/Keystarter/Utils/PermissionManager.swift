@@ -33,7 +33,9 @@ final class PermissionManager {
 
     /// Request Accessibility permission (for global hotkey).
     private func requestAccessibilityPermission(completion: @escaping () -> Void) {
-        let trusted = AXIsProcessTrusted()
+        let trusted = AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+        ] as CFDictionary)
 
         if trusted {
             completion()
