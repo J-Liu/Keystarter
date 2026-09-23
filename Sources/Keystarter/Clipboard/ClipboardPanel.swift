@@ -21,6 +21,7 @@ final class ClipboardPanel: NSPanel {
     private var groups: [[ClipboardEntry]] = []
     private var currentGroup: Int = 0
     private var previousApp: NSRunningApplication?
+    private var eventMonitor: Any?
 
     init() {
         super.init(
@@ -35,7 +36,6 @@ final class ClipboardPanel: NSPanel {
         self.backgroundColor = .clear
         self.hasShadow = true
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.hidesOnDeactivate = true
 
         setupUI()
     }
@@ -93,23 +93,38 @@ final class ClipboardPanel: NSPanel {
         emptyView.addSubview(label)
 
         // Separator
-        let separator = NSView(frame: NSRect(x: 16, y: y - 24, width: emptyView.bounds.width - 32, height: 1))
+        let separator = NSView(frame: NSRect(x: 16, y: y - 20, width: emptyView.bounds.width - 32, height: 1))
         separator.wantsLayer = true
         separator.layer?.backgroundColor = NSColor.separatorColor.cgColor
         emptyView.addSubview(separator)
 
-        // Settings button
-        let settingsButton = NSButton(frame: NSRect(x: 16, y: y - 56, width: emptyView.bounds.width - 32, height: 28))
-        settingsButton.title = "Settings..."
-        settingsButton.bezelStyle = .rounded
-        settingsButton.target = self
-        settingsButton.action = #selector(openSettings)
-        emptyView.addSubview(settingsButton)
+        // Settings menu item
+        let settingsItem = MenuItemView(title: "Settings...", action: #selector(openSettings))
+        settingsItem.frame = NSRect(x: 0, y: y - 48, width: emptyView.bounds.width, height: 24)
+        emptyView.addSubview(settingsItem)
+
+        // Clear history menu item
+        let clearItem = MenuItemView(title: "Clear History", action: #selector(clearHistory))
+        clearItem.frame = NSRect(x: 0, y: y - 72, width: emptyView.bounds.width, height: 24)
+        emptyView.addSubview(clearItem)
     }
 
     @objc private func openSettings() {
         orderOut(nil)
         (NSApp.delegate as? AppDelegate)?.showClipboardSettings()
+    }
+
+    @objc private func clearHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Clear Clipboard History?"
+        alert.informativeText = "This will delete all clipboard entries."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            (NSApp.delegate as? AppDelegate)?.indexDB?.clearClipboard()
+            loadEntries()
+        }
     }
 
     func toggle() {
@@ -125,6 +140,19 @@ final class ClipboardPanel: NSPanel {
         centerOnMouse()
         previousApp = NSWorkspace.shared.frontmostApplication
         makeKeyAndOrderFront(nil)
+        
+        // Monitor for clicks outside the panel
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.orderOut(nil)
+        }
+    }
+
+    override func orderOut(_ sender: Any?) {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+            eventMonitor = nil
+        }
+        super.orderOut(sender)
     }
 
     private func loadEntries() {
@@ -285,6 +313,49 @@ final class ClipboardPanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+// MARK: - MenuItemView
+
+class MenuItemView: NSView {
+    private let title: String
+    private let action: Selector
+
+    init(title: String, action: Selector) {
+        self.title = title
+        self.action = action
+        super.init(frame: .zero)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setup() {
+        wantsLayer = true
+
+        let label = NSTextField(labelWithString: title)
+        label.frame = NSRect(x: 16, y: 2, width: bounds.width - 32, height: 20)
+        label.font = .systemFont(ofSize: 13)
+        label.autoresizingMask = [.width]
+        addSubview(label)
+
+        let trackingArea = NSTrackingArea(rect: .zero, options: [.inVisibleRect, .activeAlways, .mouseEnteredAndExited], owner: self, userInfo: nil)
+        addTrackingArea(trackingArea)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.2).cgColor
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        layer?.backgroundColor = .clear
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        _ = (window as? ClipboardPanel)?.perform(action)
+    }
+}
+
 // MARK: - NSTableViewDataSource / Delegate
 
 extension ClipboardPanel: NSTableViewDataSource, NSTableViewDelegate {
@@ -314,7 +385,6 @@ extension ClipboardPanel: NSTableViewDataSource, NSTableViewDelegate {
         let contentField = NSTextField(frame: NSRect(x: 28, y: 8, width: tableView.bounds.width - 36, height: 20))
         var content = entry.content
         if entry.type == "text" {
-            // Truncate text
             if content.count > 30 {
                 content = String(content.prefix(30)) + "..."
             }
@@ -334,7 +404,6 @@ extension ClipboardPanel: NSTableViewDataSource, NSTableViewDelegate {
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
         let rowView = ClipboardRowView()
-        // Add separator between groups
         if row > 0 && row % 10 == 0 {
             rowView.showTopSeparator = true
         }

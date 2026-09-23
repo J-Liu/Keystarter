@@ -11,6 +11,7 @@ final class ClipboardManager {
 
     private var timer: Timer?
     private var lastChangeCount: Int = 0
+    private var logFile: URL?
 
     private var db: IndexDatabase? {
         (NSApp.delegate as? AppDelegate)?.indexDB
@@ -19,8 +20,29 @@ final class ClipboardManager {
     /// Start monitoring clipboard.
     func start() {
         lastChangeCount = NSPasteboard.general.changeCount
+        setupLogFile()
+        log("ClipboardManager started, initial count: \(lastChangeCount)")
         timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
             self?.checkClipboard()
+        }
+    }
+
+    private func setupLogFile() {
+        let dir = NSHomeDirectory() + "/Library/Application Support/Keystarter"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        logFile = URL(fileURLWithPath: dir + "/clipboard.log")
+    }
+
+    private func log(_ message: String) {
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let line = "[\(timestamp)] \(message)\n"
+        guard let file = logFile else { return }
+        if let handle = try? FileHandle(forWritingTo: file) {
+            handle.seekToEndOfFile()
+            handle.write(line.data(using: .utf8)!)
+            handle.closeFile()
+        } else {
+            try? line.write(to: file, atomically: true, encoding: .utf8)
         }
     }
 
@@ -28,13 +50,14 @@ final class ClipboardManager {
     func stop() {
         timer?.invalidate()
         timer = nil
+        log("ClipboardManager stopped")
     }
 
     private func checkClipboard() {
         let currentCount = NSPasteboard.general.changeCount
         guard currentCount != lastChangeCount else { return }
         lastChangeCount = currentCount
-        print("[Clipboard] Change detected: \(currentCount)")
+        log("Change detected: \(currentCount)")
         processClipboard()
     }
 
@@ -43,27 +66,27 @@ final class ClipboardManager {
 
         // Skip concealed content (passwords)
         if pasteboard.types?.contains(.init(rawValue: "org.nspasteboard.ConcealedType")) == true {
-            print("[Clipboard] Skipping concealed content")
+            log("Skipping concealed content")
             return
         }
 
         // Prefer text
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
-            print("[Clipboard] Text found: \(text.prefix(50))...")
+            log("Text found: \(text.prefix(50))...")
             let hash = sha256(text)
             guard let database = db else {
-                print("[Clipboard] Database not ready")
+                log("Database not ready")
                 return
             }
             let inserted = database.insertClipboard(type: "text", content: text, hash: hash)
-            print("[Clipboard] Inserted: \(inserted)")
+            log("Inserted: \(inserted)")
             return
         }
 
         // Then image
         if UserDefaults.standard.bool(forKey: "clipboard.recordImages") {
             if let image = NSImage(pasteboard: pasteboard) {
-                print("[Clipboard] Image found")
+                log("Image found")
                 guard let tiffData = image.tiffRepresentation,
                       let bitmap = NSBitmapImageRep(data: tiffData),
                       let pngData = bitmap.representation(using: .png, properties: [:]) else { return }
@@ -79,7 +102,8 @@ final class ClipboardManager {
         let path = dir + "/" + filename
         try? data.write(to: URL(fileURLWithPath: path))
         let hash = sha256(data)
-        _ = db?.insertClipboard(type: "image", content: path, hash: hash)
+        let inserted = db?.insertClipboard(type: "image", content: path, hash: hash) ?? false
+        log("Image saved: \(filename), inserted: \(inserted)")
     }
 
     private func sha256(_ string: String) -> String {
@@ -92,15 +116,5 @@ final class ClipboardManager {
             CC_SHA256(ptr.baseAddress, CC_LONG(data.count), &digest)
         }
         return digest.map { String(format: "%02x", $0) }.joined()
-    }
-
-    // MARK: - Config
-
-    private var maxCount: Int {
-        UserDefaults.standard.integer(forKey: "clipboard.maxCount")
-    }
-
-    private var maxDays: Int {
-        UserDefaults.standard.integer(forKey: "clipboard.maxDays")
     }
 }
