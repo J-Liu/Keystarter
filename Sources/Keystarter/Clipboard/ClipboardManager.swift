@@ -11,10 +11,9 @@ final class ClipboardManager {
 
     private var timer: Timer?
     private var lastChangeCount: Int = 0
-    private let db: IndexDatabase?
 
-    private init() {
-        db = (NSApp.delegate as? AppDelegate)?.indexDB
+    private var db: IndexDatabase? {
+        (NSApp.delegate as? AppDelegate)?.indexDB
     }
 
     /// Start monitoring clipboard.
@@ -54,11 +53,13 @@ final class ClipboardManager {
         }
 
         // Then image
-        if let image = NSImage(pasteboard: pasteboard) {
-            guard let tiffData = image.tiffRepresentation,
-                  let bitmap = NSBitmapImageRep(data: tiffData),
-                  let pngData = bitmap.representation(using: .png, properties: [:]) else { return }
-            saveImage(pngData)
+        if UserDefaults.standard.bool(forKey: "clipboard.recordImages") {
+            if let image = NSImage(pasteboard: pasteboard) {
+                guard let tiffData = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiffData),
+                      let pngData = bitmap.representation(using: .png, properties: [:]) else { return }
+                saveImage(pngData)
+            }
         }
     }
 
