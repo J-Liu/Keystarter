@@ -80,12 +80,23 @@ final class ClipboardPanel: NSObject {
             return
         }
 
+        // Create main "Clipboard History" menu item with submenu
+        let clipboardHistoryMenu = NSMenu()
+        let clipboardHistoryItem = NSMenuItem(title: "Clipboard History", action: nil, keyEquivalent: "")
+        clipboardHistoryItem.submenu = clipboardHistoryMenu
+        menu?.addItem(clipboardHistoryItem)
+
         // Group by 10
         let groups = stride(from: 0, to: entries.count, by: 10).map {
             Array(entries[$0..<min($0 + 10, entries.count)])
         }
 
         for (groupIndex, group) in groups.enumerated() {
+            let startNum = groupIndex * 10 + 1
+            let endNum = startNum + group.count - 1
+            let groupTitle = "\(startNum)-\(endNum)"
+
+            // Create submenu for this group
             let groupMenu = NSMenu()
 
             for (index, entry) in group.enumerated() {
@@ -106,10 +117,10 @@ final class ClipboardPanel: NSObject {
                 groupMenu.addItem(item)
             }
 
-            let groupTitle = groups.count == 1 ? "Clipboard History" : "Group \(groupIndex + 1)"
+            // Add group item with submenu
             let groupItem = NSMenuItem(title: groupTitle, action: nil, keyEquivalent: "")
             groupItem.submenu = groupMenu
-            menu?.addItem(groupItem)
+            clipboardHistoryMenu.addItem(groupItem)
         }
 
         menu?.addItem(NSMenuItem.separator())
