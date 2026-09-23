@@ -25,14 +25,9 @@ final class PermissionManager {
     /// Request all necessary permissions with explanations.
     func requestAllPermissions(completion: @escaping () -> Void) {
         requestAccessibilityPermission { [weak self] in
-            self?.requestClipboardPermission {
-                self?.requestFileAccessPermission {
-                    self?.requestLoginItemPermission {
-                        // Restart app after permissions are granted
-                        self?.restartApp()
-                    }
-                }
-            }
+            // After accessibility permission, enable login item and restart
+            self?.setLoginItem(enabled: true)
+            self?.restartApp()
         }
     }
 
@@ -56,7 +51,7 @@ final class PermissionManager {
         • Capture keyboard shortcuts for navigation
         
         Click "Open System Settings" to grant permission.
-        You may need to restart Keystarter after granting.
+        After granting, the app will restart automatically.
         """
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open System Settings")
@@ -73,83 +68,24 @@ final class PermissionManager {
         }
     }
 
-    /// Request Clipboard permission (for paste functionality).
-    private func requestClipboardPermission(completion: @escaping () -> Void) {
-        // On macOS 13+, clipboard access may require permission
-        // We'll request it by trying to access
-        let pasteboard = NSPasteboard.general
-        _ = pasteboard.string(forType: .string)
-
-        // Check if we need to request
-        if #available(macOS 14.0, *) {
-            // Clipboard permission is handled by the system
-            completion()
-        } else {
-            completion()
-        }
-    }
-
-    /// Request File Access permission (for file search).
-    private func requestFileAccessPermission(completion: @escaping () -> Void) {
-        // Try to access a common directory
-        let testPath = NSHomeDirectory() + "/Documents"
-        if FileManager.default.isReadableFile(atPath: testPath) {
-            completion()
-            return
-        }
-
-        let alert = NSAlert()
-        alert.messageText = "File Access Permission Required"
-        alert.informativeText = """
-        Keystarter needs Full Disk Access to:
-        
-        • Search files in Documents, Desktop, Downloads
-        • Open files and applications
-        
-        Click "Open System Settings" to grant permission.
-        """
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Skip")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            openFullDiskAccessSettings()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                completion()
-            }
-        } else {
-            completion()
-        }
-    }
-
-    /// Request Login Item permission (for auto-start at login).
-    private func requestLoginItemPermission(completion: @escaping () -> Void) {
-        let alert = NSAlert()
-        alert.messageText = "Enable Auto-Start"
-        alert.informativeText = """
-        Would you like Keystarter to start automatically when you log in?
-        
-        This allows you to use the global hotkey (⌘ Space) immediately after login.
-        """
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Enable")
-        alert.addButton(withTitle: "Skip")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            // Enable login item
-            if #available(macOS 13.0, *) {
-                do {
+    /// Enable or disable login item (start at login).
+    func setLoginItem(enabled: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enabled {
                     try SMAppService.mainApp.register()
-                } catch {
-                    print("Failed to register login item: \(error)")
+                } else {
+                    try SMAppService.mainApp.unregister()
                 }
-            } else {
-                // For older macOS versions
-                let bundleID = Bundle.main.bundleIdentifier! as CFString
-                SMLoginItemSetEnabled(bundleID, true)
+            } catch {
+                print("Failed to \(enabled ? "register" : "unregister") login item: \(error)")
             }
+        } else {
+            // For older macOS versions
+            let bundleID = Bundle.main.bundleIdentifier! as CFString
+            SMLoginItemSetEnabled(bundleID, enabled)
         }
-        completion()
+        UserDefaults.standard.set(enabled, forKey: "startAtLogin")
     }
 
     /// Restart the application.
@@ -164,13 +100,6 @@ final class PermissionManager {
     /// Open System Settings > Privacy & Security > Accessibility.
     private func openAccessibilitySettings() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-            NSWorkspace.shared.open(url)
-        }
-    }
-
-    /// Open System Settings > Privacy & Security > Full Disk Access.
-    private func openFullDiskAccessSettings() {
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
             NSWorkspace.shared.open(url)
         }
     }

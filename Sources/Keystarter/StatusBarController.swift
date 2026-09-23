@@ -83,6 +83,15 @@ final class StatusBarController {
         updateItem.target = self
         menu.addItem(updateItem)
 
+        // Check Permissions
+        let permissionsItem = NSMenuItem(
+            title: "Check Permissions...",
+            action: #selector(checkPermissions),
+            keyEquivalent: ""
+        )
+        permissionsItem.target = self
+        menu.addItem(permissionsItem)
+
         // Settings
         let settingsItem = NSMenuItem(
             title: "Settings...",
@@ -133,6 +142,12 @@ final class StatusBarController {
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+
+    @objc private func checkPermissions() {
+        PermissionManager.shared.requestAllPermissions {
+            // Permissions granted
+        }
     }
 
     @objc private func openSettings() {

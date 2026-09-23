@@ -135,21 +135,33 @@ final class SettingsWindow: NSWindow {
         opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
         view.addSubview(opacityValue)
 
+        // Start at Login
+        let loginLabel = NSTextField(labelWithString: "Start at Login:")
+        loginLabel.frame = NSRect(x: 0, y: 85, width: 100, height: 24)
+        view.addSubview(loginLabel)
+
+        let loginCheckbox = NSButton(frame: NSRect(x: 110, y: 84, width: 200, height: 24))
+        loginCheckbox.title = "Automatically start at login"
+        loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
+        loginCheckbox.target = self
+        loginCheckbox.action = #selector(loginItemChanged(_:))
+        view.addSubview(loginCheckbox)
+
+        // Check Permissions button
+        let permissionsButton = NSButton(frame: NSRect(x: 0, y: 45, width: 200, height: 32))
+        permissionsButton.title = "Check Permissions..."
+        permissionsButton.bezelStyle = .rounded
+        permissionsButton.target = self
+        permissionsButton.action = #selector(checkPermissions)
+        view.addSubview(permissionsButton)
+
         // Clear History button
-        let clearButton = NSButton(frame: NSRect(x: 0, y: 60, width: 200, height: 32))
+        let clearButton = NSButton(frame: NSRect(x: 0, y: 15, width: 200, height: 32))
         clearButton.title = "Clear Launch History"
         clearButton.bezelStyle = .rounded
         clearButton.target = self
         clearButton.action = #selector(clearHistory)
         view.addSubview(clearButton)
-
-        // Rebuild Index button
-        let rebuildButton = NSButton(frame: NSRect(x: 0, y: 20, width: 200, height: 32))
-        rebuildButton.title = "Rebuild File Index"
-        rebuildButton.bezelStyle = .rounded
-        rebuildButton.target = self
-        rebuildButton.action = #selector(rebuildIndex)
-        view.addSubview(rebuildButton)
 
         return view
     }
@@ -177,6 +189,18 @@ final class SettingsWindow: NSWindow {
         }
         UserDefaults.standard.set(theme, forKey: "statusBar.theme")
         (NSApp.delegate as? AppDelegate)?.updateStatusBarTheme(theme)
+    }
+
+    @objc private func loginItemChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "startAtLogin")
+        PermissionManager.shared.setLoginItem(enabled: enabled)
+    }
+
+    @objc private func checkPermissions() {
+        PermissionManager.shared.requestAllPermissions {
+            // Permissions granted
+        }
     }
 
     private func createAboutTab() -> NSView {

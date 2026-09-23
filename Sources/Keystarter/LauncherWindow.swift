@@ -344,8 +344,8 @@ final class LauncherWindow: NSWindow {
         }
 
         let itemWidth: CGFloat = 95
-        let itemHeight: CGFloat = 110
-        let spacing: CGFloat = 10
+        let itemHeight: CGFloat = 100
+        let spacing: CGFloat = 8
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
@@ -439,11 +439,11 @@ final class LauncherWindow: NSWindow {
     private func createGridItemView(app: LaunchItem, size: NSSize) -> NSView {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
 
-        // Icon - larger size
-        let iconSize: CGFloat = 75
+        // Icon
+        let iconSize: CGFloat = 64
         let imageView = NSImageView(frame: NSRect(
             x: (size.width - iconSize) / 2,
-            y: size.height - iconSize - 10,
+            y: size.height - iconSize - 5,
             width: iconSize,
             height: iconSize
         ))
@@ -451,11 +451,11 @@ final class LauncherWindow: NSWindow {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         view.addSubview(imageView)
 
-        // Name - larger font
+        // Name
         let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 4, y: 0, width: size.width - 8, height: 40)
+        nameField.frame = NSRect(x: 4, y: 0, width: size.width - 8, height: 30)
         nameField.alignment = .center
-        nameField.font = .systemFont(ofSize: 13)
+        nameField.font = .systemFont(ofSize: 11)
         nameField.lineBreakMode = .byTruncatingTail
         nameField.maximumNumberOfLines = 2
         view.addSubview(nameField)
