@@ -106,7 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Minimal menu so Cmd+Q works and the app behaves like a normal macOS app.
+    /// Full menu for Dock icon and system menu bar.
     private func setupMenu() {
         let mainMenu = NSMenu()
 
@@ -116,6 +116,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let appMenu = NSMenu()
         appMenu.addItem(
+            withTitle: "About Keystarter",
+            action: #selector(showAbout),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(
+            withTitle: "Settings...",
+            action: #selector(showSettingsFromMenu),
+            keyEquivalent: ","
+        )
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(
+            withTitle: "Check for Updates...",
+            action: #selector(checkForUpdates),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(
+            withTitle: "Check Permissions...",
+            action: #selector(checkPermissionsFromMenu),
+            keyEquivalent: ""
+        )
+        appMenu.addItem(NSMenuItem.separator())
+        appMenu.addItem(
+            withTitle: "Close Window",
+            action: #selector(closeWindow),
+            keyEquivalent: "w"
+        )
+        appMenu.addItem(
             withTitle: "Quit Keystarter",
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
@@ -123,6 +151,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenuItem.submenu = appMenu
 
         NSApp.mainMenu = mainMenu
+    }
+
+    @objc private func showAbout() {
+        if settingsWindow == nil {
+            settingsWindow = SettingsWindow()
+        }
+        settingsWindow?.selectTab(withIdentifier: "about")
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func showSettingsFromMenu() {
+        showSettings()
+    }
+
+    @objc private func checkForUpdates() {
+        let alert = NSAlert()
+        alert.messageText = "Check for Updates"
+        alert.informativeText = "Auto-update is not configured yet.\nSee docs/SPARKLE_SETUP.md for instructions."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc private func checkPermissionsFromMenu() {
+        PermissionManager.shared.requestAllPermissions {
+            // Permissions granted
+        }
+    }
+
+    @objc private func closeWindow() {
+        NSApp.keyWindow?.close()
     }
 
     private func setupStatusBar() {
