@@ -105,7 +105,7 @@ final class ClipboardPanel: NSObject {
                 } else {
                     // Load image and create thumbnail
                     if let fullImage = NSImage(contentsOfFile: entry.content) {
-                        image = createThumbnail(from: fullImage, size: NSSize(width: 32, height: 32))
+                        image = createThumbnail(from: fullImage, maxSize: 32)
                         title = ""
                     }
                 }
@@ -202,12 +202,24 @@ final class ClipboardPanel: NSObject {
         (NSApp.delegate as? AppDelegate)?.showClipboardSettings()
     }
 
-    private func createThumbnail(from image: NSImage, size: NSSize) -> NSImage {
-        let thumbnail = NSImage(size: size)
+    private func createThumbnail(from image: NSImage, maxSize: CGFloat) -> NSImage {
+        let srcSize = image.size
+        let aspectRatio = srcSize.width / srcSize.height
+
+        var thumbnailSize: NSSize
+        if aspectRatio > 1 {
+            // Landscape
+            thumbnailSize = NSSize(width: maxSize, height: maxSize / aspectRatio)
+        } else {
+            // Portrait
+            thumbnailSize = NSSize(width: maxSize * aspectRatio, height: maxSize)
+        }
+
+        let thumbnail = NSImage(size: thumbnailSize)
         thumbnail.lockFocus()
 
-        let srcRect = NSRect(origin: .zero, size: image.size)
-        let dstRect = NSRect(origin: .zero, size: size)
+        let srcRect = NSRect(origin: .zero, size: srcSize)
+        let dstRect = NSRect(origin: .zero, size: thumbnailSize)
 
         image.draw(in: dstRect, from: srcRect, operation: .sourceOver, fraction: 1.0)
 

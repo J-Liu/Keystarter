@@ -70,13 +70,16 @@ final class ClipboardManager {
         // Check for image data first (before text)
         if let image = NSImage(pasteboard: pasteboard) {
             log("Image found in pasteboard")
-            guard let tiffData = image.tiffRepresentation,
-                  let bitmap = NSBitmapImageRep(data: tiffData),
-                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
-                log("Failed to convert image to PNG")
-                return
+            // Process image in background to avoid blocking UI
+            DispatchQueue.global(qos: .background).async { [weak self] in
+                guard let tiffData = image.tiffRepresentation,
+                      let bitmap = NSBitmapImageRep(data: tiffData),
+                      let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                    self?.log("Failed to convert image to PNG")
+                    return
+                }
+                self?.saveImage(pngData)
             }
-            saveImage(pngData)
             return
         }
 
