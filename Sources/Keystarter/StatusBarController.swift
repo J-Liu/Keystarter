@@ -26,18 +26,11 @@ final class StatusBarController {
         case "hidden":
             button.image = nil
         default:
-            // Load PNG as template image
-            if let imagePath = Bundle.main.path(forResource: "statusbar-icon", ofType: "png"),
-               let image = NSImage(contentsOfFile: imagePath) {
-                // Set as template so system handles color automatically
-                image.isTemplate = true
-                button.image = image
-            } else {
-                // Fallback to system icon
-                let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
-                image?.isTemplate = true
-                button.image = image
-            }
+            // Use system symbol bolt.fill as template image
+            let image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Keystarter")
+            image?.size = NSSize(width: 18, height: 18)
+            image?.isTemplate = true  // Let system handle color automatically
+            button.image = image
         }
         button.needsDisplay = true
     }
