@@ -156,7 +156,7 @@ final class ClipboardPanel: NSObject {
 
         hide()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+        DispatchQueue.main.async { [weak self] in
             self?.activateAndPaste()
         }
     }
