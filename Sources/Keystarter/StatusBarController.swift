@@ -28,26 +28,31 @@ final class StatusBarController {
         switch currentTheme {
         case "hidden":
             button.image = nil
-        case "light":
-            // Light-colored icon (white)
-            let config = NSImage.SymbolConfiguration(paletteColors: [.white])
-            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")?
-                .withSymbolConfiguration(config)
-            image?.isTemplate = false
-            button.image = image
-        case "dark":
-            // Dark-colored icon (black)
-            let config = NSImage.SymbolConfiguration(paletteColors: [.black])
-            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")?
-                .withSymbolConfiguration(config)
-            image?.isTemplate = false
-            button.image = image
-        default: // system
-            let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
-            image?.isTemplate = true
-            button.image = image
+        default:
+            // Load custom icon from bundle
+            if let image = NSImage(named: "Keystarter") {
+                let resizedImage = resizeImage(image, to: NSSize(width: 18, height: 18))
+                resizedImage.isTemplate = true
+                button.image = resizedImage
+            } else {
+                // Fallback to system icon
+                let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
+                image?.isTemplate = true
+                button.image = image
+            }
         }
         button.needsDisplay = true
+    }
+
+    private func resizeImage(_ image: NSImage, to size: NSSize) -> NSImage {
+        let resizedImage = NSImage(size: size)
+        resizedImage.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: size),
+                   from: NSRect(origin: .zero, size: image.size),
+                   operation: .sourceOver,
+                   fraction: 1.0)
+        resizedImage.unlockFocus()
+        return resizedImage
     }
 
     /// Update the status bar icon theme.

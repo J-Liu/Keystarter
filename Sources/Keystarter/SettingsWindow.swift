@@ -374,8 +374,13 @@ final class SettingsWindow: NSWindow {
 
         // App Icon
         let appIcon = NSImageView(frame: NSRect(x: 190, y: 240, width: 80, height: 80))
-        appIcon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)
-        appIcon.contentTintColor = .controlAccentColor
+        if let image = NSImage(named: "Keystarter") {
+            appIcon.image = image
+        } else {
+            // Fallback to system icon
+            appIcon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)
+            appIcon.contentTintColor = .controlAccentColor
+        }
         view.addSubview(appIcon)
 
         // App Name
