@@ -13,7 +13,9 @@ let package = Package(
             name: "Keystarter",
             path: "Sources/Keystarter",
             resources: [
-                .process("../../Resources/Compiled/Keystarter.icns")
+                .copy("../../Resources/Compiled/Keystarter.icns"),
+                .copy("../../01-background.svg"),
+                .copy("../../02-foreground.svg")
             ]
         )
     ]

@@ -29,9 +29,9 @@ final class StatusBarController {
         case "hidden":
             button.image = nil
         default:
-            // Load custom icon from bundle
-            if let image = NSImage(named: "Keystarter") {
-                let resizedImage = resizeImage(image, to: NSSize(width: 18, height: 18))
+            // Load and composite SVG icons
+            if let compositeImage = loadCompositeIcon() {
+                let resizedImage = resizeImage(compositeImage, to: NSSize(width: 18, height: 18))
                 resizedImage.isTemplate = true
                 button.image = resizedImage
             } else {
@@ -42,6 +42,30 @@ final class StatusBarController {
             }
         }
         button.needsDisplay = true
+    }
+
+    private func loadCompositeIcon() -> NSImage? {
+        // Load background and foreground SVGs
+        guard let backgroundPath = Bundle.main.path(forResource: "01-background", ofType: "svg"),
+              let foregroundPath = Bundle.main.path(forResource: "02-foreground", ofType: "svg"),
+              let background = NSImage(contentsOfFile: backgroundPath),
+              let foreground = NSImage(contentsOfFile: foregroundPath) else {
+            return nil
+        }
+
+        // Create composite image
+        let size = background.size
+        let composite = NSImage(size: size)
+        composite.lockFocus()
+
+        // Draw background first
+        background.draw(in: NSRect(origin: .zero, size: size))
+
+        // Draw foreground on top
+        foreground.draw(in: NSRect(origin: .zero, size: size))
+
+        composite.unlockFocus()
+        return composite
     }
 
     private func resizeImage(_ image: NSImage, to size: NSSize) -> NSImage {
