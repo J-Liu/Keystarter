@@ -3,6 +3,7 @@
 
 import AppKit
 import Carbon
+import ServiceManagement
 
 /// Manages permission requests with clear explanations.
 final class PermissionManager {
@@ -26,7 +27,10 @@ final class PermissionManager {
         requestAccessibilityPermission { [weak self] in
             self?.requestClipboardPermission {
                 self?.requestFileAccessPermission {
-                    completion()
+                    self?.requestLoginItemPermission {
+                        // Restart app after permissions are granted
+                        self?.restartApp()
+                    }
                 }
             }
         }
@@ -116,6 +120,45 @@ final class PermissionManager {
         } else {
             completion()
         }
+    }
+
+    /// Request Login Item permission (for auto-start at login).
+    private func requestLoginItemPermission(completion: @escaping () -> Void) {
+        let alert = NSAlert()
+        alert.messageText = "Enable Auto-Start"
+        alert.informativeText = """
+        Would you like Keystarter to start automatically when you log in?
+        
+        This allows you to use the global hotkey (⌘ Space) immediately after login.
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Enable")
+        alert.addButton(withTitle: "Skip")
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            // Enable login item
+            if #available(macOS 13.0, *) {
+                do {
+                    try SMAppService.mainApp.register()
+                } catch {
+                    print("Failed to register login item: \(error)")
+                }
+            } else {
+                // For older macOS versions
+                let bundleID = Bundle.main.bundleIdentifier! as CFString
+                SMLoginItemSetEnabled(bundleID, true)
+            }
+        }
+        completion()
+    }
+
+    /// Restart the application.
+    private func restartApp() {
+        let task = Process()
+        task.launchPath = "/bin/sh"
+        task.arguments = ["-c", "sleep 1; open \"\(Bundle.main.bundlePath)\""]
+        try? task.run()
+        NSApp.terminate(nil)
     }
 
     /// Open System Settings > Privacy & Security > Accessibility.

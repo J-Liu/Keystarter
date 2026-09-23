@@ -260,7 +260,7 @@ final class LauncherWindow: NSWindow {
         let width = AppearanceSettings.windowWidth
         let height = AppearanceSettings.windowHeight
         let x = screenFrame.minX + (screenFrame.width - width) / 2
-        let y = screenFrame.minY + (screenFrame.height - height) / 2 + 100
+        let y = screenFrame.minY + (screenFrame.height - height) / 2
 
         setFrameOrigin(NSPoint(x: x, y: y))
     }
@@ -343,47 +343,47 @@ final class LauncherWindow: NSWindow {
             subview.removeFromSuperview()
         }
 
-        let itemWidth: CGFloat = 110
-        let itemHeight: CGFloat = 130
-        let spacing: CGFloat = 20
+        let itemWidth: CGFloat = 95
+        let itemHeight: CGFloat = 110
+        let spacing: CGFloat = 10
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
-        var totalHeight: CGFloat = 20 // top padding
+        var totalHeight: CGFloat = 10 // top padding
 
         // Recent apps section
         if !recentApps.isEmpty {
-            totalHeight += 20 // label height
+            totalHeight += 18 // label height
             let recentRows = Int(ceil(Double(recentApps.count) / Double(columns)))
             totalHeight += CGFloat(recentRows) * (itemHeight + spacing)
-            totalHeight += 30 // separator and spacing
+            totalHeight += 20 // separator and spacing
         }
 
         // All apps section - show all apps
-        totalHeight += 20 // label height
+        totalHeight += 18 // label height
         let allAppsCount = results.count
         let allRows = Int(ceil(Double(allAppsCount) / Double(columns)))
         totalHeight += CGFloat(allRows) * (itemHeight + spacing)
-        totalHeight += 20 // bottom padding
+        totalHeight += 10 // bottom padding
 
         // Set grid view frame
         let contentHeight = max(gridScrollView.bounds.height, totalHeight)
         gridView.frame = NSRect(x: 0, y: 0, width: gridScrollView.bounds.width, height: contentHeight)
 
         // Start placing items from top
-        var y: CGFloat = contentHeight - 20
-        var x: CGFloat = 20
+        var y: CGFloat = contentHeight - 10
+        var x: CGFloat = 10
         var index = 0
 
         // Recent apps section
         if !recentApps.isEmpty {
             // Label for recent apps
             let recentLabel = NSTextField(labelWithString: "Recent")
-            recentLabel.frame = NSRect(x: 20, y: y - 16, width: 100, height: 16)
-            recentLabel.font = .systemFont(ofSize: 12, weight: .medium)
+            recentLabel.frame = NSRect(x: 10, y: y - 14, width: 100, height: 14)
+            recentLabel.font = .systemFont(ofSize: 11, weight: .medium)
             recentLabel.textColor = .secondaryLabelColor
             gridView.addSubview(recentLabel)
-            y -= 20
+            y -= 18
 
             for app in recentApps {
                 let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
@@ -393,7 +393,7 @@ final class LauncherWindow: NSWindow {
                 index += 1
                 x += itemWidth + spacing
                 if index % columns == 0 {
-                    x = 20
+                    x = 10
                     y -= itemHeight + spacing
                 }
             }
@@ -404,23 +404,23 @@ final class LauncherWindow: NSWindow {
             }
 
             // Separator line
-            y -= 10
-            let separator = NSView(frame: NSRect(x: 20, y: y, width: gridView.bounds.width - 40, height: 1))
+            y -= 5
+            let separator = NSView(frame: NSRect(x: 10, y: y, width: gridView.bounds.width - 20, height: 1))
             separator.wantsLayer = true
             separator.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
             gridView.addSubview(separator)
-            y -= 20
+            y -= 15
         }
 
         // All apps section
         let allLabel = NSTextField(labelWithString: "All Apps")
-        allLabel.frame = NSRect(x: 20, y: y - 16, width: 100, height: 16)
-        allLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        allLabel.frame = NSRect(x: 10, y: y - 14, width: 100, height: 14)
+        allLabel.font = .systemFont(ofSize: 11, weight: .medium)
         allLabel.textColor = .secondaryLabelColor
         gridView.addSubview(allLabel)
-        y -= 20
+        y -= 18
 
-        x = 20
+        x = 10
         index = 0
         for app in results { // Show all apps
             let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
@@ -430,7 +430,7 @@ final class LauncherWindow: NSWindow {
             index += 1
             x += itemWidth + spacing
             if index % columns == 0 {
-                x = 20
+                x = 10
                 y -= itemHeight + spacing
             }
         }
@@ -440,7 +440,7 @@ final class LauncherWindow: NSWindow {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
 
         // Icon - larger size
-        let iconSize: CGFloat = 80
+        let iconSize: CGFloat = 75
         let imageView = NSImageView(frame: NSRect(
             x: (size.width - iconSize) / 2,
             y: size.height - iconSize - 10,
