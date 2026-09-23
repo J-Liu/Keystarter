@@ -31,8 +31,8 @@
     <key>SUEnableJavaScript</key>
     <true/>
     <key>SUFeedURL</key>
-    <string>https://keystarter.app/appcast.xml</string>
+    <string>https://J-Liu.github.io/Keystarter/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>REPLACE_WITH_YOUR_PUBLIC_KEY</string>
+    <string>PBDS5VN8RaVF+gVsHkIKLWt1drP2OsDPcJEDxjuZKZs=</string>
 </dict>
 </plist>
