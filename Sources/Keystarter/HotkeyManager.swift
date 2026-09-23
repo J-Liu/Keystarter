@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon
 
 /// Manages a single global hotkey using CGEvent tap.
 /// Requires Accessibility permission.
@@ -12,6 +13,8 @@ final class HotkeyManager {
     private let callback: () -> Void
     private var targetKeyCode: UInt16 = 49 // Space
     private var targetModifiers: NSEvent.ModifierFlags = .command
+    private var permissionCheckTimer: Timer?
+    private var isRegistered = false
 
     init(callback: @escaping () -> Void) {
         self.callback = callback
@@ -22,13 +25,24 @@ final class HotkeyManager {
         targetKeyCode = keyCode
         targetModifiers = modifiers
 
+        tryRegister()
+
+        // Start checking for permission changes
+        startPermissionCheck()
+    }
+
+    /// Try to register the event tap.
+    private func tryRegister() {
         // Check accessibility permission
-        let trusted = AXIsProcessTrustedWithOptions([
-            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
-        ] as CFDictionary)
+        let trusted = AXIsProcessTrusted()
 
         if !trusted {
-            print("[HotkeyManager] Accessibility permission required")
+            print("[HotkeyManager] Accessibility permission not granted yet")
+            return
+        }
+
+        // Already registered
+        if isRegistered {
             return
         }
 
@@ -60,7 +74,22 @@ final class HotkeyManager {
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
 
+        isRegistered = true
         print("[HotkeyManager] Hotkey registered")
+    }
+
+    /// Start periodic permission check.
+    private func startPermissionCheck() {
+        permissionCheckTimer?.invalidate()
+        permissionCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.tryRegister()
+        }
+    }
+
+    /// Stop permission check.
+    private func stopPermissionCheck() {
+        permissionCheckTimer?.invalidate()
+        permissionCheckTimer = nil
     }
 
     /// Handle keyboard event.
@@ -109,6 +138,8 @@ final class HotkeyManager {
 
     /// Unregister the global hotkey.
     func unregister() {
+        stopPermissionCheck()
+
         if let eventTap = eventTap {
             CGEvent.tapEnable(tap: eventTap, enable: false)
             if let runLoopSource = runLoopSource {
@@ -117,6 +148,7 @@ final class HotkeyManager {
             self.eventTap = nil
             self.runLoopSource = nil
         }
+        isRegistered = false
         print("[HotkeyManager] Hotkey unregistered")
     }
 

@@ -345,7 +345,7 @@ final class LauncherWindow: NSWindow {
 
         let itemWidth: CGFloat = 95
         let itemHeight: CGFloat = 110
-        let spacing: CGFloat = 8
+        let spacing: CGFloat = 4  // Reduced from 8 to fit more rows
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
@@ -356,7 +356,7 @@ final class LauncherWindow: NSWindow {
             totalHeight += 18 // label height
             let recentRows = Int(ceil(Double(recentApps.count) / Double(columns)))
             totalHeight += CGFloat(recentRows) * (itemHeight + spacing)
-            totalHeight += 12 // separator and spacing (reduced from 20)
+            totalHeight += 8 // separator and spacing (reduced from 12)
         }
 
         // All apps section - show all apps
@@ -409,7 +409,7 @@ final class LauncherWindow: NSWindow {
             separator.wantsLayer = true
             separator.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
             gridView.addSubview(separator)
-            y -= 10
+            y -= 6  // Reduced from 10
         }
 
         // All apps section
@@ -453,7 +453,7 @@ final class LauncherWindow: NSWindow {
 
         // Name (increased spacing from icon)
         let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 4, y: 8, width: size.width - 8, height: 30)
+        nameField.frame = NSRect(x: 4, y: 12, width: size.width - 8, height: 28)  // Increased from y:8 to y:12
         nameField.alignment = .center
         nameField.font = .systemFont(ofSize: 13)
         nameField.lineBreakMode = .byTruncatingTail

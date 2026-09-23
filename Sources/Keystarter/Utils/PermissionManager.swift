@@ -25,17 +25,15 @@ final class PermissionManager {
     /// Request all necessary permissions with explanations.
     func requestAllPermissions(completion: @escaping () -> Void) {
         requestAccessibilityPermission { [weak self] in
-            // After accessibility permission, enable login item and restart
+            // After accessibility permission, enable login item
             self?.setLoginItem(enabled: true)
-            self?.restartApp()
+            completion()
         }
     }
 
     /// Request Accessibility permission (for global hotkey).
     private func requestAccessibilityPermission(completion: @escaping () -> Void) {
-        let trusted = AXIsProcessTrustedWithOptions([
-            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
-        ] as CFDictionary)
+        let trusted = AXIsProcessTrusted()
 
         if trusted {
             completion()
@@ -51,11 +49,10 @@ final class PermissionManager {
         • Capture keyboard shortcuts for navigation
         
         Click "Open System Settings" to grant permission.
-        After granting, click "Restart Now" to apply the changes.
+        The hotkey will work immediately after granting.
         """
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "Restart Now")
         alert.addButton(withTitle: "Skip")
 
         let response = alert.runModal()
@@ -63,36 +60,10 @@ final class PermissionManager {
         if response == .alertFirstButtonReturn {
             // Open System Settings
             openAccessibilitySettings()
-            // Show restart alert after a short delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                self.showRestartAlert(completion: completion)
-            }
-        } else if response == .alertSecondButtonReturn {
-            // User clicked "Restart Now" directly
-            completion()
-        } else {
-            // Skip
-            completion()
         }
-    }
-
-    /// Show restart alert after granting permission.
-    private func showRestartAlert(completion: @escaping () -> Void) {
-        let alert = NSAlert()
-        alert.messageText = "Permission Granted?"
-        alert.informativeText = """
-        After granting Accessibility permission in System Settings,
-        click "Restart Now" to apply the changes.
         
-        The app will restart automatically.
-        """
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Restart Now")
-        alert.addButton(withTitle: "Later")
-
-        if alert.runModal() == .alertFirstButtonReturn {
-            completion()
-        }
+        // Complete immediately - HotkeyManager will detect permission change
+        completion()
     }
 
     /// Enable or disable login item (start at login).
@@ -113,15 +84,6 @@ final class PermissionManager {
             SMLoginItemSetEnabled(bundleID, enabled)
         }
         UserDefaults.standard.set(enabled, forKey: "startAtLogin")
-    }
-
-    /// Restart the application.
-    private func restartApp() {
-        let task = Process()
-        task.launchPath = "/bin/sh"
-        task.arguments = ["-c", "sleep 1; open \"\(Bundle.main.bundlePath)\""]
-        try? task.run()
-        NSApp.terminate(nil)
     }
 
     /// Open System Settings > Privacy & Security > Accessibility.
