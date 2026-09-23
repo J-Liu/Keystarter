@@ -103,9 +103,9 @@ final class ClipboardPanel: NSObject {
                         title = String(title.prefix(40)) + "..."
                     }
                 } else {
-                    // Load image and create thumbnail
-                    if let fullImage = NSImage(contentsOfFile: entry.content) {
-                        image = createThumbnail(from: fullImage, maxSize: 32)
+                    // Use ImageIO for efficient thumbnail generation
+                    if let thumbnail = createThumbnailFromFile(entry.content, maxSize: 32) {
+                        image = thumbnail
                         title = ""
                     }
                 }
@@ -145,8 +145,9 @@ final class ClipboardPanel: NSObject {
         if entry.type == "text" {
             pasteboard.setString(entry.content, forType: .string)
         } else if entry.type == "image" {
-            if let image = NSImage(contentsOfFile: entry.content) {
-                pasteboard.writeObjects([image])
+            // Write raw data directly, avoid NSImage decoding
+            if let data = try? Data(contentsOf: URL(fileURLWithPath: entry.content)) {
+                pasteboard.setData(data, forType: .png)
             }
         }
 
@@ -225,6 +226,25 @@ final class ClipboardPanel: NSObject {
 
         thumbnail.unlockFocus()
         return thumbnail
+    }
+
+    private func createThumbnailFromFile(_ path: String, maxSize: CGFloat) -> NSImage? {
+        guard let imageSource = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil) else {
+            return nil
+        }
+
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxSize
+        ]
+
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(imageSource, 0, options as CFDictionary) else {
+            return nil
+        }
+
+        return NSImage(cgImage: cgImage, size: .zero)
     }
 }
 
