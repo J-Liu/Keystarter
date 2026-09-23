@@ -193,7 +193,7 @@ final class SettingsWindow: NSWindow {
         logPathField.identifier = NSUserInterfaceItemIdentifier("generalLogPath")
         view.addSubview(logPathField)
 
-        let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 70, height: 28))
+        let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 80, height: 28))
         chooseLogButton.title = "Choose..."
         chooseLogButton.bezelStyle = .rounded
         chooseLogButton.target = self
@@ -216,7 +216,7 @@ final class SettingsWindow: NSWindow {
     // MARK: - Clipboard Tab
 
     private func createClipboardTab() -> NSView {
-        let viewHeight: CGFloat = 320
+        let viewHeight: CGFloat = 400
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
 
         var y = viewHeight - rowHeight
@@ -284,7 +284,7 @@ final class SettingsWindow: NSWindow {
         logPathField.identifier = NSUserInterfaceItemIdentifier("clipboardLogPath")
         view.addSubview(logPathField)
 
-        let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 70, height: 28))
+        let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 80, height: 28))
         chooseLogButton.title = "Choose..."
         chooseLogButton.bezelStyle = .rounded
         chooseLogButton.target = self
