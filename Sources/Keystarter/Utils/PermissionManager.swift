@@ -33,41 +33,48 @@ final class PermissionManager {
 
     /// Request Accessibility permission (for global hotkey).
     private func requestAccessibilityPermission(completion: @escaping () -> Void) {
-        // This will trigger the system permission dialog if not already granted
-        let trusted = AXIsProcessTrustedWithOptions([
-            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+        // First check silently without triggering system dialog
+        let alreadyTrusted = AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): false
         ] as CFDictionary)
 
-        if trusted {
+        if alreadyTrusted {
             completion()
             return
         }
 
-        // Show our explanation alert after system dialog
+        // Show our explanation alert first
         let alert = NSAlert()
         alert.messageText = "Accessibility Permission Required"
         alert.informativeText = """
         Keystarter needs Accessibility permission to:
-        
+
         • Listen for the global hotkey (⌘ Space)
-        • Capture keyboard shortcuts for navigation
-        
+        • Paste clipboard content to other apps
+
         Please grant permission in System Settings.
-        The hotkey will work immediately after granting.
         """
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "Grant Permission")
         alert.addButton(withTitle: "Skip")
 
         let response = alert.runModal()
-        
+
         if response == .alertFirstButtonReturn {
-            // Open System Settings
-            openAccessibilitySettings()
+            // Trigger system permission dialog
+            _ = AXIsProcessTrustedWithOptions([
+                kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+            ] as CFDictionary)
         }
-        
-        // Complete immediately - HotkeyManager will detect permission change
+
         completion()
+    }
+
+    /// Check if Accessibility permission is granted.
+    func hasAccessibilityPermission() -> Bool {
+        AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): false
+        ] as CFDictionary)
     }
 
     /// Enable or disable login item (start at login).

@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon
 
 struct ClipboardEntry {
     let id: Int64
@@ -148,6 +149,22 @@ final class ClipboardPanel: NSPanel {
     }
 
     private func activateAndPaste() {
+        guard PermissionManager.shared.hasAccessibilityPermission() else {
+            // Request permission if not granted
+            let alert = NSAlert()
+            alert.messageText = "Accessibility Permission Required"
+            alert.informativeText = "Keystarter needs Accessibility permission to paste content."
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "Grant Permission")
+            alert.addButton(withTitle: "Cancel")
+            if alert.runModal() == .alertFirstButtonReturn {
+                _ = AXIsProcessTrustedWithOptions([
+                    kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+                ] as CFDictionary)
+            }
+            return
+        }
+
         if let app = previousApp {
             app.activate()
         }
