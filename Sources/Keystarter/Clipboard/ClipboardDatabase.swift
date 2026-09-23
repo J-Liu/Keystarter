@@ -77,4 +77,16 @@ final class ClipboardDatabase {
         defer { lock.unlock() }
         sqlite3_exec(db, "DELETE FROM clipboard;", nil, nil, nil)
     }
+
+    func touchEntry(id: Int64) {
+        lock.lock()
+        defer { lock.unlock() }
+        let sql = "UPDATE clipboard SET created_at = ? WHERE id = ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        sqlite3_bind_int64(stmt, 1, Int64(Date().timeIntervalSince1970))
+        sqlite3_bind_int64(stmt, 2, id)
+        sqlite3_step(stmt)
+        sqlite3_finalize(stmt)
+    }
 }

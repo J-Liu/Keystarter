@@ -151,9 +151,12 @@ final class ClipboardPanel: NSObject {
             }
         }
 
+        // Move to front (update created_at)
+        ClipboardManager.shared.db.touchEntry(id: entry.id)
+
         hide()
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
             self?.activateAndPaste()
         }
     }
