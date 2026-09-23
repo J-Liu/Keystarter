@@ -25,7 +25,7 @@ final class ClipboardPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 190, height: 360),
+            contentRect: NSRect(x: 0, y: 0, width: 190, height: 160),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
@@ -84,7 +84,7 @@ final class ClipboardPanel: NSPanel {
     }
 
     private func setupEmptyView() {
-        let y = emptyView.bounds.height - 60
+        let y: CGFloat = 100
 
         let label = NSTextField(labelWithString: "No clipboard history")
         label.frame = NSRect(x: 0, y: y, width: emptyView.bounds.width, height: 24)
@@ -100,12 +100,12 @@ final class ClipboardPanel: NSPanel {
 
         // Settings menu item
         let settingsItem = MenuItemView(title: "Settings...", action: #selector(openSettings))
-        settingsItem.frame = NSRect(x: 0, y: y - 48, width: emptyView.bounds.width, height: 24)
+        settingsItem.frame = NSRect(x: 8, y: y - 48, width: emptyView.bounds.width - 16, height: 24)
         emptyView.addSubview(settingsItem)
 
         // Clear history menu item
         let clearItem = MenuItemView(title: "Clear History", action: #selector(clearHistory))
-        clearItem.frame = NSRect(x: 0, y: y - 72, width: emptyView.bounds.width, height: 24)
+        clearItem.frame = NSRect(x: 8, y: y - 72, width: emptyView.bounds.width - 16, height: 24)
         emptyView.addSubview(clearItem)
     }
 
@@ -137,6 +137,7 @@ final class ClipboardPanel: NSPanel {
 
     func show() {
         loadEntries()
+        adjustHeight()
         centerOnMouse()
         previousApp = NSWorkspace.shared.frontmostApplication
         makeKeyAndOrderFront(nil)
@@ -145,6 +146,26 @@ final class ClipboardPanel: NSPanel {
         eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             self?.orderOut(nil)
         }
+    }
+
+    private func adjustHeight() {
+        let minWidth: CGFloat = 190
+        let rowHeight: CGFloat = 36
+        let padding: CGFloat = 16
+        let maxHeight: CGFloat = 400
+
+        let height: CGFloat
+        if entries.isEmpty {
+            height = 120
+        } else {
+            let contentHeight = CGFloat(entries.count) * rowHeight + padding * 2
+            height = min(maxHeight, max(160, contentHeight))
+        }
+
+        var frame = self.frame
+        frame.size.height = height
+        frame.size.width = minWidth
+        setFrame(frame, display: true)
     }
 
     override func orderOut(_ sender: Any?) {
@@ -334,9 +355,9 @@ class MenuItemView: NSView {
         wantsLayer = true
 
         let label = NSTextField(labelWithString: title)
-        label.frame = NSRect(x: 16, y: 2, width: bounds.width - 32, height: 20)
         label.font = .systemFont(ofSize: 13)
-        label.autoresizingMask = [.width]
+        label.sizeToFit()
+        label.frame = NSRect(x: 16, y: (bounds.height - label.bounds.height) / 2, width: label.bounds.width, height: label.bounds.height)
         addSubview(label)
 
         let trackingArea = NSTrackingArea(rect: .zero, options: [.inVisibleRect, .activeAlways, .mouseEnteredAndExited], owner: self, userInfo: nil)
