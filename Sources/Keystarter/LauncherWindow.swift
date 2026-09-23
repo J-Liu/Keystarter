@@ -286,7 +286,8 @@ final class LauncherWindow: NSWindow {
     }
 
     @objc private func tableClicked() {
-        executeSelected()
+        // In list mode, just update preview, don't execute
+        updatePreview()
     }
 
     /// Execute the currently selected result.
@@ -451,9 +452,16 @@ final class LauncherWindow: NSWindow {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         view.addSubview(imageView)
 
-        // Name (increased spacing from icon)
-        let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 4, y: -12, width: size.width - 8, height: 28)
+        // Name (centered below icon)
+        let nameField = NSTextField(wrappingLabelWithString: app.name)
+        let nameWidth = size.width - 8
+        let nameHeight: CGFloat = 28
+        nameField.frame = NSRect(
+            x: (size.width - nameWidth) / 2,
+            y: -12,
+            width: nameWidth,
+            height: nameHeight
+        )
         nameField.alignment = .center
         nameField.font = .systemFont(ofSize: 13)
         nameField.lineBreakMode = .byTruncatingTail
@@ -583,6 +591,14 @@ final class LauncherWindow: NSWindow {
             if name.hasPrefix(".") { continue }
 
             let fullPath = path + "/" + name
+            
+            // Skip symbolic links (like Safari in /Applications)
+            if let attrs = try? fileManager.attributesOfItem(atPath: fullPath),
+               let fileType = attrs[.type] as? FileAttributeType,
+               fileType == .typeSymbolicLink {
+                continue
+            }
+            
             var isDir: ObjCBool = false
             guard fileManager.fileExists(atPath: fullPath, isDirectory: &isDir) else { continue }
 

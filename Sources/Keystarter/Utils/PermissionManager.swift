@@ -33,6 +33,7 @@ final class PermissionManager {
 
     /// Request Accessibility permission (for global hotkey).
     private func requestAccessibilityPermission(completion: @escaping () -> Void) {
+        // This will trigger the system permission dialog if not already granted
         let trusted = AXIsProcessTrustedWithOptions([
             kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
         ] as CFDictionary)
@@ -42,6 +43,7 @@ final class PermissionManager {
             return
         }
 
+        // Show our explanation alert after system dialog
         let alert = NSAlert()
         alert.messageText = "Accessibility Permission Required"
         alert.informativeText = """
@@ -50,7 +52,7 @@ final class PermissionManager {
         • Listen for the global hotkey (⌘ Space)
         • Capture keyboard shortcuts for navigation
         
-        Click "Open System Settings" to grant permission.
+        Please grant permission in System Settings.
         The hotkey will work immediately after granting.
         """
         alert.alertStyle = .warning
