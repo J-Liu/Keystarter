@@ -344,8 +344,8 @@ final class LauncherWindow: NSWindow {
         }
 
         let itemWidth: CGFloat = 95
-        let itemHeight: CGFloat = 110
-        let spacing: CGFloat = 4  // Reduced from 8 to fit more rows
+        let itemHeight: CGFloat = 95
+        let spacing: CGFloat = 10  // Reduced from 8 to fit more rows
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
@@ -453,7 +453,7 @@ final class LauncherWindow: NSWindow {
 
         // Name (increased spacing from icon)
         let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 4, y: 12, width: size.width - 8, height: 28)  // Increased from y:8 to y:12
+        nameField.frame = NSRect(x: 4, y: -12, width: size.width - 8, height: 28)
         nameField.alignment = .center
         nameField.font = .systemFont(ofSize: 13)
         nameField.lineBreakMode = .byTruncatingTail
