@@ -96,18 +96,27 @@ final class ClipboardPanel: NSObject {
             for (index, entry) in group.enumerated() {
                 let number = index + 1
                 var title = entry.content
+                var image: NSImage? = nil
+
                 if entry.type == "text" {
                     if title.count > 40 {
                         title = String(title.prefix(40)) + "..."
                     }
                 } else {
-                    title = "📷 Image"
+                    // Load image and create thumbnail
+                    if let fullImage = NSImage(contentsOfFile: entry.content) {
+                        image = createThumbnail(from: fullImage, size: NSSize(width: 32, height: 32))
+                        title = ""
+                    }
                 }
 
                 let item = NSMenuItem(title: "\(number). \(title)", action: #selector(pasteEntry(_:)), keyEquivalent: number == 10 ? "0" : "\(number)")
                 item.representedObject = entry
                 item.keyEquivalentModifierMask = .command
                 item.target = self
+                if let img = image {
+                    item.image = img
+                }
                 groupMenu.addItem(item)
             }
 
@@ -191,6 +200,19 @@ final class ClipboardPanel: NSObject {
     @objc private func openSettings() {
         hide()
         (NSApp.delegate as? AppDelegate)?.showClipboardSettings()
+    }
+
+    private func createThumbnail(from image: NSImage, size: NSSize) -> NSImage {
+        let thumbnail = NSImage(size: size)
+        thumbnail.lockFocus()
+
+        let srcRect = NSRect(origin: .zero, size: image.size)
+        let dstRect = NSRect(origin: .zero, size: size)
+
+        image.draw(in: dstRect, from: srcRect, operation: .sourceOver, fraction: 1.0)
+
+        thumbnail.unlockFocus()
+        return thumbnail
     }
 }
 
