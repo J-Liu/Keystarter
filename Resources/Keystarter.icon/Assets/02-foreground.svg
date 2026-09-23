@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="170 40 380 640" width="1024" height="1024">
+  <defs>
+    <linearGradient id="boltGrad" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFF6DC"/>
+      <stop offset="50%" stop-color="#E8C978"/>
+      <stop offset="100%" stop-color="#A8843C"/>
+    </linearGradient>
+  </defs>
+
+  <!--
+    Flash-style bolt, outer contour only.
+    viewBox is set to the bolt's own coordinate range,
+    so no translate/scale transform is needed.
+  -->
+  <path d="
+    m42.8-62.6
+    -253.2 295
+    46.9-8.7
+    -84 139.1
+    47.8-6.1
+    -108.8 199.7
+    250.5-281.7
+    -46.4 6.1
+    83.5-133.5
+    -53.9 10.5
+    z
+  " fill="url(#boltGrad)" stroke="none"
+  transform="translate(490.6, 113.1)"/>
+</svg>

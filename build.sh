@@ -36,6 +36,15 @@ cp "$BINARY_PATH" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 # Copy Info.plist from Resources/
 cp "${ROOT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 
+# Copy pre-compiled icon assets (committed to git)
+ICON_DIR="${ROOT_DIR}/Resources/Compiled"
+if [ -f "${ICON_DIR}/Assets.car" ]; then
+    cp "${ICON_DIR}/Assets.car" "${APP_BUNDLE}/Contents/Resources/Assets.car"
+fi
+if [ -f "${ICON_DIR}/${APP_NAME}.icns" ]; then
+    cp "${ICON_DIR}/${APP_NAME}.icns" "${APP_BUNDLE}/Contents/Resources/${APP_NAME}.icns"
+fi
+
 # 3. Ad-hoc sign (required on Apple Silicon)
 echo "==> Signing..."
 codesign --force --deep --sign - "$APP_BUNDLE"

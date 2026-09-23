@@ -11,9 +11,13 @@
     <key>CFBundleDisplayName</key>
     <string>Keystarter</string>
     <key>CFBundleVersion</key>
-    <string>0.1.0</string>
+    <string>1</string>
     <key>CFBundleShortVersionString</key>
     <string>0.1.0</string>
+    <key>CFBundleIconName</key>
+    <string>Keystarter</string>
+    <key>CFBundleIconFile</key>
+    <string>Keystarter</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>LSMinimumSystemVersion</key>
@@ -32,4 +36,3 @@
     <string>REPLACE_WITH_YOUR_PUBLIC_KEY</string>
 </dict>
 </plist>
-
