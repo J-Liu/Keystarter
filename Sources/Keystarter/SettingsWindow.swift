@@ -167,14 +167,24 @@ final class SettingsWindow: NSWindow {
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
         view.addSubview(loginCheckbox)
 
+        // Show Dock Icon
+        let dockIconLabel = NSTextField(labelWithString: "Dock Icon:")
+        dockIconLabel.frame = NSRect(x: 0, y: 15, width: 100, height: 24)
+        view.addSubview(dockIconLabel)
+
+        let dockIconCheckbox = NSButton(checkboxWithTitle: "Show Dock icon", target: self, action: #selector(dockIconChanged(_:)))
+        dockIconCheckbox.frame = NSRect(x: 110, y: 14, width: 200, height: 24)
+        dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
+        view.addSubview(dockIconCheckbox)
+
         // Enable Log
         let enableLogCheckbox = NSButton(checkboxWithTitle: "Enable log", target: self, action: #selector(generalLogEnabledChanged(_:)))
-        enableLogCheckbox.frame = NSRect(x: 110, y: 15, width: 120, height: 24)
+        enableLogCheckbox.frame = NSRect(x: 110, y: -15, width: 120, height: 24)
         enableLogCheckbox.state = LogSettings.shared.generalLogEnabled ? .on : .off
         view.addSubview(enableLogCheckbox)
 
         // Log path (read-only)
-        let logPathField = NSTextField(frame: NSRect(x: 240, y: 15, width: 150, height: 24))
+        let logPathField = NSTextField(frame: NSRect(x: 240, y: -15, width: 150, height: 24))
         logPathField.stringValue = LogSettings.shared.generalLogPath
         logPathField.isEditable = false
         logPathField.isBezeled = false
@@ -185,7 +195,7 @@ final class SettingsWindow: NSWindow {
         view.addSubview(logPathField)
 
         // Choose log file button
-        let chooseLogButton = NSButton(frame: NSRect(x: 395, y: 14, width: 60, height: 24))
+        let chooseLogButton = NSButton(frame: NSRect(x: 395, y: -16, width: 60, height: 24))
         chooseLogButton.title = "Choose..."
         chooseLogButton.bezelStyle = .rounded
         chooseLogButton.target = self
@@ -237,6 +247,12 @@ final class SettingsWindow: NSWindow {
         let enabled = sender.state == .on
         UserDefaults.standard.set(enabled, forKey: "startAtLogin")
         PermissionManager.shared.setLoginItem(enabled: enabled)
+    }
+
+    @objc private func dockIconChanged(_ sender: NSButton) {
+        let showDock = sender.state == .on
+        UserDefaults.standard.set(showDock, forKey: "showDockIcon")
+        (NSApp.delegate as? AppDelegate)?.updateDockIconVisibility()
     }
 
     @objc private func checkPermissions() {

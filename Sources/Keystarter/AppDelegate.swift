@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupMenu()
         setupStatusBar()
         setupIndex()
+        updateDockIconVisibility()
 
         // Create the launcher window (hidden initially)
         launcherWindow = LauncherWindow()
@@ -94,6 +95,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Update the status bar icon theme.
     func updateStatusBarTheme(_ theme: String) {
         statusBarController?.updateTheme(theme)
+    }
+
+    func updateDockIconVisibility() {
+        let showDock = UserDefaults.standard.bool(forKey: "showDockIcon")
+        if showDock {
+            NSApp.setActivationPolicy(.regular)
+        } else {
+            NSApp.setActivationPolicy(.accessory)
+        }
     }
 
     /// Minimal menu so Cmd+Q works and the app behaves like a normal macOS app.
