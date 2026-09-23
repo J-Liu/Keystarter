@@ -56,6 +56,13 @@ final class IndexDatabase {
         CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN
             INSERT INTO files_fts(files_fts, rowid, name, path) VALUES('delete', old.id, old.name, old.path);
         END;
+        CREATE TABLE IF NOT EXISTS clipboard (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            content TEXT NOT NULL,
+            hash TEXT NOT NULL UNIQUE,
+            created_at INTEGER NOT NULL
+        );
         """
         sqlite3_exec(db, sql, nil, nil, nil)
     }
@@ -132,5 +139,73 @@ final class IndexDatabase {
     func commitTransaction() {
         sqlite3_exec(db, "COMMIT;", nil, nil, nil)
         lock.unlock()
+    }
+
+    // MARK: - Clipboard
+
+    /// Insert a clipboard entry. Returns true if inserted, false if duplicate.
+    func insertClipboard(type: String, content: String, hash: String) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        let sql = "INSERT OR IGNORE INTO clipboard (type, content, hash, created_at) VALUES (?, ?, ?, ?);"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        sqlite3_bind_text(stmt, 1, (type as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 2, (content as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 3, (hash as NSString).utf8String, -1, nil)
+        sqlite3_bind_int64(stmt, 4, Int64(Date().timeIntervalSince1970))
+        sqlite3_step(stmt)
+        let changes = sqlite3_changes(db)
+        sqlite3_finalize(stmt)
+        return changes > 0
+    }
+
+    /// Get recent clipboard entries.
+    func getClipboard(limit: Int = 30) -> [(id: Int64, type: String, content: String, createdAt: Date)] {
+        lock.lock()
+        defer { lock.unlock() }
+        let sql = "SELECT id, type, content, created_at FROM clipboard ORDER BY created_at DESC LIMIT ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        sqlite3_bind_int(stmt, 1, Int32(limit))
+        var results: [(Int64, String, String, Date)] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let type = String(cString: sqlite3_column_text(stmt, 1))
+            let content = String(cString: sqlite3_column_text(stmt, 2))
+            let createdAt = Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 3)))
+            results.append((id, type, content, createdAt))
+        }
+        sqlite3_finalize(stmt)
+        return results
+    }
+
+    /// Delete clipboard entries older than days or exceeding max count.
+    func cleanClipboard(maxCount: Int, maxDays: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        // Delete by age
+        let cutoff = Date().addingTimeInterval(-Double(maxDays * 86400)).timeIntervalSince1970
+        var sql = "DELETE FROM clipboard WHERE created_at < ?;"
+        var stmt: OpaquePointer?
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_int64(stmt, 1, Int64(cutoff))
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+        // Delete by count (keep most recent)
+        sql = "DELETE FROM clipboard WHERE id NOT IN (SELECT id FROM clipboard ORDER BY created_at DESC LIMIT ?);"
+        if sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK {
+            sqlite3_bind_int(stmt, 1, Int32(maxCount))
+            sqlite3_step(stmt)
+            sqlite3_finalize(stmt)
+        }
+    }
+
+    /// Clear all clipboard history.
+    func clearClipboard() {
+        lock.lock()
+        defer { lock.unlock() }
+        sqlite3_exec(db, "DELETE FROM clipboard;", nil, nil, nil)
     }
 }
