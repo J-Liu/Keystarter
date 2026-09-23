@@ -3,6 +3,7 @@ name: Build macOS App
 on:
   push:
     branches: [ main, develop ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
@@ -15,15 +16,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Swift
-      uses: swift-actions/setup-swift@v2
-      with:
-        swift-version: "5.9"
-
     - name: Cache Swift packages
       uses: actions/cache@v4
       with:
-        path: .build
+        path: |
+          .build
+          ~/Library/Caches/org.swift.swiftpm
         key: ${{ runner.os }}-spm-${{ hashFiles('**/Package.resolved') }}
         restore-keys: |
           ${{ runner.os }}-spm-
@@ -40,16 +38,15 @@ jobs:
         DMG_NAME="${APP_NAME}-macOS.dmg"
         TEMP_DMG="temp.dmg"
 
-        # Create temporary DMG
         hdiutil create -volname "${APP_NAME}" -srcfolder "${APP_DIR}" -ov -format UDRO "${TEMP_DMG}"
-
-        # Convert to compressed DMG
         hdiutil convert "${TEMP_DMG}" -format UDZO -o "${DMG_NAME}"
-
-        # Clean up
         rm "${TEMP_DMG}"
 
         echo "DMG created at ${DMG_NAME}"
+
+    - name: Create ZIP for Sparkle
+      run: |
+        zip -r "Keystarter-${GITHUB_REF_NAME#v}.zip" Keystarter.app
 
     - name: Upload app bundle
       uses: actions/upload-artifact@v4
@@ -69,6 +66,6 @@ jobs:
       with:
         files: |
           Keystarter-macOS.dmg
-          Keystarter.app
+          Keystarter-*.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
