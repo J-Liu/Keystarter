@@ -108,9 +108,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Full menu for Dock icon and system menu bar.
     private func setupMenu() {
-        let mainMenu = NSMenu()
+        updateMenu()
+        // Listen for language changes
+        NotificationCenter.default.addObserver(self, selector: #selector(updateMenu), name: .languageChanged, object: nil)
+    }
 
-        // App menu
+    @objc private func updateMenu() {
+        let mainMenu = NSMenu()
         let appMenuItem = NSMenuItem()
         mainMenu.addItem(appMenuItem)
 

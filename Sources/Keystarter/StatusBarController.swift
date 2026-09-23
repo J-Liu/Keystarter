@@ -27,21 +27,24 @@ final class StatusBarController {
             button.image = nil
         case "light":
             // Light theme: use dark icon
-            if let image = NSImage(named: "menubar-dark") {
+            if let imagePath = Bundle.main.path(forResource: "menubar-dark", ofType: "png"),
+               let image = NSImage(contentsOfFile: imagePath) {
                 image.isTemplate = true
                 button.image = image
             }
         case "dark":
             // Dark theme: use light icon
-            if let image = NSImage(named: "menubar-light") {
+            if let imagePath = Bundle.main.path(forResource: "menubar-light", ofType: "png"),
+               let image = NSImage(contentsOfFile: imagePath) {
                 image.isTemplate = true
                 button.image = image
             }
         default:
             // System theme: detect current appearance
             let isDarkMode = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let iconName = isDarkMode ? "menubar-light" : "menubar-dark"
-            if let image = NSImage(named: iconName) {
+            let resourceName = isDarkMode ? "menubar-light" : "menubar-dark"
+            if let imagePath = Bundle.main.path(forResource: resourceName, ofType: "png"),
+               let image = NSImage(contentsOfFile: imagePath) {
                 image.isTemplate = true
                 button.image = image
             }

@@ -50,6 +50,11 @@ if [ -d "${ROOT_DIR}/Resources/MenuBar" ]; then
     cp "${ROOT_DIR}/Resources/MenuBar/"*.png "${APP_BUNDLE}/Contents/Resources/"
 fi
 
+# Copy Info.plist
+cp "${ROOT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
+# Set LSUIElement to true (hide from Dock by default)
+/usr/libexec/PlistBuddy -c "Set :LSUIElement true" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || true
+
 # 3. Ad-hoc sign (required on Apple Silicon)
 echo "==> Signing..."
 codesign --force --deep --sign - "$APP_BUNDLE"

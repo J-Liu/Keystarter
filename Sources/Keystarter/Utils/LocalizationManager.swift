@@ -3,6 +3,10 @@
 
 import Foundation
 
+extension Notification.Name {
+    static let languageChanged = Notification.Name("languageChanged")
+}
+
 /// Manages localization for the app.
 final class LocalizationManager {
 
@@ -41,6 +45,8 @@ final class LocalizationManager {
 
     private func loadLanguage() {
         strings = localizedStrings[currentLanguage] ?? [:]
+        // Post notification for menu updates
+        NotificationCenter.default.post(name: .languageChanged, object: nil)
     }
 
     func localized(_ key: String) -> String {
@@ -58,6 +64,7 @@ final class LocalizationManager {
             "settings.tab.about": "About",
 
             // General Tab
+            "settings.language": "Language:",
             "settings.hotkey": "Hotkey:",
             "settings.hotkey.hint": "Click to record",
             "settings.statusbar": "Status Bar:",
@@ -128,6 +135,7 @@ final class LocalizationManager {
             "settings.tab.about": "关于",
 
             // General Tab
+            "settings.language": "语言：",
             "settings.hotkey": "快捷键：",
             "settings.hotkey.hint": "点击录制",
             "settings.statusbar": "状态栏：",
@@ -198,6 +206,7 @@ final class LocalizationManager {
             "settings.tab.about": "關於",
 
             // General Tab
+            "settings.language": "語言：",
             "settings.hotkey": "快速鍵：",
             "settings.hotkey.hint": "點擊錄製",
             "settings.statusbar": "狀態列：",

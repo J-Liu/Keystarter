@@ -76,10 +76,10 @@ final class SettingsWindow: NSWindow {
         let viewHeight: CGFloat = 440
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
 
-        var y = viewHeight - rowHeight
+        var y = viewHeight - 20  // Start with top padding
 
         // Row: Language
-        addLabel("Language:", to: view, y: y)
+        addLabel(L("settings.language"), to: view, y: y)
         let languagePopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
         for language in LocalizationManager.Language.allCases {
             languagePopup.addItem(withTitle: language.displayName)
@@ -453,12 +453,11 @@ final class SettingsWindow: NSWindow {
 
     @objc private func statusBarThemeChanged(_ sender: NSPopUpButton) {
         let theme: String
-        switch sender.title {
-        case L("settings.statusbar.light"): theme = "light"
-        case L("settings.statusbar.dark"): theme = "dark"
-        case L("settings.statusbar.hidden"): theme = "hidden"
-        default: theme = "system"
-        }
+        let title = sender.selectedItem?.title ?? ""
+        if title == L("settings.statusbar.light") { theme = "light" }
+        else if title == L("settings.statusbar.dark") { theme = "dark" }
+        else if title == L("settings.statusbar.hidden") { theme = "hidden" }
+        else { theme = "system" }
         UserDefaults.standard.set(theme, forKey: "statusBar.theme")
         (NSApp.delegate as? AppDelegate)?.updateStatusBarTheme(theme)
     }
