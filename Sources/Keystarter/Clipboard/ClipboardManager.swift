@@ -12,34 +12,27 @@ final class ClipboardManager {
 
     private var timer: Timer?
     private var lastChangeCount: Int = 0
-    private var logFile: URL?
 
     /// Start monitoring clipboard.
     func start() {
         lastChangeCount = NSPasteboard.general.changeCount
-        setupLogFile()
         log("ClipboardManager started, initial count: \(lastChangeCount)")
         timer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
             self?.checkClipboard()
         }
     }
 
-    private func setupLogFile() {
-        let dir = NSHomeDirectory() + "/Library/Application Support/Keystarter"
-        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        logFile = URL(fileURLWithPath: dir + "/clipboard.log")
-    }
-
     private func log(_ message: String) {
+        guard LogSettings.shared.clipboardLogEnabled else { return }
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let line = "[\(timestamp)] \(message)\n"
-        guard let file = logFile else { return }
-        if let handle = try? FileHandle(forWritingTo: file) {
+        let path = LogSettings.shared.clipboardLogPath
+        if let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path)) {
             handle.seekToEndOfFile()
             handle.write(line.data(using: .utf8)!)
             handle.closeFile()
         } else {
-            try? line.write(to: file, atomically: true, encoding: .utf8)
+            try? line.write(to: URL(fileURLWithPath: path), atomically: true, encoding: .utf8)
         }
     }
 

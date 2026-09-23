@@ -166,8 +166,22 @@ final class SettingsWindow: NSWindow {
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
         view.addSubview(loginCheckbox)
 
+        // Enable Log
+        let enableLogCheckbox = NSButton(checkboxWithTitle: "Enable log", target: self, action: #selector(generalLogEnabledChanged(_:)))
+        enableLogCheckbox.frame = NSRect(x: 110, y: 15, width: 120, height: 24)
+        enableLogCheckbox.state = LogSettings.shared.generalLogEnabled ? .on : .off
+        view.addSubview(enableLogCheckbox)
+
+        // Log path
+        let logPathField = NSTextField(frame: NSRect(x: 240, y: 15, width: 180, height: 24))
+        logPathField.stringValue = LogSettings.shared.generalLogPath
+        logPathField.placeholderString = "Log file path"
+        logPathField.target = self
+        logPathField.action = #selector(generalLogPathChanged(_:))
+        view.addSubview(logPathField)
+
         // Check Permissions button
-        let permissionsButton = NSButton(frame: NSRect(x: 0, y: 5, width: 200, height: 32))
+        let permissionsButton = NSButton(frame: NSRect(x: 0, y: -25, width: 200, height: 32))
         permissionsButton.title = "Check Permissions..."
         permissionsButton.bezelStyle = .rounded
         permissionsButton.target = self
@@ -279,11 +293,19 @@ final class SettingsWindow: NSWindow {
         maxDaysHint.textColor = .secondaryLabelColor
         view.addSubview(maxDaysHint)
 
-        // Record images
-        let recordImagesCheckbox = NSButton(checkboxWithTitle: "Record images", target: self, action: #selector(clipboardRecordImagesChanged(_:)))
-        recordImagesCheckbox.frame = NSRect(x: 110, y: 130, width: 200, height: 24)
-        recordImagesCheckbox.state = UserDefaults.standard.bool(forKey: "clipboard.recordImages") ? .on : .off
-        view.addSubview(recordImagesCheckbox)
+        // Enable Log
+        let enableLogCheckbox = NSButton(checkboxWithTitle: "Enable log", target: self, action: #selector(clipboardLogEnabledChanged(_:)))
+        enableLogCheckbox.frame = NSRect(x: 110, y: 130, width: 120, height: 24)
+        enableLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
+        view.addSubview(enableLogCheckbox)
+
+        // Log path
+        let logPathField = NSTextField(frame: NSRect(x: 240, y: 130, width: 180, height: 24))
+        logPathField.stringValue = LogSettings.shared.clipboardLogPath
+        logPathField.placeholderString = "Log file path"
+        logPathField.target = self
+        logPathField.action = #selector(clipboardLogPathChanged(_:))
+        view.addSubview(logPathField)
 
         // Clear button
         let clearButton = NSButton(frame: NSRect(x: 0, y: 80, width: 180, height: 32))
@@ -319,8 +341,20 @@ final class SettingsWindow: NSWindow {
         }
     }
 
-    @objc private func clipboardRecordImagesChanged(_ sender: NSButton) {
-        UserDefaults.standard.set(sender.state == .on, forKey: "clipboard.recordImages")
+    @objc private func generalLogEnabledChanged(_ sender: NSButton) {
+        LogSettings.shared.generalLogEnabled = sender.state == .on
+    }
+
+    @objc private func generalLogPathChanged(_ sender: NSTextField) {
+        LogSettings.shared.generalLogPath = sender.stringValue
+    }
+
+    @objc private func clipboardLogEnabledChanged(_ sender: NSButton) {
+        LogSettings.shared.clipboardLogEnabled = sender.state == .on
+    }
+
+    @objc private func clipboardLogPathChanged(_ sender: NSTextField) {
+        LogSettings.shared.clipboardLogPath = sender.stringValue
     }
 
     @objc private func clearClipboardHistory() {
