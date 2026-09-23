@@ -44,6 +44,13 @@ final class SettingsWindow: NSWindow {
         generalItem.view = generalTab
         tabView.addTabViewItem(generalItem)
 
+        // Clipboard tab
+        let clipboardTab = createClipboardTab()
+        let clipboardItem = NSTabViewItem(identifier: "clipboard")
+        clipboardItem.label = "Clipboard"
+        clipboardItem.view = clipboardTab
+        tabView.addTabViewItem(clipboardItem)
+
         // About tab
         aboutTab = createAboutTab()
         let aboutItem = NSTabViewItem(identifier: "about")
@@ -209,6 +216,142 @@ final class SettingsWindow: NSWindow {
     @objc private func checkPermissions() {
         PermissionManager.shared.requestAllPermissions {
             // Permissions granted
+        }
+    }
+
+    private func createClipboardTab() -> NSView {
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 320))
+
+        // Hotkey
+        let hotkeyLabel = NSTextField(labelWithString: "Hotkey:")
+        hotkeyLabel.frame = NSRect(x: 0, y: 280, width: 100, height: 24)
+        view.addSubview(hotkeyLabel)
+
+        let clipboardHotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: 110, y: 276, width: 150, height: 32))
+        clipboardHotkeyRecorder.onKeyRecorded = { [weak self] recorder in
+            self?.clipboardHotkeyChanged(recorder: recorder)
+        }
+        let savedKeyCode = UserDefaults.standard.integer(forKey: "clipboard.hotkey.keyCode")
+        let savedModifiers = UserDefaults.standard.integer(forKey: "clipboard.hotkey.modifiers")
+        if savedKeyCode > 0 {
+            clipboardHotkeyRecorder.setShortcut(keyCode: UInt16(savedKeyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(savedModifiers)))
+        } else {
+            clipboardHotkeyRecorder.setShortcut(keyCode: UInt16(9), modifiers: [.command, .shift]) // V + Cmd + Shift
+        }
+        view.addSubview(clipboardHotkeyRecorder)
+
+        let hotkeyHint = NSTextField(labelWithString: "Click to record")
+        hotkeyHint.frame = NSRect(x: 270, y: 280, width: 150, height: 24)
+        hotkeyHint.textColor = .secondaryLabelColor
+        hotkeyHint.font = .systemFont(ofSize: 12)
+        view.addSubview(hotkeyHint)
+
+        // Show groups
+        let groupsLabel = NSTextField(labelWithString: "Show Groups:")
+        groupsLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
+        view.addSubview(groupsLabel)
+
+        let groupsSlider = NSSlider(frame: NSRect(x: 110, y: 230, width: 150, height: 24))
+        groupsSlider.minValue = 1
+        groupsSlider.maxValue = 10
+        groupsSlider.integerValue = UserDefaults.standard.integer(forKey: "clipboard.groups") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.groups") : 3
+        groupsSlider.target = self
+        groupsSlider.action = #selector(clipboardGroupsChanged(_:))
+        view.addSubview(groupsSlider)
+
+        let groupsValue = NSTextField(labelWithString: "\(groupsSlider.integerValue)")
+        groupsValue.frame = NSRect(x: 270, y: 230, width: 40, height: 24)
+        groupsValue.identifier = NSUserInterfaceItemIdentifier("clipboardGroupsValue")
+        view.addSubview(groupsValue)
+
+        // Max count
+        let maxCountLabel = NSTextField(labelWithString: "Max Count:")
+        maxCountLabel.frame = NSRect(x: 0, y: 180, width: 100, height: 24)
+        view.addSubview(maxCountLabel)
+
+        let maxCountField = NSTextField(frame: NSRect(x: 110, y: 180, width: 80, height: 24))
+        maxCountField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500)
+        maxCountField.target = self
+        maxCountField.action = #selector(clipboardMaxCountChanged(_:))
+        view.addSubview(maxCountField)
+
+        let maxCountHint = NSTextField(labelWithString: "entries")
+        maxCountHint.frame = NSRect(x: 200, y: 180, width: 60, height: 24)
+        maxCountHint.textColor = .secondaryLabelColor
+        view.addSubview(maxCountHint)
+
+        // Max days
+        let maxDaysLabel = NSTextField(labelWithString: "Max Days:")
+        maxDaysLabel.frame = NSRect(x: 0, y: 130, width: 100, height: 24)
+        view.addSubview(maxDaysLabel)
+
+        let maxDaysField = NSTextField(frame: NSRect(x: 110, y: 130, width: 80, height: 24))
+        maxDaysField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxDays") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxDays") : 30)
+        maxDaysField.target = self
+        maxDaysField.action = #selector(clipboardMaxDaysChanged(_:))
+        view.addSubview(maxDaysField)
+
+        let maxDaysHint = NSTextField(labelWithString: "days")
+        maxDaysHint.frame = NSRect(x: 200, y: 130, width: 60, height: 24)
+        maxDaysHint.textColor = .secondaryLabelColor
+        view.addSubview(maxDaysHint)
+
+        // Record images
+        let recordImagesCheckbox = NSButton(checkboxWithTitle: "Record images", target: self, action: #selector(clipboardRecordImagesChanged(_:)))
+        recordImagesCheckbox.frame = NSRect(x: 110, y: 80, width: 200, height: 24)
+        recordImagesCheckbox.state = UserDefaults.standard.bool(forKey: "clipboard.recordImages") ? .on : .off
+        view.addSubview(recordImagesCheckbox)
+
+        // Clear button
+        let clearButton = NSButton(frame: NSRect(x: 0, y: 20, width: 180, height: 32))
+        clearButton.title = "Clear Clipboard History"
+        clearButton.bezelStyle = .rounded
+        clearButton.target = self
+        clearButton.action = #selector(clearClipboardHistory)
+        view.addSubview(clearButton)
+
+        return view
+    }
+
+    private func clipboardHotkeyChanged(recorder: HotkeyRecorderButton) {
+        UserDefaults.standard.set(Int(recorder.keyCode), forKey: "clipboard.hotkey.keyCode")
+        UserDefaults.standard.set(Int(recorder.modifiers.rawValue), forKey: "clipboard.hotkey.modifiers")
+        (NSApp.delegate as? AppDelegate)?.updateClipboardHotkey(keyCode: recorder.keyCode, modifiers: recorder.modifiers)
+    }
+
+    @objc private func clipboardGroupsChanged(_ sender: NSSlider) {
+        UserDefaults.standard.set(sender.integerValue, forKey: "clipboard.groups")
+        if let view = sender.superview,
+           let label = view.subviews.first(where: { $0.identifier?.rawValue == "clipboardGroupsValue" }) as? NSTextField {
+            label.stringValue = "\(sender.integerValue)"
+        }
+    }
+
+    @objc private func clipboardMaxCountChanged(_ sender: NSTextField) {
+        if let value = Int(sender.stringValue) {
+            UserDefaults.standard.set(value, forKey: "clipboard.maxCount")
+        }
+    }
+
+    @objc private func clipboardMaxDaysChanged(_ sender: NSTextField) {
+        if let value = Int(sender.stringValue) {
+            UserDefaults.standard.set(value, forKey: "clipboard.maxDays")
+        }
+    }
+
+    @objc private func clipboardRecordImagesChanged(_ sender: NSButton) {
+        UserDefaults.standard.set(sender.state == .on, forKey: "clipboard.recordImages")
+    }
+
+    @objc private func clearClipboardHistory() {
+        let alert = NSAlert()
+        alert.messageText = "Clear Clipboard History?"
+        alert.informativeText = "This will delete all clipboard entries."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Clear")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            (NSApp.delegate as? AppDelegate)?.indexDB?.clearClipboard()
         }
     }
 

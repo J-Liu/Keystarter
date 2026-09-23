@@ -83,6 +83,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "hotkey.modifiers")
     }
 
+    /// Update the clipboard hotkey.
+    func updateClipboardHotkey(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
+        clipboardHotkeyManager?.unregister()
+        clipboardHotkeyManager?.register(keyCode: keyCode, modifiers: modifiers)
+        UserDefaults.standard.set(Int(keyCode), forKey: "clipboard.hotkey.keyCode")
+        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "clipboard.hotkey.modifiers")
+    }
+
     /// Update the status bar icon theme.
     func updateStatusBarTheme(_ theme: String) {
         statusBarController?.updateTheme(theme)
