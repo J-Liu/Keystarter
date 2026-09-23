@@ -97,10 +97,9 @@ final class ClipboardPanel: NSObject {
                     title = "📷 Image"
                 }
 
-                let item = NSMenuItem(title: "\(number). \(title)", action: #selector(pasteEntry(_:)), keyEquivalent: "")
+                let item = NSMenuItem(title: "\(number). \(title)", action: #selector(pasteEntry(_:)), keyEquivalent: number == 10 ? "0" : "\(number)")
                 item.representedObject = entry
-                item.keyEquivalent = number == 10 ? "0" : "\(number)"
-                item.keyEquivalentModifierMask = []
+                item.keyEquivalentModifierMask = .command
                 groupMenu.addItem(item)
             }
 
