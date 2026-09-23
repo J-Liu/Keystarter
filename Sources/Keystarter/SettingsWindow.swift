@@ -34,7 +34,7 @@ final class SettingsWindow: NSWindow {
             defer: false
         )
 
-        self.title = "Keystarter Settings"
+        self.title = L("settings.title")
         self.isReleasedWhenClosed = false
         self.minSize = NSSize(width: 600, height: 480)
 
@@ -49,21 +49,21 @@ final class SettingsWindow: NSWindow {
         // General tab
         generalTab = createGeneralTab()
         let generalItem = NSTabViewItem(identifier: "general")
-        generalItem.label = "General"
+        generalItem.label = L("settings.tab.general")
         generalItem.view = generalTab
         tabView.addTabViewItem(generalItem)
 
         // Clipboard tab
         clipboardTab = createClipboardTab()
         let clipboardItem = NSTabViewItem(identifier: "clipboard")
-        clipboardItem.label = "Clipboard"
+        clipboardItem.label = L("settings.tab.clipboard")
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
 
         // About tab
         aboutTab = createAboutTab()
         let aboutItem = NSTabViewItem(identifier: "about")
-        aboutItem.label = "About"
+        aboutItem.label = L("settings.tab.about")
         aboutItem.view = aboutTab
         tabView.addTabViewItem(aboutItem)
 
@@ -73,13 +73,27 @@ final class SettingsWindow: NSWindow {
     // MARK: - General Tab
 
     private func createGeneralTab() -> NSView {
-        let viewHeight: CGFloat = 400
+        let viewHeight: CGFloat = 440
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
 
         var y = viewHeight - rowHeight
 
+        // Row: Language
+        addLabel("Language:", to: view, y: y)
+        let languagePopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        for language in LocalizationManager.Language.allCases {
+            languagePopup.addItem(withTitle: language.displayName)
+        }
+        let currentLanguage = LocalizationManager.shared.currentLanguage
+        languagePopup.selectItem(withTitle: currentLanguage.displayName)
+        languagePopup.target = self
+        languagePopup.action = #selector(languageChanged(_:))
+        view.addSubview(languagePopup)
+
+        y -= rowHeight
+
         // Row: Hotkey
-        addLabel("Hotkey:", to: view, y: y)
+        addLabel(L("settings.hotkey"), to: view, y: y)
         hotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: controlX, y: y - 4, width: 150, height: 32))
         hotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.hotkeyChanged(recorder: recorder)
@@ -92,17 +106,17 @@ final class SettingsWindow: NSWindow {
             hotkeyRecorder.setShortcut(keyCode: UInt16(49), modifiers: .command)
         }
         view.addSubview(hotkeyRecorder)
-        addHint("Click to record", to: view, x: controlX + 160, y: y)
+        addHint(L("settings.hotkey.hint"), to: view, x: controlX + 160, y: y)
 
         y -= rowHeight
 
         // Row: Status Bar
-        addLabel("Status Bar:", to: view, y: y)
+        addLabel(L("settings.statusbar"), to: view, y: y)
         let statusBarPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
-        statusBarPopup.addItem(withTitle: "System Default")
-        statusBarPopup.addItem(withTitle: "Light")
-        statusBarPopup.addItem(withTitle: "Dark")
-        statusBarPopup.addItem(withTitle: "Hidden")
+        statusBarPopup.addItem(withTitle: L("settings.statusbar.system"))
+        statusBarPopup.addItem(withTitle: L("settings.statusbar.light"))
+        statusBarPopup.addItem(withTitle: L("settings.statusbar.dark"))
+        statusBarPopup.addItem(withTitle: L("settings.statusbar.hidden"))
         let savedTheme = UserDefaults.standard.string(forKey: "statusBar.theme") ?? "system"
         statusBarPopup.selectItem(withTitle: themeName(for: savedTheme))
         statusBarPopup.target = self
@@ -112,7 +126,7 @@ final class SettingsWindow: NSWindow {
         y -= rowHeight
 
         // Row: Corner Radius
-        addLabel("Corner Radius:", to: view, y: y)
+        addLabel(L("settings.cornerRadius"), to: view, y: y)
         let radiusSlider = NSSlider(frame: NSRect(x: controlX, y: y, width: controlWidth, height: 24))
         radiusSlider.minValue = 0
         radiusSlider.maxValue = 24
@@ -129,7 +143,7 @@ final class SettingsWindow: NSWindow {
         y -= rowHeight
 
         // Row: Opacity
-        addLabel("Opacity:", to: view, y: y)
+        addLabel(L("settings.opacity"), to: view, y: y)
         let opacitySlider = NSSlider(frame: NSRect(x: controlX, y: y, width: controlWidth, height: 24))
         opacitySlider.minValue = 0.5
         opacitySlider.maxValue = 1.0
@@ -146,12 +160,12 @@ final class SettingsWindow: NSWindow {
         y -= rowHeight
 
         // Row: Group By
-        addLabel("Group By:", to: view, y: y)
+        addLabel(L("settings.groupBy"), to: view, y: y)
         let groupByPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
-        groupByPopup.addItem(withTitle: "Category")
-        groupByPopup.addItem(withTitle: "Letter")
+        groupByPopup.addItem(withTitle: L("settings.groupBy.category"))
+        groupByPopup.addItem(withTitle: L("settings.groupBy.letter"))
         let savedGroupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "category"
-        groupByPopup.selectItem(withTitle: savedGroupBy == "letter" ? "Letter" : "Category")
+        groupByPopup.selectItem(withTitle: savedGroupBy == "letter" ? L("settings.groupBy.letter") : L("settings.groupBy.category"))
         groupByPopup.target = self
         groupByPopup.action = #selector(groupByChanged(_:))
         view.addSubview(groupByPopup)
@@ -159,8 +173,8 @@ final class SettingsWindow: NSWindow {
         y -= rowHeight
 
         // Row: Start at Login
-        addLabel("Start at Login:", to: view, y: y)
-        let loginCheckbox = NSButton(checkboxWithTitle: "Automatically start at login", target: self, action: #selector(loginItemChanged(_:)))
+        addLabel(L("settings.startAtLogin"), to: view, y: y)
+        let loginCheckbox = NSButton(checkboxWithTitle: L("settings.startAtLogin.checkbox"), target: self, action: #selector(loginItemChanged(_:)))
         loginCheckbox.frame = NSRect(x: controlX, y: y, width: 250, height: 24)
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
         view.addSubview(loginCheckbox)
@@ -168,8 +182,8 @@ final class SettingsWindow: NSWindow {
         y -= rowHeight
 
         // Row: Dock Icon
-        addLabel("Dock Icon:", to: view, y: y)
-        let dockIconCheckbox = NSButton(checkboxWithTitle: "Show Dock icon", target: self, action: #selector(dockIconChanged(_:)))
+        addLabel(L("settings.dockIcon"), to: view, y: y)
+        let dockIconCheckbox = NSButton(checkboxWithTitle: L("settings.dockIcon.checkbox"), target: self, action: #selector(dockIconChanged(_:)))
         dockIconCheckbox.frame = NSRect(x: controlX, y: y, width: 200, height: 24)
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
         view.addSubview(dockIconCheckbox)
@@ -177,8 +191,8 @@ final class SettingsWindow: NSWindow {
         y -= rowHeight
 
         // Row: Log
-        addLabel("Log:", to: view, y: y)
-        let enableLogCheckbox = NSButton(checkboxWithTitle: "Enable", target: self, action: #selector(generalLogEnabledChanged(_:)))
+        addLabel(L("settings.log"), to: view, y: y)
+        let enableLogCheckbox = NSButton(checkboxWithTitle: L("settings.log.enable"), target: self, action: #selector(generalLogEnabledChanged(_:)))
         enableLogCheckbox.frame = NSRect(x: controlX, y: y, width: 70, height: 24)
         enableLogCheckbox.state = LogSettings.shared.generalLogEnabled ? .on : .off
         view.addSubview(enableLogCheckbox)
@@ -194,7 +208,7 @@ final class SettingsWindow: NSWindow {
         view.addSubview(logPathField)
 
         let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 80, height: 28))
-        chooseLogButton.title = "Choose..."
+        chooseLogButton.title = L("settings.log.choose")
         chooseLogButton.bezelStyle = .rounded
         chooseLogButton.target = self
         chooseLogButton.action = #selector(chooseGeneralLogFile)
@@ -204,7 +218,7 @@ final class SettingsWindow: NSWindow {
 
         // Bottom buttons
         let permissionsButton = NSButton(frame: NSRect(x: labelX, y: y, width: 160, height: 32))
-        permissionsButton.title = "Check Permissions..."
+        permissionsButton.title = L("settings.permissions")
         permissionsButton.bezelStyle = .rounded
         permissionsButton.target = self
         permissionsButton.action = #selector(checkPermissions)
@@ -222,7 +236,7 @@ final class SettingsWindow: NSWindow {
         var y = viewHeight - rowHeight
 
         // Row: Hotkey
-        addLabel("Hotkey:", to: view, y: y)
+        addLabel(L("settings.clipboard.hotkey"), to: view, y: y)
         let clipboardHotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: controlX, y: y - 4, width: 150, height: 32))
         clipboardHotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.clipboardHotkeyChanged(recorder: recorder)
@@ -235,12 +249,12 @@ final class SettingsWindow: NSWindow {
             clipboardHotkeyRecorder.setShortcut(keyCode: UInt16(9), modifiers: [.command, .shift])
         }
         view.addSubview(clipboardHotkeyRecorder)
-        addHint("Click to record", to: view, x: controlX + 160, y: y)
+        addHint(L("settings.hotkey.hint"), to: view, x: controlX + 160, y: y)
 
         y -= rowHeight
 
         // Row: Max Count
-        addLabel("Max Count:", to: view, y: y)
+        addLabel(L("settings.clipboard.maxCount"), to: view, y: y)
         let maxCountField = NSTextField(frame: NSRect(x: controlX, y: y, width: 80, height: 24))
         let currentMaxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500
         maxCountField.stringValue = String(currentMaxCount)
@@ -248,7 +262,8 @@ final class SettingsWindow: NSWindow {
         maxCountField.action = #selector(clipboardMaxCountChanged(_:))
         view.addSubview(maxCountField)
 
-        let maxCountHint = NSTextField(labelWithString: "entries (groups: \(currentMaxCount / 10 + 1))")
+        let groupsCount = currentMaxCount / 10 + 1
+        let maxCountHint = NSTextField(labelWithString: String(format: L("settings.clipboard.maxCount.hint"), "\(groupsCount)"))
         maxCountHint.frame = NSRect(x: controlX + 90, y: y, width: 200, height: 24)
         maxCountHint.textColor = .secondaryLabelColor
         maxCountHint.identifier = NSUserInterfaceItemIdentifier("maxCountHint")
@@ -257,19 +272,19 @@ final class SettingsWindow: NSWindow {
         y -= rowHeight
 
         // Row: Max Days
-        addLabel("Max Days:", to: view, y: y)
+        addLabel(L("settings.clipboard.maxDays"), to: view, y: y)
         let maxDaysField = NSTextField(frame: NSRect(x: controlX, y: y, width: 80, height: 24))
         maxDaysField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxDays") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxDays") : 30)
         maxDaysField.target = self
         maxDaysField.action = #selector(clipboardMaxDaysChanged(_:))
         view.addSubview(maxDaysField)
-        addHint("days", to: view, x: controlX + 90, y: y)
+        addHint(L("settings.clipboard.maxDays.hint"), to: view, x: controlX + 90, y: y)
 
         y -= rowHeight
 
         // Row: Log
-        addLabel("Log:", to: view, y: y)
-        let enableLogCheckbox = NSButton(checkboxWithTitle: "Enable", target: self, action: #selector(clipboardLogEnabledChanged(_:)))
+        addLabel(L("settings.log"), to: view, y: y)
+        let enableLogCheckbox = NSButton(checkboxWithTitle: L("settings.log.enable"), target: self, action: #selector(clipboardLogEnabledChanged(_:)))
         enableLogCheckbox.frame = NSRect(x: controlX, y: y, width: 70, height: 24)
         enableLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
         view.addSubview(enableLogCheckbox)
@@ -285,7 +300,7 @@ final class SettingsWindow: NSWindow {
         view.addSubview(logPathField)
 
         let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 80, height: 28))
-        chooseLogButton.title = "Choose..."
+        chooseLogButton.title = L("settings.log.choose")
         chooseLogButton.bezelStyle = .rounded
         chooseLogButton.target = self
         chooseLogButton.action = #selector(chooseClipboardLogFile)
@@ -295,7 +310,7 @@ final class SettingsWindow: NSWindow {
 
         // Bottom: Clear button
         let clearButton = NSButton(frame: NSRect(x: labelX, y: y, width: 180, height: 32))
-        clearButton.title = "Clear Clipboard History"
+        clearButton.title = L("settings.clipboard.clear")
         clearButton.bezelStyle = .rounded
         clearButton.target = self
         clearButton.action = #selector(clearClipboardHistory)
@@ -329,14 +344,14 @@ final class SettingsWindow: NSWindow {
 
         // Version
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
-        let versionLabel = NSTextField(labelWithString: "Version \(version)")
+        let versionLabel = NSTextField(labelWithString: String(format: L("settings.about.version"), version))
         versionLabel.frame = NSRect(x: 0, y: 190, width: viewWidth, height: 20)
         versionLabel.alignment = .center
         versionLabel.textColor = .secondaryLabelColor
         view.addSubview(versionLabel)
 
         // Copyright
-        let copyrightLabel = NSTextField(labelWithString: "© 2026 Jia Liu. All rights reserved.")
+        let copyrightLabel = NSTextField(labelWithString: L("settings.about.copyright"))
         copyrightLabel.frame = NSRect(x: 0, y: 160, width: viewWidth, height: 20)
         copyrightLabel.alignment = .center
         copyrightLabel.textColor = .secondaryLabelColor
@@ -392,10 +407,10 @@ final class SettingsWindow: NSWindow {
 
     private func themeName(for key: String) -> String {
         switch key {
-        case "light": return "Light"
-        case "dark": return "Dark"
-        case "hidden": return "Hidden"
-        default: return "System Default"
+        case "light": return L("settings.statusbar.light")
+        case "dark": return L("settings.statusbar.dark")
+        case "hidden": return L("settings.statusbar.hidden")
+        default: return L("settings.statusbar.system")
         }
     }
 
@@ -403,12 +418,45 @@ final class SettingsWindow: NSWindow {
         (NSApp.delegate as? AppDelegate)?.updateHotkey(keyCode: recorder.keyCode, modifiers: recorder.modifiers)
     }
 
+    @objc private func languageChanged(_ sender: NSPopUpButton) {
+        let language = LocalizationManager.Language.allCases.first { $0.displayName == sender.title } ?? .english
+        LocalizationManager.shared.currentLanguage = language
+        // Recreate UI to apply new language
+        recreateUI()
+    }
+
+    private func recreateUI() {
+        // Remove existing tabs
+        while let tab = tabView.tabViewItems.first {
+            tabView.removeTabViewItem(tab)
+        }
+
+        // Recreate tabs
+        generalTab = createGeneralTab()
+        let generalItem = NSTabViewItem(identifier: "general")
+        generalItem.label = L("settings.tab.general")
+        generalItem.view = generalTab
+        tabView.addTabViewItem(generalItem)
+
+        clipboardTab = createClipboardTab()
+        let clipboardItem = NSTabViewItem(identifier: "clipboard")
+        clipboardItem.label = L("settings.tab.clipboard")
+        clipboardItem.view = clipboardTab
+        tabView.addTabViewItem(clipboardItem)
+
+        aboutTab = createAboutTab()
+        let aboutItem = NSTabViewItem(identifier: "about")
+        aboutItem.label = L("settings.tab.about")
+        aboutItem.view = aboutTab
+        tabView.addTabViewItem(aboutItem)
+    }
+
     @objc private func statusBarThemeChanged(_ sender: NSPopUpButton) {
         let theme: String
         switch sender.title {
-        case "Light": theme = "light"
-        case "Dark": theme = "dark"
-        case "Hidden": theme = "hidden"
+        case L("settings.statusbar.light"): theme = "light"
+        case L("settings.statusbar.dark"): theme = "dark"
+        case L("settings.statusbar.hidden"): theme = "hidden"
         default: theme = "system"
         }
         UserDefaults.standard.set(theme, forKey: "statusBar.theme")
@@ -416,7 +464,7 @@ final class SettingsWindow: NSWindow {
     }
 
     @objc private func groupByChanged(_ sender: NSPopUpButton) {
-        let groupBy = sender.title == "Letter" ? "letter" : "category"
+        let groupBy = sender.title == L("settings.groupBy.letter") ? "letter" : "category"
         UserDefaults.standard.set(groupBy, forKey: "launcher.groupBy")
     }
 

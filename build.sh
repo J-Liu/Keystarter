@@ -45,6 +45,11 @@ if [ -f "${ICON_DIR}/${APP_NAME}.icns" ]; then
     cp "${ICON_DIR}/${APP_NAME}.icns" "${APP_BUNDLE}/Contents/Resources/${APP_NAME}.icns"
 fi
 
+# Copy menu bar icons
+if [ -d "${ROOT_DIR}/Resources/MenuBar" ]; then
+    cp "${ROOT_DIR}/Resources/MenuBar/"*.png "${APP_BUNDLE}/Contents/Resources/"
+fi
+
 # 3. Ad-hoc sign (required on Apple Silicon)
 echo "==> Signing..."
 codesign --force --deep --sign - "$APP_BUNDLE"

@@ -69,12 +69,12 @@ final class ClipboardPanel: NSObject {
         menu?.delegate = self
 
         if entries.isEmpty {
-            let item = NSMenuItem(title: "No clipboard history", action: nil, keyEquivalent: "")
+            let item = NSMenuItem(title: L("clipboard.empty"), action: nil, keyEquivalent: "")
             item.isEnabled = false
             menu?.addItem(item)
             menu?.addItem(NSMenuItem.separator())
 
-            let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: "")
+            let settingsItem = NSMenuItem(title: L("clipboard.settings"), action: #selector(openSettings), keyEquivalent: "")
             settingsItem.target = self
             menu?.addItem(settingsItem)
             return
@@ -128,11 +128,11 @@ final class ClipboardPanel: NSObject {
 
         menu?.addItem(NSMenuItem.separator())
 
-        let clearItem = NSMenuItem(title: "Clear History", action: #selector(clearHistory), keyEquivalent: "")
+        let clearItem = NSMenuItem(title: L("clipboard.clear"), action: #selector(clearHistory), keyEquivalent: "")
         clearItem.target = self
         menu?.addItem(clearItem)
 
-        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: L("clipboard.settings"), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu?.addItem(settingsItem)
     }
@@ -164,11 +164,11 @@ final class ClipboardPanel: NSObject {
     private func activateAndPaste() {
         guard PermissionManager.shared.hasAccessibilityPermission() else {
             let alert = NSAlert()
-            alert.messageText = "Accessibility Permission Required"
-            alert.informativeText = "Keystarter needs Accessibility permission to paste content."
+            alert.messageText = L("alert.permissions.title")
+            alert.informativeText = L("alert.permissions.message")
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Grant Permission")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: L("alert.grant"))
+            alert.addButton(withTitle: L("alert.cancel"))
             if alert.runModal() == .alertFirstButtonReturn {
                 _ = AXIsProcessTrustedWithOptions([
                     kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
@@ -191,11 +191,11 @@ final class ClipboardPanel: NSObject {
 
     @objc private func clearHistory() {
         let alert = NSAlert()
-        alert.messageText = "Clear Clipboard History?"
-        alert.informativeText = "This will delete all clipboard entries."
+        alert.messageText = L("alert.clearHistory.title")
+        alert.informativeText = L("alert.clearHistory.message")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Clear")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("alert.clear"))
+        alert.addButton(withTitle: L("alert.cancel"))
         if alert.runModal() == .alertFirstButtonReturn {
             ClipboardManager.shared.db.clearClipboard()
         }

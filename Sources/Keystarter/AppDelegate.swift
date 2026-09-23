@@ -116,35 +116,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let appMenu = NSMenu()
         appMenu.addItem(
-            withTitle: "About Keystarter",
+            withTitle: L("menu.about"),
             action: #selector(showAbout),
             keyEquivalent: ""
         )
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
-            withTitle: "Settings...",
+            withTitle: L("menu.settings"),
             action: #selector(showSettingsFromMenu),
             keyEquivalent: ","
         )
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
-            withTitle: "Check for Updates...",
+            withTitle: L("menu.checkUpdates"),
             action: #selector(checkForUpdates),
             keyEquivalent: ""
         )
         appMenu.addItem(
-            withTitle: "Check Permissions...",
+            withTitle: L("menu.checkPermissions"),
             action: #selector(checkPermissionsFromMenu),
             keyEquivalent: ""
         )
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
-            withTitle: "Close Window",
+            withTitle: L("menu.closeWindow"),
             action: #selector(closeWindow),
             keyEquivalent: "w"
         )
         appMenu.addItem(
-            withTitle: "Quit Keystarter",
+            withTitle: L("menu.quit"),
             action: #selector(NSApplication.terminate(_:)),
             keyEquivalent: "q"
         )
