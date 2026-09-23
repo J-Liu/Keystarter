@@ -43,7 +43,6 @@ final class ClipboardPanel: NSObject {
         var x = mouseLoc.x
         var y = mouseLoc.y
 
-        // Adjust for screen edges
         if x < screenFrame.minX + 50 { x = screenFrame.minX + 50 }
         if x > screenFrame.maxX - 50 { x = screenFrame.maxX - 50 }
         if y < screenFrame.minY + 100 { y = screenFrame.minY + 100 }
@@ -74,7 +73,10 @@ final class ClipboardPanel: NSObject {
             item.isEnabled = false
             menu?.addItem(item)
             menu?.addItem(NSMenuItem.separator())
-            menu?.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ""))
+
+            let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: "")
+            settingsItem.target = self
+            menu?.addItem(settingsItem)
             return
         }
 
@@ -100,6 +102,7 @@ final class ClipboardPanel: NSObject {
                 let item = NSMenuItem(title: "\(number). \(title)", action: #selector(pasteEntry(_:)), keyEquivalent: number == 10 ? "0" : "\(number)")
                 item.representedObject = entry
                 item.keyEquivalentModifierMask = .command
+                item.target = self
                 groupMenu.addItem(item)
             }
 
@@ -110,14 +113,19 @@ final class ClipboardPanel: NSObject {
         }
 
         menu?.addItem(NSMenuItem.separator())
-        menu?.addItem(NSMenuItem(title: "Clear History", action: #selector(clearHistory), keyEquivalent: ""))
-        menu?.addItem(NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ","))
+
+        let clearItem = NSMenuItem(title: "Clear History", action: #selector(clearHistory), keyEquivalent: "")
+        clearItem.target = self
+        menu?.addItem(clearItem)
+
+        let settingsItem = NSMenuItem(title: "Settings...", action: #selector(openSettings), keyEquivalent: ",")
+        settingsItem.target = self
+        menu?.addItem(settingsItem)
     }
 
     @objc private func pasteEntry(_ sender: NSMenuItem) {
         guard let entry = sender.representedObject as? ClipboardEntry else { return }
 
-        // Write to pasteboard
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         if entry.type == "text" {
@@ -130,7 +138,6 @@ final class ClipboardPanel: NSObject {
 
         hide()
 
-        // Activate previous app and simulate Cmd+V
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.activateAndPaste()
         }
