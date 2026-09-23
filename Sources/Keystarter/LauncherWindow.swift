@@ -346,8 +346,18 @@ final class LauncherWindow: NSWindow {
 
         let itemWidth: CGFloat = 95
         let itemHeight: CGFloat = 95
-        let spacing: CGFloat = 10  // Reduced from 8 to fit more rows
+        let spacing: CGFloat = 10
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
+        let groupHeaderHeight: CGFloat = 24
+
+        // Group apps by first letter
+        let groupedApps = Dictionary(grouping: results) { app -> String in
+            let firstChar = app.name.prefix(1).uppercased()
+            if firstChar.rangeOfCharacter(from: CharacterSet.letters) != nil {
+                return firstChar
+            }
+            return "#"
+        }.sorted { $0.key < $1.key }
 
         // Calculate total height needed
         var totalHeight: CGFloat = 10 // top padding
@@ -357,14 +367,15 @@ final class LauncherWindow: NSWindow {
             totalHeight += 18 // label height
             let recentRows = Int(ceil(Double(recentApps.count) / Double(columns)))
             totalHeight += CGFloat(recentRows) * (itemHeight + spacing)
-            totalHeight += 8 // separator and spacing (reduced from 12)
+            totalHeight += 8 // separator and spacing
         }
 
-        // All apps section - show all apps
-        totalHeight += 18 // label height
-        let allAppsCount = results.count
-        let allRows = Int(ceil(Double(allAppsCount) / Double(columns)))
-        totalHeight += CGFloat(allRows) * (itemHeight + spacing)
+        // All apps section - grouped by letter
+        for (_, apps) in groupedApps {
+            totalHeight += groupHeaderHeight // group header
+            let rows = Int(ceil(Double(apps.count) / Double(columns)))
+            totalHeight += CGFloat(rows) * (itemHeight + spacing)
+        }
         totalHeight += 10 // bottom padding
 
         // Set grid view frame
@@ -374,7 +385,6 @@ final class LauncherWindow: NSWindow {
         // Start placing items from top
         var y: CGFloat = contentHeight - 10
         var x: CGFloat = 10
-        var index = 0
 
         // Recent apps section
         if !recentApps.isEmpty {
@@ -386,6 +396,7 @@ final class LauncherWindow: NSWindow {
             gridView.addSubview(recentLabel)
             y -= 18
 
+            var index = 0
             for app in recentApps {
                 let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
                 itemView.frame = NSRect(x: x, y: y - itemHeight, width: itemWidth, height: itemHeight)
@@ -404,16 +415,16 @@ final class LauncherWindow: NSWindow {
                 y -= itemHeight + spacing
             }
 
-            // Separator line (reduced spacing)
+            // Separator line
             y -= 2
             let separator = NSView(frame: NSRect(x: 10, y: y, width: gridView.bounds.width - 20, height: 1))
             separator.wantsLayer = true
             separator.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
             gridView.addSubview(separator)
-            y -= 6  // Reduced from 10
+            y -= 6
         }
 
-        // All apps section
+        // All apps section - grouped by letter
         let allLabel = NSTextField(labelWithString: "All Apps")
         allLabel.frame = NSRect(x: 10, y: y - 14, width: 100, height: 14)
         allLabel.font = .systemFont(ofSize: 11, weight: .medium)
@@ -421,17 +432,32 @@ final class LauncherWindow: NSWindow {
         gridView.addSubview(allLabel)
         y -= 18
 
-        x = 10
-        index = 0
-        for app in results { // Show all apps
-            let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
-            itemView.frame = NSRect(x: x, y: y - itemHeight, width: itemWidth, height: itemHeight)
-            gridView.addSubview(itemView)
+        for (letter, apps) in groupedApps {
+            // Group header
+            let groupLabel = NSTextField(labelWithString: letter)
+            groupLabel.frame = NSRect(x: 10, y: y - 16, width: 50, height: 16)
+            groupLabel.font = .systemFont(ofSize: 13, weight: .bold)
+            groupLabel.textColor = .labelColor
+            gridView.addSubview(groupLabel)
+            y -= groupHeaderHeight
 
-            index += 1
-            x += itemWidth + spacing
-            if index % columns == 0 {
-                x = 10
+            x = 10
+            var index = 0
+            for app in apps {
+                let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
+                itemView.frame = NSRect(x: x, y: y - itemHeight, width: itemWidth, height: itemHeight)
+                gridView.addSubview(itemView)
+
+                index += 1
+                x += itemWidth + spacing
+                if index % columns == 0 {
+                    x = 10
+                    y -= itemHeight + spacing
+                }
+            }
+
+            // Reset for next row if not at start
+            if index % columns != 0 {
                 y -= itemHeight + spacing
             }
         }
@@ -454,16 +480,17 @@ final class LauncherWindow: NSWindow {
 
         // Name (centered below icon)
         let nameField = NSTextField(wrappingLabelWithString: app.name)
-        let nameWidth = size.width - 8
-        let nameHeight: CGFloat = 28
+        // Use full width minus small padding
+        let nameWidth = size.width - 4
+        let nameHeight: CGFloat = 32
         nameField.frame = NSRect(
             x: (size.width - nameWidth) / 2,
-            y: -12,
+            y: -14,
             width: nameWidth,
             height: nameHeight
         )
         nameField.alignment = .center
-        nameField.font = .systemFont(ofSize: 13)
+        nameField.font = .systemFont(ofSize: 12)
         nameField.lineBreakMode = .byTruncatingTail
         nameField.maximumNumberOfLines = 2
         view.addSubview(nameField)
@@ -591,14 +618,7 @@ final class LauncherWindow: NSWindow {
             if name.hasPrefix(".") { continue }
 
             let fullPath = path + "/" + name
-            
-            // Skip symbolic links (like Safari in /Applications)
-            if let attrs = try? fileManager.attributesOfItem(atPath: fullPath),
-               let fileType = attrs[.type] as? FileAttributeType,
-               fileType == .typeSymbolicLink {
-                continue
-            }
-            
+
             var isDir: ObjCBool = false
             guard fileManager.fileExists(atPath: fullPath, isDirectory: &isDir) else { continue }
 
