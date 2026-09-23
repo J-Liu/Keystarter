@@ -350,14 +350,25 @@ final class LauncherWindow: NSWindow {
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
         let groupHeaderHeight: CGFloat = 24
 
-        // Group apps by first letter
-        let groupedApps = Dictionary(grouping: results) { app -> String in
-            let firstChar = app.name.prefix(1).uppercased()
-            if firstChar.rangeOfCharacter(from: CharacterSet.letters) != nil {
-                return firstChar
-            }
-            return "#"
-        }.sorted { $0.key < $1.key }
+        // Read grouping preference
+        let groupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "category"
+
+        // Group apps
+        let groupedApps: [(String, [LaunchItem])]
+        if groupBy == "letter" {
+            groupedApps = Dictionary(grouping: results) { app -> String in
+                let firstChar = app.name.prefix(1).uppercased()
+                if firstChar.rangeOfCharacter(from: CharacterSet.letters) != nil {
+                    return firstChar
+                }
+                return "#"
+            }.sorted { $0.key < $1.key }
+        } else {
+            // Group by category (function)
+            groupedApps = Dictionary(grouping: results) { app -> String in
+                app.category ?? "Other"
+            }.sorted { $0.key < $1.key }
+        }
 
         // Calculate total height needed
         var totalHeight: CGFloat = 10 // top padding
@@ -370,7 +381,7 @@ final class LauncherWindow: NSWindow {
             totalHeight += 8 // separator and spacing
         }
 
-        // All apps section - grouped by letter
+        // All apps section - grouped
         for (_, apps) in groupedApps {
             totalHeight += groupHeaderHeight // group header
             let rows = Int(ceil(Double(apps.count) / Double(columns)))
@@ -424,7 +435,7 @@ final class LauncherWindow: NSWindow {
             y -= 6
         }
 
-        // All apps section - grouped by letter
+        // All apps section - grouped
         let allLabel = NSTextField(labelWithString: "All Apps")
         allLabel.frame = NSRect(x: 10, y: y - 14, width: 100, height: 14)
         allLabel.font = .systemFont(ofSize: 11, weight: .medium)
@@ -432,10 +443,10 @@ final class LauncherWindow: NSWindow {
         gridView.addSubview(allLabel)
         y -= 18
 
-        for (letter, apps) in groupedApps {
+        for (groupName, apps) in groupedApps {
             // Group header
-            let groupLabel = NSTextField(labelWithString: letter)
-            groupLabel.frame = NSRect(x: 10, y: y - 16, width: 50, height: 16)
+            let groupLabel = NSTextField(labelWithString: groupName)
+            groupLabel.frame = NSRect(x: 10, y: y - 16, width: 200, height: 16)
             groupLabel.font = .systemFont(ofSize: 13, weight: .bold)
             groupLabel.textColor = .labelColor
             gridView.addSubview(groupLabel)
@@ -537,6 +548,7 @@ final class LauncherWindow: NSWindow {
                     name: result.title,
                     path: result.subtitle ?? "",
                     type: .command,
+                    category: nil,
                     pluginAction: result.action,
                     pluginIcon: result.icon,
                     detailText: result.detailText
@@ -570,7 +582,8 @@ final class LauncherWindow: NSWindow {
                 LaunchItem(
                     name: file.name,
                     path: file.path,
-                    type: .file
+                    type: .file,
+                    category: nil
                 )
             }
         }
@@ -628,13 +641,52 @@ final class LauncherWindow: NSWindow {
                     if !seenPaths.contains(fullPath) {
                         seenPaths.insert(fullPath)
                         let displayName = (name as NSString).deletingPathExtension
-                        items.append(LaunchItem(name: displayName, path: fullPath, type: .application))
+                        let category = readAppCategory(path: fullPath)
+                        items.append(LaunchItem(name: displayName, path: fullPath, type: .application, category: category))
                     }
                 } else {
                     // Recursively scan subdirectories
                     scanDirectoryForApps(at: fullPath, fileManager: fileManager, items: &items, seenPaths: &seenPaths)
                 }
             }
+        }
+    }
+
+    private func readAppCategory(path: String) -> String? {
+        let plistPath = path + "/Contents/Info.plist"
+        guard let data = FileManager.default.contents(atPath: plistPath),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let categoryType = plist["LSApplicationCategoryType"] as? String else {
+            return nil
+        }
+        // Convert category type to display name
+        return categoryDisplayName(for: categoryType)
+    }
+
+    private func categoryDisplayName(for categoryType: String) -> String {
+        switch categoryType {
+        case "public.app-category.utilities": return "Utilities"
+        case "public.app-category.productivity": return "Productivity"
+        case "public.app-category.games": return "Games"
+        case "public.app-category.entertainment": return "Entertainment"
+        case "public.app-category.education": return "Education"
+        case "public.app-category.finance": return "Finance"
+        case "public.app-category.lifestyle": return "Lifestyle"
+        case "public.app-category.medical": return "Medical"
+        case "public.app-category.music": return "Music"
+        case "public.app-category.news": return "News"
+        case "public.app-category.photography": return "Photography"
+        case "public.app-category.social-networking": return "Social"
+        case "public.app-category.travel": return "Travel"
+        case "public.app-category.video": return "Video"
+        case "public.app-category.weather": return "Weather"
+        case "public.app-category.developer-tools": return "Developer Tools"
+        case "public.app-category.graphics-design": return "Graphics & Design"
+        case "public.app-category.business": return "Business"
+        case "public.app-category.reference": return "Reference"
+        case "public.app-category.sports": return "Sports"
+        case "public.app-category.healthcare-fitness": return "Health & Fitness"
+        default: return "Other"
         }
     }
 }

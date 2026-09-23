@@ -14,6 +14,7 @@ struct LaunchItem {
     let name: String
     let path: String
     let type: ItemType
+    let category: String?
 
     /// Optional action for plugin results. If set, overrides default execute().
     var pluginAction: (() -> Void)?

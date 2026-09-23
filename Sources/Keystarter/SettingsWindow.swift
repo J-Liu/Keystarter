@@ -135,31 +135,37 @@ final class SettingsWindow: NSWindow {
         opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
         view.addSubview(opacityValue)
 
+        // Group By
+        let groupByLabel = NSTextField(labelWithString: "Group By:")
+        groupByLabel.frame = NSRect(x: 0, y: 85, width: 100, height: 24)
+        view.addSubview(groupByLabel)
+
+        let groupByPopup = NSPopUpButton(frame: NSRect(x: 110, y: 81, width: 200, height: 32))
+        groupByPopup.addItem(withTitle: "Category")
+        groupByPopup.addItem(withTitle: "Letter")
+        let savedGroupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "category"
+        groupByPopup.selectItem(withTitle: savedGroupBy == "letter" ? "Letter" : "Category")
+        groupByPopup.target = self
+        groupByPopup.action = #selector(groupByChanged(_:))
+        view.addSubview(groupByPopup)
+
         // Start at Login
         let loginLabel = NSTextField(labelWithString: "Start at Login:")
-        loginLabel.frame = NSRect(x: 0, y: 85, width: 100, height: 24)
+        loginLabel.frame = NSRect(x: 0, y: 45, width: 100, height: 24)
         view.addSubview(loginLabel)
 
         let loginCheckbox = NSButton(checkboxWithTitle: "Automatically start at login", target: self, action: #selector(loginItemChanged(_:)))
-        loginCheckbox.frame = NSRect(x: 110, y: 84, width: 250, height: 24)
+        loginCheckbox.frame = NSRect(x: 110, y: 44, width: 250, height: 24)
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
         view.addSubview(loginCheckbox)
 
         // Check Permissions button
-        let permissionsButton = NSButton(frame: NSRect(x: 0, y: 45, width: 200, height: 32))
+        let permissionsButton = NSButton(frame: NSRect(x: 0, y: 5, width: 200, height: 32))
         permissionsButton.title = "Check Permissions..."
         permissionsButton.bezelStyle = .rounded
         permissionsButton.target = self
         permissionsButton.action = #selector(checkPermissions)
         view.addSubview(permissionsButton)
-
-        // Clear History button
-        let clearButton = NSButton(frame: NSRect(x: 0, y: 15, width: 200, height: 32))
-        clearButton.title = "Clear Launch History"
-        clearButton.bezelStyle = .rounded
-        clearButton.target = self
-        clearButton.action = #selector(clearHistory)
-        view.addSubview(clearButton)
 
         return view
     }
@@ -187,6 +193,11 @@ final class SettingsWindow: NSWindow {
         }
         UserDefaults.standard.set(theme, forKey: "statusBar.theme")
         (NSApp.delegate as? AppDelegate)?.updateStatusBarTheme(theme)
+    }
+
+    @objc private func groupByChanged(_ sender: NSPopUpButton) {
+        let groupBy = sender.title == "Letter" ? "letter" : "category"
+        UserDefaults.standard.set(groupBy, forKey: "launcher.groupBy")
     }
 
     @objc private func loginItemChanged(_ sender: NSButton) {
