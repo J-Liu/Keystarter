@@ -44,6 +44,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Load Alfred workflows
         AlfredWorkflowManager.shared.loadAll()
 
+        // Start clipboard manager (has its own database)
+        ClipboardManager.shared.start()
+
         // Setup clipboard panel and hotkey
         clipboardPanel = ClipboardPanel()
         clipboardHotkeyManager = HotkeyManager { [weak self] in
@@ -186,8 +189,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             DispatchQueue.main.async {
                 self?.isIndexReady = true
-                // Start clipboard manager after database is ready
-                ClipboardManager.shared.start()
             }
         }
     }

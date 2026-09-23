@@ -8,14 +8,11 @@ import CommonCrypto
 final class ClipboardManager {
 
     static let shared = ClipboardManager()
+    let db = ClipboardDatabase()
 
     private var timer: Timer?
     private var lastChangeCount: Int = 0
     private var logFile: URL?
-
-    private var db: IndexDatabase? {
-        (NSApp.delegate as? AppDelegate)?.indexDB
-    }
 
     /// Start monitoring clipboard.
     func start() {
@@ -74,11 +71,7 @@ final class ClipboardManager {
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
             log("Text found: \(text.prefix(50))...")
             let hash = sha256(text)
-            guard let database = db else {
-                log("Database not ready")
-                return
-            }
-            let inserted = database.insertClipboard(type: "text", content: text, hash: hash)
+            let inserted = db.insertClipboard(type: "text", content: text, hash: hash)
             log("Inserted: \(inserted)")
             return
         }
@@ -102,7 +95,7 @@ final class ClipboardManager {
         let path = dir + "/" + filename
         try? data.write(to: URL(fileURLWithPath: path))
         let hash = sha256(data)
-        let inserted = db?.insertClipboard(type: "image", content: path, hash: hash) ?? false
+        let inserted = db.insertClipboard(type: "image", content: path, hash: hash)
         log("Image saved: \(filename), inserted: \(inserted)")
     }
 
