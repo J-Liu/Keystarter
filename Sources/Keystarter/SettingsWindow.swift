@@ -14,21 +14,22 @@ final class SettingsWindow: NSWindow {
 
     init() {
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
-        let width: CGFloat = 500
-        let height: CGFloat = 400
+        let width: CGFloat = 600
+        let height: CGFloat = 500
         let x = screenFrame.midX - width / 2
         let y = screenFrame.midY - height / 2
         let frame = NSRect(x: x, y: y, width: width, height: height)
 
         super.init(
             contentRect: frame,
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
 
         self.title = "Keystarter Settings"
         self.isReleasedWhenClosed = false
+        self.minSize = NSSize(width: 600, height: 500)
 
         setupUI()
         setupKeyHandlers()
@@ -63,14 +64,14 @@ final class SettingsWindow: NSWindow {
     }
 
     private func createGeneralTab() -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 320))
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 560, height: 420))
 
         // Hotkey
         let hotkeyLabel = NSTextField(labelWithString: "Hotkey:")
-        hotkeyLabel.frame = NSRect(x: 0, y: 280, width: 100, height: 24)
+        hotkeyLabel.frame = NSRect(x: 0, y: 380, width: 100, height: 24)
         view.addSubview(hotkeyLabel)
 
-        hotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: 110, y: 276, width: 150, height: 32))
+        hotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: 110, y: 376, width: 150, height: 32))
         hotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.hotkeyChanged(recorder: recorder)
         }
@@ -86,17 +87,17 @@ final class SettingsWindow: NSWindow {
 
         // Hotkey hint label
         let hotkeyHint = NSTextField(labelWithString: "Click to record")
-        hotkeyHint.frame = NSRect(x: 270, y: 280, width: 150, height: 24)
+        hotkeyHint.frame = NSRect(x: 270, y: 380, width: 150, height: 24)
         hotkeyHint.textColor = .secondaryLabelColor
         hotkeyHint.font = .systemFont(ofSize: 12)
         view.addSubview(hotkeyHint)
 
         // Status Bar Icon
         let statusBarLabel = NSTextField(labelWithString: "Status Bar:")
-        statusBarLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
+        statusBarLabel.frame = NSRect(x: 0, y: 330, width: 100, height: 24)
         view.addSubview(statusBarLabel)
 
-        let statusBarPopup = NSPopUpButton(frame: NSRect(x: 110, y: 226, width: 200, height: 32))
+        let statusBarPopup = NSPopUpButton(frame: NSRect(x: 110, y: 326, width: 200, height: 32))
         statusBarPopup.addItem(withTitle: "System Default")
         statusBarPopup.addItem(withTitle: "Light")
         statusBarPopup.addItem(withTitle: "Dark")
@@ -109,10 +110,10 @@ final class SettingsWindow: NSWindow {
 
         // Corner Radius
         let radiusLabel = NSTextField(labelWithString: "Corner Radius:")
-        radiusLabel.frame = NSRect(x: 0, y: 180, width: 100, height: 24)
+        radiusLabel.frame = NSRect(x: 0, y: 280, width: 100, height: 24)
         view.addSubview(radiusLabel)
 
-        let radiusSlider = NSSlider(frame: NSRect(x: 110, y: 180, width: 200, height: 24))
+        let radiusSlider = NSSlider(frame: NSRect(x: 110, y: 280, width: 200, height: 24))
         radiusSlider.minValue = 0
         radiusSlider.maxValue = 24
         radiusSlider.doubleValue = Double(AppearanceSettings.cornerRadius)
@@ -121,16 +122,16 @@ final class SettingsWindow: NSWindow {
         view.addSubview(radiusSlider)
 
         let radiusValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
-        radiusValue.frame = NSRect(x: 320, y: 180, width: 40, height: 24)
+        radiusValue.frame = NSRect(x: 320, y: 280, width: 40, height: 24)
         radiusValue.identifier = NSUserInterfaceItemIdentifier("radiusValue")
         view.addSubview(radiusValue)
 
         // Opacity
         let opacityLabel = NSTextField(labelWithString: "Opacity:")
-        opacityLabel.frame = NSRect(x: 0, y: 130, width: 100, height: 24)
+        opacityLabel.frame = NSRect(x: 0, y: 230, width: 100, height: 24)
         view.addSubview(opacityLabel)
 
-        let opacitySlider = NSSlider(frame: NSRect(x: 110, y: 130, width: 200, height: 24))
+        let opacitySlider = NSSlider(frame: NSRect(x: 110, y: 230, width: 200, height: 24))
         opacitySlider.minValue = 0.5
         opacitySlider.maxValue = 1.0
         opacitySlider.doubleValue = Double(AppearanceSettings.opacity)
@@ -139,16 +140,16 @@ final class SettingsWindow: NSWindow {
         view.addSubview(opacitySlider)
 
         let opacityValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
-        opacityValue.frame = NSRect(x: 320, y: 130, width: 50, height: 24)
+        opacityValue.frame = NSRect(x: 320, y: 230, width: 50, height: 24)
         opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
         view.addSubview(opacityValue)
 
         // Group By
         let groupByLabel = NSTextField(labelWithString: "Group By:")
-        groupByLabel.frame = NSRect(x: 0, y: 85, width: 100, height: 24)
+        groupByLabel.frame = NSRect(x: 0, y: 185, width: 100, height: 24)
         view.addSubview(groupByLabel)
 
-        let groupByPopup = NSPopUpButton(frame: NSRect(x: 110, y: 81, width: 200, height: 32))
+        let groupByPopup = NSPopUpButton(frame: NSRect(x: 110, y: 181, width: 200, height: 32))
         groupByPopup.addItem(withTitle: "Category")
         groupByPopup.addItem(withTitle: "Letter")
         let savedGroupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "category"
@@ -159,32 +160,32 @@ final class SettingsWindow: NSWindow {
 
         // Start at Login
         let loginLabel = NSTextField(labelWithString: "Start at Login:")
-        loginLabel.frame = NSRect(x: 0, y: 45, width: 100, height: 24)
+        loginLabel.frame = NSRect(x: 0, y: 145, width: 100, height: 24)
         view.addSubview(loginLabel)
 
         let loginCheckbox = NSButton(checkboxWithTitle: "Automatically start at login", target: self, action: #selector(loginItemChanged(_:)))
-        loginCheckbox.frame = NSRect(x: 110, y: 44, width: 250, height: 24)
+        loginCheckbox.frame = NSRect(x: 110, y: 144, width: 250, height: 24)
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
         view.addSubview(loginCheckbox)
 
         // Show Dock Icon
         let dockIconLabel = NSTextField(labelWithString: "Dock Icon:")
-        dockIconLabel.frame = NSRect(x: 0, y: 15, width: 100, height: 24)
+        dockIconLabel.frame = NSRect(x: 0, y: 115, width: 100, height: 24)
         view.addSubview(dockIconLabel)
 
         let dockIconCheckbox = NSButton(checkboxWithTitle: "Show Dock icon", target: self, action: #selector(dockIconChanged(_:)))
-        dockIconCheckbox.frame = NSRect(x: 110, y: 14, width: 200, height: 24)
+        dockIconCheckbox.frame = NSRect(x: 110, y: 114, width: 200, height: 24)
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
         view.addSubview(dockIconCheckbox)
 
         // Enable Log
         let enableLogCheckbox = NSButton(checkboxWithTitle: "Enable log", target: self, action: #selector(generalLogEnabledChanged(_:)))
-        enableLogCheckbox.frame = NSRect(x: 110, y: -15, width: 120, height: 24)
+        enableLogCheckbox.frame = NSRect(x: 110, y: 85, width: 120, height: 24)
         enableLogCheckbox.state = LogSettings.shared.generalLogEnabled ? .on : .off
         view.addSubview(enableLogCheckbox)
 
         // Log path (read-only)
-        let logPathField = NSTextField(frame: NSRect(x: 240, y: -15, width: 150, height: 24))
+        let logPathField = NSTextField(frame: NSRect(x: 240, y: 85, width: 200, height: 24))
         logPathField.stringValue = LogSettings.shared.generalLogPath
         logPathField.isEditable = false
         logPathField.isBezeled = false
@@ -195,7 +196,7 @@ final class SettingsWindow: NSWindow {
         view.addSubview(logPathField)
 
         // Choose log file button
-        let chooseLogButton = NSButton(frame: NSRect(x: 395, y: -16, width: 60, height: 24))
+        let chooseLogButton = NSButton(frame: NSRect(x: 450, y: 84, width: 80, height: 24))
         chooseLogButton.title = "Choose..."
         chooseLogButton.bezelStyle = .rounded
         chooseLogButton.target = self
@@ -203,7 +204,7 @@ final class SettingsWindow: NSWindow {
         view.addSubview(chooseLogButton)
 
         // Check Permissions button
-        let permissionsButton = NSButton(frame: NSRect(x: 0, y: -25, width: 200, height: 32))
+        let permissionsButton = NSButton(frame: NSRect(x: 0, y: 40, width: 200, height: 32))
         permissionsButton.title = "Check Permissions..."
         permissionsButton.bezelStyle = .rounded
         permissionsButton.target = self

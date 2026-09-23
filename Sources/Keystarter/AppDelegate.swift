@@ -208,4 +208,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardHotkeyManager?.unregister()
         ClipboardManager.shared.stop()
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        launcherWindow?.show()
+        return true
+    }
 }
