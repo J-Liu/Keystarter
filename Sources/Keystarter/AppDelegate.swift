@@ -7,6 +7,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var launcherWindow: LauncherWindow?
     private var hotkeyManager: HotkeyManager?
+    private var clipboardHotkeyManager: HotkeyManager?
+    private var clipboardPanel: ClipboardPanel?
     private var statusBarController: StatusBarController?
     private var settingsWindow: SettingsWindow?
     var indexDB: IndexDatabase?
@@ -41,6 +43,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Load Alfred workflows
         AlfredWorkflowManager.shared.loadAll()
+
+        // Start clipboard manager
+        ClipboardManager.shared.start()
+
+        // Setup clipboard panel and hotkey
+        clipboardPanel = ClipboardPanel()
+        clipboardHotkeyManager = HotkeyManager { [weak self] in
+            self?.clipboardPanel?.toggle()
+        }
+        clipboardHotkeyManager?.register(keyCode: 9, modifiers: [.command, .shift]) // V + Cmd + Shift
 
         // Show setup wizard on first launch
         if PermissionManager.shared.isFirstLaunch {
@@ -166,5 +178,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         hotkeyManager?.unregister()
+        clipboardHotkeyManager?.unregister()
+        ClipboardManager.shared.stop()
     }
 }
