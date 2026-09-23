@@ -13,7 +13,8 @@ let package = Package(
             name: "Keystarter",
             path: "Sources/Keystarter",
             resources: [
-                .copy("../../Resources/Compiled/Keystarter.icns")
+                .copy("../../Resources/Compiled/Keystarter.icns"),
+                .process("../../Resources/MenuBar")
             ]
         )
     ]

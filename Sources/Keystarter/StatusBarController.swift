@@ -25,12 +25,23 @@ final class StatusBarController {
         switch currentTheme {
         case "hidden":
             button.image = nil
+        case "light":
+            // Light theme: use dark icon
+            if let image = NSImage(named: "menubar-dark") {
+                button.image = image
+            }
+        case "dark":
+            // Dark theme: use light icon
+            if let image = NSImage(named: "menubar-light") {
+                button.image = image
+            }
         default:
-            // Use system symbol bolt.fill as template image
-            let image = NSImage(systemSymbolName: "bolt.fill", accessibilityDescription: "Keystarter")
-            image?.size = NSSize(width: 18, height: 18)
-            image?.isTemplate = true  // Let system handle color automatically
-            button.image = image
+            // System theme: detect current appearance
+            let isDarkMode = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let iconName = isDarkMode ? "menubar-light" : "menubar-dark"
+            if let image = NSImage(named: iconName) {
+                button.image = image
+            }
         }
         button.needsDisplay = true
     }
