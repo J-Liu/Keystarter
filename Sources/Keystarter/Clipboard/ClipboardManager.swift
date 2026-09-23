@@ -67,24 +67,26 @@ final class ClipboardManager {
             return
         }
 
-        // Prefer text
+        // Check for image data first (before text)
+        if let image = NSImage(pasteboard: pasteboard) {
+            log("Image found in pasteboard")
+            guard let tiffData = image.tiffRepresentation,
+                  let bitmap = NSBitmapImageRep(data: tiffData),
+                  let pngData = bitmap.representation(using: .png, properties: [:]) else {
+                log("Failed to convert image to PNG")
+                return
+            }
+            saveImage(pngData)
+            return
+        }
+
+        // Then text
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
             log("Text found: \(text.prefix(50))...")
             let hash = sha256(text)
             let inserted = db.insertClipboard(type: "text", content: text, hash: hash)
             log("Inserted: \(inserted)")
             return
-        }
-
-        // Then image
-        if UserDefaults.standard.bool(forKey: "clipboard.recordImages") {
-            if let image = NSImage(pasteboard: pasteboard) {
-                log("Image found")
-                guard let tiffData = image.tiffRepresentation,
-                      let bitmap = NSBitmapImageRep(data: tiffData),
-                      let pngData = bitmap.representation(using: .png, properties: [:]) else { return }
-                saveImage(pngData)
-            }
         }
     }
 
