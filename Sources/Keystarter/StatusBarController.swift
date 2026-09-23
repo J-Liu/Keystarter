@@ -22,27 +22,15 @@ final class StatusBarController {
     private func setupIcon() {
         guard let button = statusItem.button else { return }
 
-        // Clear previous tint
-        button.contentTintColor = nil
-
         switch currentTheme {
         case "hidden":
             button.image = nil
-        case "light":
-            // Light theme: use dark icon (black)
-            if let image = loadAndTintIcon(color: .black) {
-                button.image = image
-            }
-        case "dark":
-            // Dark theme: use light icon (white)
-            if let image = loadAndTintIcon(color: .white) {
-                button.image = image
-            }
-        default: // system
-            // System theme: detect current appearance
-            let isDarkMode = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            let color: NSColor = isDarkMode ? .white : .black
-            if let image = loadAndTintIcon(color: color) {
+        default:
+            // Load PNG as template image
+            if let imagePath = Bundle.main.path(forResource: "statusbar-icon", ofType: "png"),
+               let image = NSImage(contentsOfFile: imagePath) {
+                // Set as template so system handles color automatically
+                image.isTemplate = true
                 button.image = image
             } else {
                 // Fallback to system icon
@@ -52,32 +40,6 @@ final class StatusBarController {
             }
         }
         button.needsDisplay = true
-    }
-
-    private func loadAndTintIcon(color: NSColor) -> NSImage? {
-        guard let imagePath = Bundle.main.path(forResource: "statusbar-icon", ofType: "png"),
-              let originalImage = NSImage(contentsOfFile: imagePath),
-              let tiffData = originalImage.tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiffData) else {
-            return nil
-        }
-
-        // Create a new image with the same size
-        let size = originalImage.size
-        let newImage = NSImage(size: size)
-
-        newImage.lockFocus()
-
-        // Draw the original image
-        bitmap.draw(in: NSRect(origin: .zero, size: size))
-
-        // Apply color tint using composite operation
-        color.setFill()
-        NSRect(origin: .zero, size: size).fill(using: .sourceAtop)
-
-        newImage.unlockFocus()
-
-        return newImage
     }
 
     /// Update the status bar icon theme.

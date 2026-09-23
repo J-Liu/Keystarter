@@ -8,6 +8,7 @@ final class SettingsWindow: NSWindow {
 
     private var tabView: NSTabView!
     private var generalTab: NSView!
+    private var clipboardTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
 
@@ -45,7 +46,7 @@ final class SettingsWindow: NSWindow {
         tabView.addTabViewItem(generalItem)
 
         // Clipboard tab
-        let clipboardTab = createClipboardTab()
+        clipboardTab = createClipboardTab()
         let clipboardItem = NSTabViewItem(identifier: "clipboard")
         clipboardItem.label = "Clipboard"
         clipboardItem.view = clipboardTab
@@ -172,13 +173,24 @@ final class SettingsWindow: NSWindow {
         enableLogCheckbox.state = LogSettings.shared.generalLogEnabled ? .on : .off
         view.addSubview(enableLogCheckbox)
 
-        // Log path
-        let logPathField = NSTextField(frame: NSRect(x: 240, y: 15, width: 180, height: 24))
+        // Log path (read-only)
+        let logPathField = NSTextField(frame: NSRect(x: 240, y: 15, width: 150, height: 24))
         logPathField.stringValue = LogSettings.shared.generalLogPath
-        logPathField.placeholderString = "Log file path"
-        logPathField.target = self
-        logPathField.action = #selector(generalLogPathChanged(_:))
+        logPathField.isEditable = false
+        logPathField.isBezeled = false
+        logPathField.drawsBackground = false
+        logPathField.font = .systemFont(ofSize: 11)
+        logPathField.lineBreakMode = .byTruncatingMiddle
+        logPathField.identifier = NSUserInterfaceItemIdentifier("generalLogPath")
         view.addSubview(logPathField)
+
+        // Choose log file button
+        let chooseLogButton = NSButton(frame: NSRect(x: 395, y: 14, width: 60, height: 24))
+        chooseLogButton.title = "Choose..."
+        chooseLogButton.bezelStyle = .rounded
+        chooseLogButton.target = self
+        chooseLogButton.action = #selector(chooseGeneralLogFile)
+        view.addSubview(chooseLogButton)
 
         // Check Permissions button
         let permissionsButton = NSButton(frame: NSRect(x: 0, y: -25, width: 200, height: 32))
@@ -299,13 +311,24 @@ final class SettingsWindow: NSWindow {
         enableLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
         view.addSubview(enableLogCheckbox)
 
-        // Log path
-        let logPathField = NSTextField(frame: NSRect(x: 240, y: 130, width: 180, height: 24))
+        // Log path (read-only)
+        let logPathField = NSTextField(frame: NSRect(x: 240, y: 130, width: 150, height: 24))
         logPathField.stringValue = LogSettings.shared.clipboardLogPath
-        logPathField.placeholderString = "Log file path"
-        logPathField.target = self
-        logPathField.action = #selector(clipboardLogPathChanged(_:))
+        logPathField.isEditable = false
+        logPathField.isBezeled = false
+        logPathField.drawsBackground = false
+        logPathField.font = .systemFont(ofSize: 11)
+        logPathField.lineBreakMode = .byTruncatingMiddle
+        logPathField.identifier = NSUserInterfaceItemIdentifier("clipboardLogPath")
         view.addSubview(logPathField)
+
+        // Choose log file button
+        let chooseLogButton = NSButton(frame: NSRect(x: 395, y: 129, width: 60, height: 24))
+        chooseLogButton.title = "Choose..."
+        chooseLogButton.bezelStyle = .rounded
+        chooseLogButton.target = self
+        chooseLogButton.action = #selector(chooseClipboardLogFile)
+        view.addSubview(chooseLogButton)
 
         // Clear button
         let clearButton = NSButton(frame: NSRect(x: 0, y: 80, width: 180, height: 32))
@@ -345,16 +368,46 @@ final class SettingsWindow: NSWindow {
         LogSettings.shared.generalLogEnabled = sender.state == .on
     }
 
-    @objc private func generalLogPathChanged(_ sender: NSTextField) {
-        LogSettings.shared.generalLogPath = sender.stringValue
+    @objc private func chooseGeneralLogFile() {
+        let panel = NSOpenPanel()
+        panel.canCreateDirectories = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.plainText]
+        panel.directoryURL = URL(fileURLWithPath: LogSettings.shared.generalLogPath).deletingLastPathComponent()
+
+        if panel.runModal() == .OK, let url = panel.url {
+            let path = url.path
+            LogSettings.shared.generalLogPath = path
+            // Update the text field
+            if let textField = generalTab?.subviews.first(where: { $0.identifier?.rawValue == "generalLogPath" }) as? NSTextField {
+                textField.stringValue = path
+            }
+        }
     }
 
     @objc private func clipboardLogEnabledChanged(_ sender: NSButton) {
         LogSettings.shared.clipboardLogEnabled = sender.state == .on
     }
 
-    @objc private func clipboardLogPathChanged(_ sender: NSTextField) {
-        LogSettings.shared.clipboardLogPath = sender.stringValue
+    @objc private func chooseClipboardLogFile() {
+        let panel = NSOpenPanel()
+        panel.canCreateDirectories = true
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.plainText]
+        panel.directoryURL = URL(fileURLWithPath: LogSettings.shared.clipboardLogPath).deletingLastPathComponent()
+
+        if panel.runModal() == .OK, let url = panel.url {
+            let path = url.path
+            LogSettings.shared.clipboardLogPath = path
+            // Update the text field
+            if let textField = clipboardTab?.subviews.first(where: { $0.identifier?.rawValue == "clipboardLogPath" }) as? NSTextField {
+                textField.stringValue = path
+            }
+        }
     }
 
     @objc private func clearClipboardHistory() {
