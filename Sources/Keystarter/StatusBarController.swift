@@ -28,12 +28,22 @@ final class StatusBarController {
         switch currentTheme {
         case "hidden":
             button.image = nil
-        default:
-            // Load and composite SVG icons
-            if let compositeImage = loadCompositeIcon() {
-                let resizedImage = resizeImage(compositeImage, to: NSSize(width: 18, height: 18))
-                resizedImage.isTemplate = true
-                button.image = resizedImage
+        case "light":
+            // Light theme: use dark icon (black)
+            if let image = loadAndTintIcon(color: .black) {
+                button.image = image
+            }
+        case "dark":
+            // Dark theme: use light icon (white)
+            if let image = loadAndTintIcon(color: .white) {
+                button.image = image
+            }
+        default: // system
+            // System theme: detect current appearance
+            let isDarkMode = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let color: NSColor = isDarkMode ? .white : .black
+            if let image = loadAndTintIcon(color: color) {
+                button.image = image
             } else {
                 // Fallback to system icon
                 let image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: "Keystarter")
@@ -44,39 +54,30 @@ final class StatusBarController {
         button.needsDisplay = true
     }
 
-    private func loadCompositeIcon() -> NSImage? {
-        // Load background and foreground SVGs
-        guard let backgroundPath = Bundle.main.path(forResource: "01-background", ofType: "svg"),
-              let foregroundPath = Bundle.main.path(forResource: "02-foreground", ofType: "svg"),
-              let background = NSImage(contentsOfFile: backgroundPath),
-              let foreground = NSImage(contentsOfFile: foregroundPath) else {
+    private func loadAndTintIcon(color: NSColor) -> NSImage? {
+        guard let imagePath = Bundle.main.path(forResource: "statusbar-icon", ofType: "png"),
+              let originalImage = NSImage(contentsOfFile: imagePath),
+              let tiffData = originalImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData) else {
             return nil
         }
 
-        // Create composite image
-        let size = background.size
-        let composite = NSImage(size: size)
-        composite.lockFocus()
+        // Create a new image with the same size
+        let size = originalImage.size
+        let newImage = NSImage(size: size)
 
-        // Draw background first
-        background.draw(in: NSRect(origin: .zero, size: size))
+        newImage.lockFocus()
 
-        // Draw foreground on top
-        foreground.draw(in: NSRect(origin: .zero, size: size))
+        // Draw the original image
+        bitmap.draw(in: NSRect(origin: .zero, size: size))
 
-        composite.unlockFocus()
-        return composite
-    }
+        // Apply color tint using composite operation
+        color.setFill()
+        NSRect(origin: .zero, size: size).fill(using: .sourceAtop)
 
-    private func resizeImage(_ image: NSImage, to size: NSSize) -> NSImage {
-        let resizedImage = NSImage(size: size)
-        resizedImage.lockFocus()
-        image.draw(in: NSRect(origin: .zero, size: size),
-                   from: NSRect(origin: .zero, size: image.size),
-                   operation: .sourceOver,
-                   fraction: 1.0)
-        resizedImage.unlockFocus()
-        return resizedImage
+        newImage.unlockFocus()
+
+        return newImage
     }
 
     /// Update the status bar icon theme.

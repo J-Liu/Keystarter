@@ -374,8 +374,9 @@ final class SettingsWindow: NSWindow {
 
         // App Icon
         let appIcon = NSImageView(frame: NSRect(x: 190, y: 240, width: 80, height: 80))
-        if let compositeImage = loadCompositeIcon() {
-            appIcon.image = compositeImage
+        if let icnsPath = Bundle.main.path(forResource: "Keystarter", ofType: "icns"),
+           let image = NSImage(contentsOfFile: icnsPath) {
+            appIcon.image = image
         } else {
             // Fallback to system icon
             appIcon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)
@@ -414,30 +415,6 @@ final class SettingsWindow: NSWindow {
         view.addSubview(githubButton)
 
         return view
-    }
-
-    private func loadCompositeIcon() -> NSImage? {
-        // Load background and foreground SVGs
-        guard let backgroundPath = Bundle.main.path(forResource: "01-background", ofType: "svg"),
-              let foregroundPath = Bundle.main.path(forResource: "02-foreground", ofType: "svg"),
-              let background = NSImage(contentsOfFile: backgroundPath),
-              let foreground = NSImage(contentsOfFile: foregroundPath) else {
-            return nil
-        }
-
-        // Create composite image
-        let size = background.size
-        let composite = NSImage(size: size)
-        composite.lockFocus()
-
-        // Draw background first
-        background.draw(in: NSRect(origin: .zero, size: size))
-
-        // Draw foreground on top
-        foreground.draw(in: NSRect(origin: .zero, size: size))
-
-        composite.unlockFocus()
-        return composite
     }
 
     private func setupKeyHandlers() {
