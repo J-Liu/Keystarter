@@ -51,11 +51,11 @@ final class PermissionManager {
         • Capture keyboard shortcuts for navigation
         
         Click "Open System Settings" to grant permission.
-        After granting, click "I've Granted Permission" to restart.
+        After granting, click "Restart Now" to apply the changes.
         """
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open System Settings")
-        alert.addButton(withTitle: "I've Granted Permission")
+        alert.addButton(withTitle: "Restart Now")
         alert.addButton(withTitle: "Skip")
 
         let response = alert.runModal()
@@ -63,12 +63,12 @@ final class PermissionManager {
         if response == .alertFirstButtonReturn {
             // Open System Settings
             openAccessibilitySettings()
-            // Wait for user to grant permission and click the button again
+            // Show restart alert after a short delay
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                self.showPermissionGrantedAlert(completion: completion)
+                self.showRestartAlert(completion: completion)
             }
         } else if response == .alertSecondButtonReturn {
-            // User clicked "I've Granted Permission"
+            // User clicked "Restart Now" directly
             completion()
         } else {
             // Skip
@@ -76,13 +76,15 @@ final class PermissionManager {
         }
     }
 
-    /// Show alert after granting permission.
-    private func showPermissionGrantedAlert(completion: @escaping () -> Void) {
+    /// Show restart alert after granting permission.
+    private func showRestartAlert(completion: @escaping () -> Void) {
         let alert = NSAlert()
         alert.messageText = "Permission Granted?"
         alert.informativeText = """
         After granting Accessibility permission in System Settings,
         click "Restart Now" to apply the changes.
+        
+        The app will restart automatically.
         """
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Restart Now")

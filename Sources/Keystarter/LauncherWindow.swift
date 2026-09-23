@@ -345,7 +345,7 @@ final class LauncherWindow: NSWindow {
 
         let itemWidth: CGFloat = 95
         let itemHeight: CGFloat = 110
-        let spacing: CGFloat = 15
+        let spacing: CGFloat = 8
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
@@ -356,7 +356,7 @@ final class LauncherWindow: NSWindow {
             totalHeight += 18 // label height
             let recentRows = Int(ceil(Double(recentApps.count) / Double(columns)))
             totalHeight += CGFloat(recentRows) * (itemHeight + spacing)
-            totalHeight += 20 // separator and spacing
+            totalHeight += 12 // separator and spacing (reduced from 20)
         }
 
         // All apps section - show all apps
@@ -403,13 +403,13 @@ final class LauncherWindow: NSWindow {
                 y -= itemHeight + spacing
             }
 
-            // Separator line
-            y -= 5
+            // Separator line (reduced spacing)
+            y -= 2
             let separator = NSView(frame: NSRect(x: 10, y: y, width: gridView.bounds.width - 20, height: 1))
             separator.wantsLayer = true
             separator.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
             gridView.addSubview(separator)
-            y -= 15
+            y -= 10
         }
 
         // All apps section
@@ -451,9 +451,9 @@ final class LauncherWindow: NSWindow {
         imageView.imageScaling = .scaleProportionallyUpOrDown
         view.addSubview(imageView)
 
-        // Name
+        // Name (increased spacing from icon)
         let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 4, y: 5, width: size.width - 8, height: 30)
+        nameField.frame = NSRect(x: 4, y: 8, width: size.width - 8, height: 30)
         nameField.alignment = .center
         nameField.font = .systemFont(ofSize: 13)
         nameField.lineBreakMode = .byTruncatingTail
