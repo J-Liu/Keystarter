@@ -344,8 +344,8 @@ final class LauncherWindow: NSWindow {
         }
 
         let itemWidth: CGFloat = 95
-        let itemHeight: CGFloat = 100
-        let spacing: CGFloat = 8
+        let itemHeight: CGFloat = 110
+        let spacing: CGFloat = 15
         let columns = Int(gridView.bounds.width / (itemWidth + spacing))
 
         // Calculate total height needed
@@ -440,7 +440,7 @@ final class LauncherWindow: NSWindow {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: size.width, height: size.height))
 
         // Icon
-        let iconSize: CGFloat = 64
+        let iconSize: CGFloat = 75
         let imageView = NSImageView(frame: NSRect(
             x: (size.width - iconSize) / 2,
             y: size.height - iconSize - 5,
@@ -453,9 +453,9 @@ final class LauncherWindow: NSWindow {
 
         // Name
         let nameField = NSTextField(labelWithString: app.name)
-        nameField.frame = NSRect(x: 4, y: 0, width: size.width - 8, height: 30)
+        nameField.frame = NSRect(x: 4, y: 5, width: size.width - 8, height: 30)
         nameField.alignment = .center
-        nameField.font = .systemFont(ofSize: 11)
+        nameField.font = .systemFont(ofSize: 13)
         nameField.lineBreakMode = .byTruncatingTail
         nameField.maximumNumberOfLines = 2
         view.addSubview(nameField)

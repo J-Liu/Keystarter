@@ -140,11 +140,9 @@ final class SettingsWindow: NSWindow {
         loginLabel.frame = NSRect(x: 0, y: 85, width: 100, height: 24)
         view.addSubview(loginLabel)
 
-        let loginCheckbox = NSButton(frame: NSRect(x: 110, y: 84, width: 200, height: 24))
-        loginCheckbox.title = "Automatically start at login"
+        let loginCheckbox = NSButton(checkboxWithTitle: "Automatically start at login", target: self, action: #selector(loginItemChanged(_:)))
+        loginCheckbox.frame = NSRect(x: 110, y: 84, width: 250, height: 24)
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
-        loginCheckbox.target = self
-        loginCheckbox.action = #selector(loginItemChanged(_:))
         view.addSubview(loginCheckbox)
 
         // Check Permissions button

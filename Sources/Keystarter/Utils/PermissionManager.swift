@@ -51,19 +51,44 @@ final class PermissionManager {
         • Capture keyboard shortcuts for navigation
         
         Click "Open System Settings" to grant permission.
-        After granting, the app will restart automatically.
+        After granting, click "I've Granted Permission" to restart.
         """
         alert.alertStyle = .warning
         alert.addButton(withTitle: "Open System Settings")
+        alert.addButton(withTitle: "I've Granted Permission")
         alert.addButton(withTitle: "Skip")
 
-        if alert.runModal() == .alertFirstButtonReturn {
+        let response = alert.runModal()
+        
+        if response == .alertFirstButtonReturn {
+            // Open System Settings
             openAccessibilitySettings()
-            // Wait a bit for user to grant permission
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                completion()
+            // Wait for user to grant permission and click the button again
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                self.showPermissionGrantedAlert(completion: completion)
             }
+        } else if response == .alertSecondButtonReturn {
+            // User clicked "I've Granted Permission"
+            completion()
         } else {
+            // Skip
+            completion()
+        }
+    }
+
+    /// Show alert after granting permission.
+    private func showPermissionGrantedAlert(completion: @escaping () -> Void) {
+        let alert = NSAlert()
+        alert.messageText = "Permission Granted?"
+        alert.informativeText = """
+        After granting Accessibility permission in System Settings,
+        click "Restart Now" to apply the changes.
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Restart Now")
+        alert.addButton(withTitle: "Later")
+
+        if alert.runModal() == .alertFirstButtonReturn {
             completion()
         }
     }
