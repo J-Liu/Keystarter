@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon
 
 /// A borderless, centered, floating window that hosts the launcher UI.
 /// Hides automatically when it loses focus.
@@ -28,6 +29,9 @@ final class LauncherWindow: NSWindow {
     /// Autocomplete suggestions
     private var autocompleteSuggestions: [String] = []
     private var isAutocompleteMode = false
+
+    /// Saved input source for restoration
+    private var savedInputSource: TISInputSource?
 
     init() {
         // Initial frame: centered, fixed size
@@ -317,6 +321,39 @@ final class LauncherWindow: NSWindow {
         container.addSubview(scrollView)
     }
 
+    // MARK: - Input Source Management
+
+    /// Save current input source and switch to English
+    private func switchToEnglishInput() {
+        // Save current input source
+        savedInputSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+
+        // Find English input source
+        guard let inputSources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+            return
+        }
+
+        // Try to find ABC or US keyboard
+        for source in inputSources {
+            guard let sourceID = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else { continue }
+            let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
+
+            if sourceIDString.contains("com.apple.keylayout.ABC") ||
+               sourceIDString.contains("com.apple.keylayout.US") ||
+               sourceIDString == "com.apple.keylayout.ABC" {
+                TISSelectInputSource(source)
+                break
+            }
+        }
+    }
+
+    /// Restore previously saved input source
+    private func restoreInputSource() {
+        guard let savedSource = savedInputSource else { return }
+        TISSelectInputSource(savedSource)
+        savedInputSource = nil
+    }
+
     // MARK: - Show / Hide
 
     /// Toggle visibility. If visible, hide. If hidden, show and focus.
@@ -329,6 +366,9 @@ final class LauncherWindow: NSWindow {
     }
 
     func show() {
+        // Switch to English input
+        switchToEnglishInput()
+
         // Reset search
         searchField.stringValue = ""
         isSearchMode = false
@@ -381,6 +421,8 @@ final class LauncherWindow: NSWindow {
     }
 
     func hide() {
+        // Restore input source before hiding
+        restoreInputSource()
         orderOut(nil)
     }
 
