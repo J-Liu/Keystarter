@@ -77,25 +77,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.clipboardPanel?.toggle()
         }
 
-        // Show setup wizard on first launch
+        // Request permissions on first launch (directly, no custom dialog)
         if PermissionManager.shared.isFirstLaunch {
-            showSetupWizard()
+            PermissionManager.shared.requestAllPermissions { }
+            PermissionManager.shared.markLaunched()
         }
-    }
-
-    /// Show the first-time setup wizard.
-    private func showSetupWizard() {
-        let wizard = SetupWizardWindow()
-        wizard.onComplete = { [weak self] in
-            // Reload hotkey settings after wizard
-            let keyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
-            let modifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
-            if keyCode > 0 {
-                self?.updateHotkey(keyCode: UInt16(keyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(modifiers)))
-            }
-        }
-        wizard.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     /// Update the global hotkey.

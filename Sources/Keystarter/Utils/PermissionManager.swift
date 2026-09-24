@@ -33,39 +33,10 @@ final class PermissionManager {
 
     /// Request Accessibility permission (for global hotkey).
     private func requestAccessibilityPermission(completion: @escaping () -> Void) {
-        // First check silently without triggering system dialog
-        let alreadyTrusted = AXIsProcessTrustedWithOptions([
-            kAXTrustedCheckOptionPrompt.takeRetainedValue(): false
+        // Directly trigger system permission dialog
+        _ = AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
         ] as CFDictionary)
-
-        if alreadyTrusted {
-            completion()
-            return
-        }
-
-        // Show our explanation alert first
-        let alert = NSAlert()
-        alert.messageText = "Accessibility Permission Required"
-        alert.informativeText = """
-        Keystarter needs Accessibility permission to:
-
-        • Listen for the global hotkey (⌘ Space)
-        • Paste clipboard content to other apps
-
-        Please grant permission in System Settings.
-        """
-        alert.alertStyle = .warning
-        alert.addButton(withTitle: "Grant Permission")
-        alert.addButton(withTitle: "Skip")
-
-        let response = alert.runModal()
-
-        if response == .alertFirstButtonReturn {
-            // Trigger system permission dialog
-            _ = AXIsProcessTrustedWithOptions([
-                kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
-            ] as CFDictionary)
-        }
 
         completion()
     }

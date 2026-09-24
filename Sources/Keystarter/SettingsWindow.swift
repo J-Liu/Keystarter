@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon
 
 /// Settings window with tabs for configuration.
 final class SettingsWindow: NSWindow {
@@ -14,10 +15,9 @@ final class SettingsWindow: NSWindow {
     private var hotkeyRecorder: HotkeyRecorderButton!
 
     // Layout constants
-    private let labelX: CGFloat = 20
-    private let controlX: CGFloat = 130
+    private let labelWidth: CGFloat = 120
     private let controlWidth: CGFloat = 200
-    private let rowHeight: CGFloat = 40
+    private let rowHeight: CGFloat = 36
     private let viewWidth: CGFloat = 560
 
     init() {
@@ -37,7 +37,7 @@ final class SettingsWindow: NSWindow {
 
         self.title = "Keystarter Settings"
         self.isReleasedWhenClosed = false
-        self.minSize = NSSize(width: 600, height: 650)
+        self.minSize = NSSize(width: 600, height: 500)
 
         setupUI()
         setupKeyHandlers()
@@ -47,28 +47,24 @@ final class SettingsWindow: NSWindow {
         tabView = NSTabView(frame: contentView!.bounds.insetBy(dx: 10, dy: 10))
         tabView.autoresizingMask = [.width, .height]
 
-        // General tab
         generalTab = createGeneralTab()
         let generalItem = NSTabViewItem(identifier: "general")
         generalItem.label = L("settings.tab.general")
         generalItem.view = generalTab
         tabView.addTabViewItem(generalItem)
 
-        // Clipboard tab
         clipboardTab = createClipboardTab()
         let clipboardItem = NSTabViewItem(identifier: "clipboard")
         clipboardItem.label = L("settings.tab.clipboard")
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
 
-        // Advanced tab
         advancedTab = createAdvancedTab()
         let advancedItem = NSTabViewItem(identifier: "advanced")
         advancedItem.label = L("settings.tab.advanced")
         advancedItem.view = advancedTab
         tabView.addTabViewItem(advancedItem)
 
-        // About tab
         aboutTab = createAboutTab()
         let aboutItem = NSTabViewItem(identifier: "about")
         aboutItem.label = L("settings.tab.about")
@@ -78,31 +74,46 @@ final class SettingsWindow: NSWindow {
         contentView?.addSubview(tabView)
     }
 
+    // MARK: - Stack View Helpers
+
+    private func makeRow(label: String, control: NSView) -> NSView {
+        let row = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: rowHeight))
+        let labelField = NSTextField(labelWithString: label)
+        labelField.frame = NSRect(x: 20, y: 6, width: labelWidth, height: 24)
+        labelField.alignment = .right
+        labelField.textColor = .labelColor
+        row.addSubview(labelField)
+        control.frame = NSRect(x: 20 + labelWidth + 10, y: 4, width: control.frame.width, height: control.frame.height)
+        row.addSubview(control)
+        return row
+    }
+
+    private func makeStackView(rows: [NSView]) -> NSStackView {
+        let stack = NSStackView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: CGFloat(rows.count) * rowHeight + 40))
+        stack.orientation = .vertical
+        stack.spacing = 4
+        stack.edgeInsets = NSEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
+        for row in rows {
+            stack.addArrangedSubview(row)
+        }
+        return stack
+    }
+
     // MARK: - General Tab
 
     private func createGeneralTab() -> NSView {
-        let viewHeight: CGFloat = 700
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
-
-        var y = viewHeight - 20  // Start with top padding
-
-        // Row: Language
-        addLabel(L("settings.language"), to: view, y: y)
-        let languagePopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        // Language
+        let languagePopup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: controlWidth, height: 28))
         for language in LocalizationManager.Language.allCases {
             languagePopup.addItem(withTitle: language.displayName)
         }
-        let currentLanguage = LocalizationManager.shared.currentLanguage
-        languagePopup.selectItem(withTitle: currentLanguage.displayName)
+        languagePopup.selectItem(withTitle: LocalizationManager.shared.currentLanguage.displayName)
         languagePopup.target = self
         languagePopup.action = #selector(languageChanged(_:))
-        view.addSubview(languagePopup)
+        let languageRow = makeRow(label: L("settings.language"), control: languagePopup)
 
-        y -= rowHeight
-
-        // Row: Hotkey
-        addLabel(L("settings.hotkey"), to: view, y: y)
-        hotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: controlX, y: y - 4, width: 150, height: 32))
+        // Hotkey
+        hotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: 0, y: 0, width: 150, height: 28))
         hotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.hotkeyChanged(recorder: recorder)
         }
@@ -113,14 +124,10 @@ final class SettingsWindow: NSWindow {
         } else {
             hotkeyRecorder.setShortcut(keyCode: UInt16(49), modifiers: .command)
         }
-        view.addSubview(hotkeyRecorder)
-        addHint(L("settings.hotkey.hint"), to: view, x: controlX + 160, y: y)
+        let hotkeyRow = makeRow(label: L("settings.hotkey"), control: hotkeyRecorder)
 
-        y -= rowHeight
-
-        // Row: Status Bar
-        addLabel(L("settings.statusbar"), to: view, y: y)
-        let statusBarPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        // Status Bar
+        let statusBarPopup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: controlWidth, height: 28))
         statusBarPopup.addItem(withTitle: L("settings.statusbar.system"))
         statusBarPopup.addItem(withTitle: L("settings.statusbar.light"))
         statusBarPopup.addItem(withTitle: L("settings.statusbar.dark"))
@@ -129,47 +136,48 @@ final class SettingsWindow: NSWindow {
         statusBarPopup.selectItem(withTitle: themeName(for: savedTheme))
         statusBarPopup.target = self
         statusBarPopup.action = #selector(statusBarThemeChanged(_:))
-        view.addSubview(statusBarPopup)
+        let statusBarRow = makeRow(label: L("settings.statusbar"), control: statusBarPopup)
 
-        y -= rowHeight
-
-        // Row: Corner Radius
-        addLabel(L("settings.cornerRadius"), to: view, y: y)
-        let radiusSlider = NSSlider(frame: NSRect(x: controlX, y: y, width: controlWidth, height: 24))
+        // Corner Radius
+        let radiusSlider = NSSlider(frame: NSRect(x: 0, y: 0, width: controlWidth, height: 24))
         radiusSlider.minValue = 0
         radiusSlider.maxValue = 24
         radiusSlider.doubleValue = Double(AppearanceSettings.cornerRadius)
         radiusSlider.target = self
         radiusSlider.action = #selector(radiusChanged(_:))
-        view.addSubview(radiusSlider)
-
         let radiusValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
-        radiusValue.frame = NSRect(x: controlX + controlWidth + 10, y: y, width: 40, height: 24)
+        radiusValue.frame = NSRect(x: 20 + labelWidth + 10 + controlWidth + 10, y: 6, width: 40, height: 24)
         radiusValue.identifier = NSUserInterfaceItemIdentifier("radiusValue")
-        view.addSubview(radiusValue)
+        let radiusRow = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: rowHeight))
+        let radiusLabel = NSTextField(labelWithString: L("settings.cornerRadius"))
+        radiusLabel.frame = NSRect(x: 20, y: 6, width: labelWidth, height: 24)
+        radiusLabel.alignment = .right
+        radiusRow.addSubview(radiusLabel)
+        radiusSlider.frame = NSRect(x: 20 + labelWidth + 10, y: 6, width: controlWidth, height: 24)
+        radiusRow.addSubview(radiusSlider)
+        radiusRow.addSubview(radiusValue)
 
-        y -= rowHeight
-
-        // Row: Opacity
-        addLabel(L("settings.opacity"), to: view, y: y)
-        let opacitySlider = NSSlider(frame: NSRect(x: controlX, y: y, width: controlWidth, height: 24))
+        // Opacity
+        let opacitySlider = NSSlider(frame: NSRect(x: 0, y: 0, width: controlWidth, height: 24))
         opacitySlider.minValue = 0.5
         opacitySlider.maxValue = 1.0
         opacitySlider.doubleValue = Double(AppearanceSettings.opacity)
         opacitySlider.target = self
         opacitySlider.action = #selector(opacityChanged(_:))
-        view.addSubview(opacitySlider)
-
         let opacityValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
-        opacityValue.frame = NSRect(x: controlX + controlWidth + 10, y: y, width: 50, height: 24)
+        opacityValue.frame = NSRect(x: 20 + labelWidth + 10 + controlWidth + 10, y: 6, width: 50, height: 24)
         opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
-        view.addSubview(opacityValue)
+        let opacityRow = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: rowHeight))
+        let opacityLabel = NSTextField(labelWithString: L("settings.opacity"))
+        opacityLabel.frame = NSRect(x: 20, y: 6, width: labelWidth, height: 24)
+        opacityLabel.alignment = .right
+        opacityRow.addSubview(opacityLabel)
+        opacitySlider.frame = NSRect(x: 20 + labelWidth + 10, y: 6, width: controlWidth, height: 24)
+        opacityRow.addSubview(opacitySlider)
+        opacityRow.addSubview(opacityValue)
 
-        y -= rowHeight
-
-        // Row: Group By
-        addLabel(L("settings.groupBy"), to: view, y: y)
-        let groupByPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        // Group By
+        let groupByPopup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: controlWidth, height: 28))
         groupByPopup.addItem(withTitle: L("settings.groupBy.frequency"))
         groupByPopup.addItem(withTitle: L("settings.groupBy.category"))
         groupByPopup.addItem(withTitle: L("settings.groupBy.letter"))
@@ -183,97 +191,74 @@ final class SettingsWindow: NSWindow {
         groupByPopup.selectItem(withTitle: selectedTitle)
         groupByPopup.target = self
         groupByPopup.action = #selector(groupByChanged(_:))
-        view.addSubview(groupByPopup)
+        let groupByRow = makeRow(label: L("settings.groupBy"), control: groupByPopup)
 
-        y -= rowHeight
-
-        // Row: Start at Login
-        addLabel(L("settings.startAtLogin"), to: view, y: y)
+        // Start at Login
         let loginCheckbox = NSButton(checkboxWithTitle: L("settings.startAtLogin.checkbox"), target: self, action: #selector(loginItemChanged(_:)))
-        loginCheckbox.frame = NSRect(x: controlX, y: y, width: 250, height: 24)
+        loginCheckbox.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
-        view.addSubview(loginCheckbox)
+        let loginRow = makeRow(label: L("settings.startAtLogin"), control: loginCheckbox)
 
-        y -= rowHeight
-
-        // Row: Dock Icon
-        addLabel(L("settings.dockIcon"), to: view, y: y)
+        // Dock Icon
         let dockIconCheckbox = NSButton(checkboxWithTitle: L("settings.dockIcon.checkbox"), target: self, action: #selector(dockIconChanged(_:)))
-        dockIconCheckbox.frame = NSRect(x: controlX, y: y, width: 200, height: 24)
+        dockIconCheckbox.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
-        view.addSubview(dockIconCheckbox)
+        let dockRow = makeRow(label: L("settings.dockIcon"), control: dockIconCheckbox)
 
-        y -= rowHeight
-
-        // Row: Update
-        addLabel(L("settings.update.frequency"), to: view, y: y)
-        let updateFrequencyPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        // Update frequency
+        let updateFrequencyPopup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 150, height: 28))
         for frequency in UpdateManager.CheckFrequency.allCases {
             updateFrequencyPopup.addItem(withTitle: frequency.displayName)
         }
-        let currentFrequency = UpdateManager.shared.checkFrequency
-        updateFrequencyPopup.selectItem(withTitle: currentFrequency.displayName)
+        updateFrequencyPopup.selectItem(withTitle: UpdateManager.shared.checkFrequency.displayName)
         updateFrequencyPopup.target = self
         updateFrequencyPopup.action = #selector(updateFrequencyChanged(_:))
-        view.addSubview(updateFrequencyPopup)
-
-        let checkNowButton = NSButton(frame: NSRect(x: controlX + controlWidth + 10, y: y - 2, width: 100, height: 28))
+        let checkNowButton = NSButton(frame: NSRect(x: 160, y: 0, width: 100, height: 28))
         checkNowButton.title = L("settings.update.checkNow")
         checkNowButton.bezelStyle = .rounded
         checkNowButton.target = self
         checkNowButton.action = #selector(checkForUpdatesNow)
-        view.addSubview(checkNowButton)
+        let updateRow = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: rowHeight))
+        let updateLabel = NSTextField(labelWithString: L("settings.update.frequency"))
+        updateLabel.frame = NSRect(x: 20, y: 6, width: labelWidth, height: 24)
+        updateLabel.alignment = .right
+        updateRow.addSubview(updateLabel)
+        updateFrequencyPopup.frame = NSRect(x: 20 + labelWidth + 10, y: 4, width: 150, height: 28)
+        updateRow.addSubview(updateFrequencyPopup)
+        checkNowButton.frame = NSRect(x: 20 + labelWidth + 10 + 160, y: 4, width: 100, height: 28)
+        updateRow.addSubview(checkNowButton)
 
-        y -= rowHeight
-
-        // Row: Log
-        addLabel(L("settings.log"), to: view, y: y)
-        let enableLogCheckbox = NSButton(checkboxWithTitle: L("settings.log.enable"), target: self, action: #selector(generalLogEnabledChanged(_:)))
-        enableLogCheckbox.frame = NSRect(x: controlX, y: y, width: 70, height: 24)
-        enableLogCheckbox.state = LogSettings.shared.generalLogEnabled ? .on : .off
-        view.addSubview(enableLogCheckbox)
-
-        let logPathField = NSTextField(frame: NSRect(x: controlX + 80, y: y, width: 220, height: 24))
-        logPathField.stringValue = LogSettings.shared.generalLogPath
-        logPathField.isEditable = false
-        logPathField.isBezeled = false
-        logPathField.drawsBackground = false
-        logPathField.font = .systemFont(ofSize: 11)
-        logPathField.lineBreakMode = .byTruncatingMiddle
-        logPathField.identifier = NSUserInterfaceItemIdentifier("generalLogPath")
-        view.addSubview(logPathField)
-
-        let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 80, height: 28))
-        chooseLogButton.title = L("settings.log.choose")
-        chooseLogButton.bezelStyle = .rounded
-        chooseLogButton.target = self
-        chooseLogButton.action = #selector(chooseGeneralLogFile)
-        view.addSubview(chooseLogButton)
-
-        y -= rowHeight + 10
-
-        // Bottom buttons
-        let permissionsButton = NSButton(frame: NSRect(x: labelX, y: y, width: 160, height: 32))
+        // Permissions button
+        let permissionsButton = NSButton(frame: NSRect(x: 0, y: 0, width: 200, height: 28))
         permissionsButton.title = L("settings.permissions")
         permissionsButton.bezelStyle = .rounded
         permissionsButton.target = self
         permissionsButton.action = #selector(checkPermissions)
-        view.addSubview(permissionsButton)
+        let permissionsRow = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: rowHeight))
+        permissionsButton.frame = NSRect(x: 20 + labelWidth + 10, y: 2, width: 200, height: 28)
+        permissionsRow.addSubview(permissionsButton)
 
-        return view
+        let stack = makeStackView(rows: [
+            languageRow, hotkeyRow, statusBarRow, radiusRow, opacityRow,
+            groupByRow, loginRow, dockRow, updateRow, permissionsRow
+        ])
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: 580))
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.documentView = stack
+        stack.frame = NSRect(x: 0, y: 0, width: viewWidth, height: stack.frame.height)
+        stack.autoresizingMask = [.width]
+
+        return scrollView
     }
 
     // MARK: - Clipboard Tab
 
     private func createClipboardTab() -> NSView {
-        let viewHeight: CGFloat = 480
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
-
-        var y = viewHeight - rowHeight
-
-        // Row: Hotkey
-        addLabel(L("settings.clipboard.hotkey"), to: view, y: y)
-        let clipboardHotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: controlX, y: y - 4, width: 150, height: 32))
+        // Hotkey
+        let clipboardHotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: 0, y: 0, width: 150, height: 28))
         clipboardHotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.clipboardHotkeyChanged(recorder: recorder)
         }
@@ -284,92 +269,58 @@ final class SettingsWindow: NSWindow {
         } else {
             clipboardHotkeyRecorder.setShortcut(keyCode: UInt16(9), modifiers: [.command, .shift])
         }
-        view.addSubview(clipboardHotkeyRecorder)
-        addHint(L("settings.hotkey.hint"), to: view, x: controlX + 160, y: y)
+        let hotkeyRow = makeRow(label: L("settings.clipboard.hotkey"), control: clipboardHotkeyRecorder)
 
-        y -= rowHeight
-
-        // Row: Max Count
-        addLabel(L("settings.clipboard.maxCount"), to: view, y: y)
-        let maxCountField = NSTextField(frame: NSRect(x: controlX, y: y, width: 80, height: 24))
+        // Max Count
+        let maxCountField = NSTextField(frame: NSRect(x: 0, y: 0, width: 80, height: 24))
         let currentMaxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500
         maxCountField.stringValue = String(currentMaxCount)
         maxCountField.target = self
         maxCountField.action = #selector(clipboardMaxCountChanged(_:))
-        view.addSubview(maxCountField)
+        let maxCountRow = makeRow(label: L("settings.clipboard.maxCount"), control: maxCountField)
 
-        let groupsCount = currentMaxCount / 10 + 1
-        let maxCountHint = NSTextField(labelWithString: String(format: L("settings.clipboard.maxCount.hint"), "\(groupsCount)"))
-        maxCountHint.frame = NSRect(x: controlX + 90, y: y, width: 200, height: 24)
-        maxCountHint.textColor = .secondaryLabelColor
-        maxCountHint.identifier = NSUserInterfaceItemIdentifier("maxCountHint")
-        view.addSubview(maxCountHint)
-
-        y -= rowHeight
-
-        // Row: Max Days
-        addLabel(L("settings.clipboard.maxDays"), to: view, y: y)
-        let maxDaysField = NSTextField(frame: NSRect(x: controlX, y: y, width: 80, height: 24))
+        // Max Days
+        let maxDaysField = NSTextField(frame: NSRect(x: 0, y: 0, width: 80, height: 24))
         maxDaysField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxDays") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxDays") : 30)
         maxDaysField.target = self
         maxDaysField.action = #selector(clipboardMaxDaysChanged(_:))
-        view.addSubview(maxDaysField)
-        addHint(L("settings.clipboard.maxDays.hint"), to: view, x: controlX + 90, y: y)
+        let maxDaysRow = makeRow(label: L("settings.clipboard.maxDays"), control: maxDaysField)
 
-        y -= rowHeight
-
-        // Row: Log
-        addLabel(L("settings.log"), to: view, y: y)
-        let enableLogCheckbox = NSButton(checkboxWithTitle: L("settings.log.enable"), target: self, action: #selector(clipboardLogEnabledChanged(_:)))
-        enableLogCheckbox.frame = NSRect(x: controlX, y: y, width: 70, height: 24)
-        enableLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
-        view.addSubview(enableLogCheckbox)
-
-        let logPathField = NSTextField(frame: NSRect(x: controlX + 80, y: y, width: 220, height: 24))
-        logPathField.stringValue = LogSettings.shared.clipboardLogPath
-        logPathField.isEditable = false
-        logPathField.isBezeled = false
-        logPathField.drawsBackground = false
-        logPathField.font = .systemFont(ofSize: 11)
-        logPathField.lineBreakMode = .byTruncatingMiddle
-        logPathField.identifier = NSUserInterfaceItemIdentifier("clipboardLogPath")
-        view.addSubview(logPathField)
-
-        let chooseLogButton = NSButton(frame: NSRect(x: controlX + 310, y: y - 2, width: 80, height: 28))
-        chooseLogButton.title = L("settings.log.choose")
-        chooseLogButton.bezelStyle = .rounded
-        chooseLogButton.target = self
-        chooseLogButton.action = #selector(chooseClipboardLogFile)
-        view.addSubview(chooseLogButton)
-
-        y -= rowHeight + 10
-
-        // Bottom: Clear button
-        let clearButton = NSButton(frame: NSRect(x: labelX, y: y, width: 180, height: 32))
+        // Clear button
+        let clearButton = NSButton(frame: NSRect(x: 0, y: 0, width: 200, height: 28))
         clearButton.title = L("settings.clipboard.clear")
         clearButton.bezelStyle = .rounded
         clearButton.target = self
         clearButton.action = #selector(clearClipboardHistory)
-        view.addSubview(clearButton)
+        let clearRow = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: rowHeight))
+        clearButton.frame = NSRect(x: 20 + labelWidth + 10, y: 2, width: 200, height: 28)
+        clearRow.addSubview(clearButton)
 
-        return view
+        let stack = makeStackView(rows: [hotkeyRow, maxCountRow, maxDaysRow, clearRow])
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: 580))
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.documentView = stack
+        stack.autoresizingMask = [.width]
+
+        return scrollView
     }
 
     // MARK: - Advanced Tab
 
     private func createAdvancedTab() -> NSView {
-        let viewHeight: CGFloat = 500
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: 580))
 
-        var y = viewHeight - 20
+        // Label
+        let label = NSTextField(labelWithString: L("settings.advanced.ignoredApps"))
+        label.frame = NSRect(x: 20, y: 540, width: labelWidth, height: 24)
+        label.alignment = .right
+        container.addSubview(label)
 
-        // Title
-        addLabel(L("settings.advanced.ignoredApps"), to: view, y: y)
-
-        y -= 30
-
-        // Table view for ignored apps
-        let scrollView = NSScrollView(frame: NSRect(x: controlX, y: y - 200, width: 300, height: 200))
+        // Table
+        let scrollView = NSScrollView(frame: NSRect(x: 20 + labelWidth + 10, y: 340, width: 300, height: 220))
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
 
@@ -384,36 +335,34 @@ final class SettingsWindow: NSWindow {
         tableView.dataSource = self
 
         scrollView.documentView = tableView
-        view.addSubview(scrollView)
+        container.addSubview(scrollView)
 
         // Empty label
         let emptyLabel = NSTextField(labelWithString: L("settings.advanced.ignoredApps.empty"))
-        emptyLabel.frame = NSRect(x: controlX + 10, y: y - 110, width: 280, height: 20)
+        emptyLabel.frame = NSRect(x: 20 + labelWidth + 20, y: 440, width: 280, height: 20)
         emptyLabel.alignment = .center
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.identifier = NSUserInterfaceItemIdentifier("emptyLabel")
         emptyLabel.isHidden = !IgnoredAppsManager.shared.getAllIgnored().isEmpty
-        view.addSubview(emptyLabel)
-
-        y -= 240
+        container.addSubview(emptyLabel)
 
         // Add button
-        let addButton = NSButton(frame: NSRect(x: controlX, y: y, width: 80, height: 32))
+        let addButton = NSButton(frame: NSRect(x: 20 + labelWidth + 10, y: 300, width: 80, height: 32))
         addButton.title = L("settings.advanced.ignoredApps.add")
         addButton.bezelStyle = .rounded
         addButton.target = self
         addButton.action = #selector(addIgnoredApp)
-        view.addSubview(addButton)
+        container.addSubview(addButton)
 
         // Remove button
-        let removeButton = NSButton(frame: NSRect(x: controlX + 90, y: y, width: 80, height: 32))
+        let removeButton = NSButton(frame: NSRect(x: 20 + labelWidth + 100, y: 300, width: 80, height: 32))
         removeButton.title = L("settings.advanced.ignoredApps.remove")
         removeButton.bezelStyle = .rounded
         removeButton.target = self
         removeButton.action = #selector(removeIgnoredApp)
-        view.addSubview(removeButton)
+        container.addSubview(removeButton)
 
-        return view
+        return container
     }
 
     @objc private func addIgnoredApp() {
@@ -448,7 +397,6 @@ final class SettingsWindow: NSWindow {
         guard let tableView = advancedTab?.subviews.compactMap({ $0 as? NSScrollView }).first?.documentView as? NSTableView else { return }
         tableView.reloadData()
 
-        // Update empty label
         if let emptyLabel = advancedTab?.subviews.first(where: { $0.identifier?.rawValue == "emptyLabel" }) as? NSTextField {
             emptyLabel.isHidden = !IgnoredAppsManager.shared.getAllIgnored().isEmpty
         }
@@ -457,10 +405,14 @@ final class SettingsWindow: NSWindow {
     // MARK: - About Tab
 
     private func createAboutTab() -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: 480))
+        let stack = NSStackView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: 400))
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 12
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 0, bottom: 20, right: 0)
 
         // App Icon
-        let appIcon = NSImageView(frame: NSRect(x: (viewWidth - 80) / 2, y: 340, width: 80, height: 80))
+        let appIcon = NSImageView(frame: NSRect(x: 0, y: 0, width: 80, height: 80))
         if let icnsPath = Bundle.main.path(forResource: "Keystarter", ofType: "icns"),
            let image = NSImage(contentsOfFile: icnsPath) {
             appIcon.image = image
@@ -468,64 +420,44 @@ final class SettingsWindow: NSWindow {
             appIcon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)
             appIcon.contentTintColor = .controlAccentColor
         }
-        view.addSubview(appIcon)
+        stack.addArrangedSubview(appIcon)
 
         // App Name
         let nameLabel = NSTextField(labelWithString: "Keystarter")
-        nameLabel.frame = NSRect(x: 0, y: 300, width: viewWidth, height: 28)
-        nameLabel.alignment = .center
         nameLabel.font = .systemFont(ofSize: 22, weight: .semibold)
-        view.addSubview(nameLabel)
+        stack.addArrangedSubview(nameLabel)
 
         // Version
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         let versionLabel = NSTextField(labelWithString: String(format: L("settings.about.version"), version))
-        versionLabel.frame = NSRect(x: 0, y: 270, width: viewWidth, height: 20)
-        versionLabel.alignment = .center
         versionLabel.textColor = .secondaryLabelColor
-        view.addSubview(versionLabel)
+        stack.addArrangedSubview(versionLabel)
 
         // Copyright
         let copyrightLabel = NSTextField(labelWithString: L("settings.about.copyright"))
-        copyrightLabel.frame = NSRect(x: 0, y: 240, width: viewWidth, height: 20)
-        copyrightLabel.alignment = .center
         copyrightLabel.textColor = .secondaryLabelColor
-        view.addSubview(copyrightLabel)
+        stack.addArrangedSubview(copyrightLabel)
+
+        // Spacer
+        stack.addArrangedSubview(NSView(frame: NSRect(x: 0, y: 0, width: 1, height: 20)))
 
         // GitHub link
-        let githubButton = NSButton(frame: NSRect(x: (viewWidth - 220) / 2, y: 180, width: 220, height: 32))
+        let githubButton = NSButton(frame: NSRect(x: 0, y: 0, width: 220, height: 32))
         githubButton.title = "github.com/J-Liu/Keystarter"
         githubButton.bezelStyle = .rounded
         githubButton.target = self
         githubButton.action = #selector(openGitHub)
-        view.addSubview(githubButton)
+        stack.addArrangedSubview(githubButton)
 
         // Check for Updates button
-        let checkUpdatesButton = NSButton(frame: NSRect(x: (viewWidth - 160) / 2, y: 130, width: 160, height: 32))
+        let checkUpdatesButton = NSButton(frame: NSRect(x: 0, y: 0, width: 160, height: 32))
         checkUpdatesButton.title = L("menu.checkUpdates")
         checkUpdatesButton.bezelStyle = .rounded
         checkUpdatesButton.target = self
         checkUpdatesButton.action = #selector(checkForUpdatesNow)
-        view.addSubview(checkUpdatesButton)
+        stack.addArrangedSubview(checkUpdatesButton)
 
-        return view
-    }
-
-    // MARK: - Layout Helpers
-
-    private func addLabel(_ text: String, to view: NSView, y: CGFloat) {
-        let label = NSTextField(labelWithString: text)
-        label.frame = NSRect(x: labelX, y: y, width: 100, height: 24)
-        label.alignment = .right
-        view.addSubview(label)
-    }
-
-    private func addHint(_ text: String, to view: NSView, x: CGFloat, y: CGFloat) {
-        let hint = NSTextField(labelWithString: text)
-        hint.frame = NSRect(x: x, y: y, width: 200, height: 24)
-        hint.textColor = .secondaryLabelColor
-        hint.font = .systemFont(ofSize: 12)
-        view.addSubview(hint)
+        return stack
     }
 
     // MARK: - Key Handlers
@@ -564,17 +496,14 @@ final class SettingsWindow: NSWindow {
     @objc private func languageChanged(_ sender: NSPopUpButton) {
         let language = LocalizationManager.Language.allCases.first { $0.displayName == sender.title } ?? .english
         LocalizationManager.shared.currentLanguage = language
-        // Recreate UI to apply new language
         recreateUI()
     }
 
     private func recreateUI() {
-        // Remove existing tabs
         while let tab = tabView.tabViewItems.first {
             tabView.removeTabViewItem(tab)
         }
 
-        // Recreate tabs
         generalTab = createGeneralTab()
         let generalItem = NSTabViewItem(identifier: "general")
         generalItem.label = L("settings.tab.general")
@@ -646,50 +575,27 @@ final class SettingsWindow: NSWindow {
     }
 
     @objc private func checkPermissions() {
-        PermissionManager.shared.requestAllPermissions {
-            // Permissions granted
-        }
+        // Directly trigger system permission dialog, no custom alert
+        _ = AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+        ] as CFDictionary)
     }
 
     @objc private func radiusChanged(_ sender: NSSlider) {
         AppearanceSettings.cornerRadius = CGFloat(sender.doubleValue)
         AppearanceSettings.save()
-        if let label = generalViewWithIdentifier("radiusValue") {
+        if let scrollView = generalTab as? NSScrollView,
+           let label = scrollView.documentView?.subviews.first(where: { $0.identifier?.rawValue == "radiusValue" }) as? NSTextField {
             label.stringValue = "\(Int(sender.doubleValue))"
         }
-    }
-
-    private func generalViewWithIdentifier(_ id: String) -> NSTextField? {
-        return generalTab.subviews.first { $0.identifier?.rawValue == id } as? NSTextField
     }
 
     @objc private func opacityChanged(_ sender: NSSlider) {
         AppearanceSettings.opacity = CGFloat(sender.doubleValue)
         AppearanceSettings.save()
-        if let label = generalViewWithIdentifier("opacityValue") {
+        if let scrollView = generalTab as? NSScrollView,
+           let label = scrollView.documentView?.subviews.first(where: { $0.identifier?.rawValue == "opacityValue" }) as? NSTextField {
             label.stringValue = "\(Int(sender.doubleValue * 100))%"
-        }
-    }
-
-    @objc private func generalLogEnabledChanged(_ sender: NSButton) {
-        LogSettings.shared.generalLogEnabled = sender.state == .on
-    }
-
-    @objc private func chooseGeneralLogFile() {
-        let panel = NSOpenPanel()
-        panel.canCreateDirectories = true
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.plainText]
-        panel.directoryURL = URL(fileURLWithPath: LogSettings.shared.generalLogPath).deletingLastPathComponent()
-
-        if panel.runModal() == .OK, let url = panel.url {
-            let path = url.path
-            LogSettings.shared.generalLogPath = path
-            if let textField = generalTab.subviews.first(where: { $0.identifier?.rawValue == "generalLogPath" }) as? NSTextField {
-                textField.stringValue = path
-            }
         }
     }
 
@@ -702,37 +608,12 @@ final class SettingsWindow: NSWindow {
     @objc private func clipboardMaxCountChanged(_ sender: NSTextField) {
         if let value = Int(sender.stringValue) {
             UserDefaults.standard.set(value, forKey: "clipboard.maxCount")
-            if let hint = clipboardTab.subviews.first(where: { $0.identifier?.rawValue == "maxCountHint" }) as? NSTextField {
-                hint.stringValue = "entries (groups: \(value / 10 + 1))"
-            }
         }
     }
 
     @objc private func clipboardMaxDaysChanged(_ sender: NSTextField) {
         if let value = Int(sender.stringValue) {
             UserDefaults.standard.set(value, forKey: "clipboard.maxDays")
-        }
-    }
-
-    @objc private func clipboardLogEnabledChanged(_ sender: NSButton) {
-        LogSettings.shared.clipboardLogEnabled = sender.state == .on
-    }
-
-    @objc private func chooseClipboardLogFile() {
-        let panel = NSOpenPanel()
-        panel.canCreateDirectories = true
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.plainText]
-        panel.directoryURL = URL(fileURLWithPath: LogSettings.shared.clipboardLogPath).deletingLastPathComponent()
-
-        if panel.runModal() == .OK, let url = panel.url {
-            let path = url.path
-            LogSettings.shared.clipboardLogPath = path
-            if let textField = clipboardTab.subviews.first(where: { $0.identifier?.rawValue == "clipboardLogPath" }) as? NSTextField {
-                textField.stringValue = path
-            }
         }
     }
 
