@@ -15,10 +15,9 @@ final class SettingsWindow: NSWindow {
     private var hotkeyRecorder: HotkeyRecorderButton!
 
     // Layout constants
-    private let labelX: CGFloat = 20
-    private let controlX: CGFloat = 150
+    private let labelWidth: CGFloat = 120
     private let controlWidth: CGFloat = 200
-    private let rowHeight: CGFloat = 40
+    private let rowSpacing: CGFloat = 16
     private let viewWidth: CGFloat = 560
 
     init() {
@@ -75,32 +74,64 @@ final class SettingsWindow: NSWindow {
         contentView?.addSubview(tabView)
     }
 
+    // MARK: - Layout Helpers
+
+    /// Wrap content in a top-aligned container so the stack starts at the top.
+    private func wrapInTopAlignedContainer(_ stack: NSStackView) -> NSView {
+        let container = NSView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: container.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: container.trailingAnchor)
+        ])
+        return container
+    }
+
+    /// Build a row: right-aligned label on the left, control on the right.
+    private func makeRow(label: String, control: NSView) -> NSStackView {
+        let labelField = NSTextField(labelWithString: label)
+        labelField.alignment = .right
+        labelField.translatesAutoresizingMaskIntoConstraints = false
+        labelField.widthAnchor.constraint(equalToConstant: labelWidth).isActive = true
+
+        control.translatesAutoresizingMaskIntoConstraints = false
+
+        let row = NSStackView(views: [labelField, control])
+        row.orientation = .horizontal
+        row.spacing = 12
+        row.alignment = .centerY
+        return row
+    }
+
+    /// Build a vertical stack with consistent spacing.
+    private func makeVerticalStack() -> NSStackView {
+        let stack = NSStackView()
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = rowSpacing
+        stack.edgeInsets = NSEdgeInsets(top: 20, left: 20, bottom: 20, right: 20)
+        return stack
+    }
+
     // MARK: - General Tab
-    // 10 rows: Language, Hotkey, StatusBar, CornerRadius, Opacity, GroupBy, Login, Dock, Update, Permissions
 
     private func createGeneralTab() -> NSView {
-        let viewHeight: CGFloat = 400
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
-        view.autoresizingMask = [.width, .height]
-
-        var y = viewHeight - 10  // Start with minimal top padding
+        let stack = makeVerticalStack()
 
         // Row: Language
-        addLabel(L("settings.language"), to: view, y: y)
-        let languagePopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        let languagePopup = NSPopUpButton()
         for language in LocalizationManager.Language.allCases {
             languagePopup.addItem(withTitle: language.displayName)
         }
         languagePopup.selectItem(withTitle: LocalizationManager.shared.currentLanguage.displayName)
         languagePopup.target = self
         languagePopup.action = #selector(languageChanged(_:))
-        view.addSubview(languagePopup)
-
-        y -= rowHeight
+        stack.addArrangedSubview(makeRow(label: L("settings.language"), control: languagePopup))
 
         // Row: Hotkey
-        addLabel(L("settings.hotkey"), to: view, y: y)
-        hotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: controlX, y: y - 4, width: 150, height: 32))
+        hotkeyRecorder = HotkeyRecorderButton()
         hotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.hotkeyChanged(recorder: recorder)
         }
@@ -111,13 +142,10 @@ final class SettingsWindow: NSWindow {
         } else {
             hotkeyRecorder.setShortcut(keyCode: UInt16(49), modifiers: .command)
         }
-        view.addSubview(hotkeyRecorder)
-
-        y -= rowHeight
+        stack.addArrangedSubview(makeRow(label: L("settings.hotkey"), control: hotkeyRecorder))
 
         // Row: Status Bar
-        addLabel(L("settings.statusbar"), to: view, y: y)
-        let statusBarPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        let statusBarPopup = NSPopUpButton()
         statusBarPopup.addItem(withTitle: L("settings.statusbar.system"))
         statusBarPopup.addItem(withTitle: L("settings.statusbar.light"))
         statusBarPopup.addItem(withTitle: L("settings.statusbar.dark"))
@@ -126,47 +154,36 @@ final class SettingsWindow: NSWindow {
         statusBarPopup.selectItem(withTitle: themeName(for: savedTheme))
         statusBarPopup.target = self
         statusBarPopup.action = #selector(statusBarThemeChanged(_:))
-        view.addSubview(statusBarPopup)
-
-        y -= rowHeight
+        stack.addArrangedSubview(makeRow(label: L("settings.statusbar"), control: statusBarPopup))
 
         // Row: Corner Radius
-        addLabel(L("settings.cornerRadius"), to: view, y: y)
-        let radiusSlider = NSSlider(frame: NSRect(x: controlX, y: y, width: controlWidth, height: 24))
-        radiusSlider.minValue = 0
-        radiusSlider.maxValue = 24
-        radiusSlider.doubleValue = Double(AppearanceSettings.cornerRadius)
-        radiusSlider.target = self
-        radiusSlider.action = #selector(radiusChanged(_:))
-        view.addSubview(radiusSlider)
-
+        let radiusSlider = NSSlider(value: Double(AppearanceSettings.cornerRadius), minValue: 0, maxValue: 24, target: self, action: #selector(radiusChanged(_:)))
+        radiusSlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
         let radiusValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
-        radiusValue.frame = NSRect(x: controlX + controlWidth + 10, y: y, width: 40, height: 24)
         radiusValue.identifier = NSUserInterfaceItemIdentifier("radiusValue")
-        view.addSubview(radiusValue)
+        radiusValue.widthAnchor.constraint(equalToConstant: 40).isActive = true
 
-        y -= rowHeight
+        let radiusRow = NSStackView(views: [radiusSlider, radiusValue])
+        radiusRow.orientation = .horizontal
+        radiusRow.spacing = 8
+        radiusRow.alignment = .centerY
+        stack.addArrangedSubview(makeRow(label: L("settings.cornerRadius"), control: radiusRow))
 
         // Row: Opacity
-        addLabel(L("settings.opacity"), to: view, y: y)
-        let opacitySlider = NSSlider(frame: NSRect(x: controlX, y: y, width: controlWidth, height: 24))
-        opacitySlider.minValue = 0.5
-        opacitySlider.maxValue = 1.0
-        opacitySlider.doubleValue = Double(AppearanceSettings.opacity)
-        opacitySlider.target = self
-        opacitySlider.action = #selector(opacityChanged(_:))
-        view.addSubview(opacitySlider)
-
+        let opacitySlider = NSSlider(value: Double(AppearanceSettings.opacity), minValue: 0.5, maxValue: 1.0, target: self, action: #selector(opacityChanged(_:)))
+        opacitySlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
         let opacityValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
-        opacityValue.frame = NSRect(x: controlX + controlWidth + 10, y: y, width: 50, height: 24)
         opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
-        view.addSubview(opacityValue)
+        opacityValue.widthAnchor.constraint(equalToConstant: 50).isActive = true
 
-        y -= rowHeight
+        let opacityRow = NSStackView(views: [opacitySlider, opacityValue])
+        opacityRow.orientation = .horizontal
+        opacityRow.spacing = 8
+        opacityRow.alignment = .centerY
+        stack.addArrangedSubview(makeRow(label: L("settings.opacity"), control: opacityRow))
 
         // Row: Group By
-        addLabel(L("settings.groupBy"), to: view, y: y)
-        let groupByPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        let groupByPopup = NSPopUpButton()
         groupByPopup.addItem(withTitle: L("settings.groupBy.frequency"))
         groupByPopup.addItem(withTitle: L("settings.groupBy.category"))
         groupByPopup.addItem(withTitle: L("settings.groupBy.letter"))
@@ -180,72 +197,52 @@ final class SettingsWindow: NSWindow {
         groupByPopup.selectItem(withTitle: selectedTitle)
         groupByPopup.target = self
         groupByPopup.action = #selector(groupByChanged(_:))
-        view.addSubview(groupByPopup)
-
-        y -= rowHeight
+        stack.addArrangedSubview(makeRow(label: L("settings.groupBy"), control: groupByPopup))
 
         // Row: Start at Login
-        addLabel(L("settings.startAtLogin"), to: view, y: y)
         let loginCheckbox = NSButton(checkboxWithTitle: L("settings.startAtLogin.checkbox"), target: self, action: #selector(loginItemChanged(_:)))
-        loginCheckbox.frame = NSRect(x: controlX, y: y, width: 300, height: 24)
         loginCheckbox.state = UserDefaults.standard.bool(forKey: "startAtLogin") ? .on : .off
-        view.addSubview(loginCheckbox)
-
-        y -= rowHeight
+        stack.addArrangedSubview(makeRow(label: L("settings.startAtLogin"), control: loginCheckbox))
 
         // Row: Dock Icon
-        addLabel(L("settings.dockIcon"), to: view, y: y)
         let dockIconCheckbox = NSButton(checkboxWithTitle: L("settings.dockIcon.checkbox"), target: self, action: #selector(dockIconChanged(_:)))
-        dockIconCheckbox.frame = NSRect(x: controlX, y: y, width: 300, height: 24)
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
-        view.addSubview(dockIconCheckbox)
-
-        y -= rowHeight
+        stack.addArrangedSubview(makeRow(label: L("settings.dockIcon"), control: dockIconCheckbox))
 
         // Row: Update
-        addLabel(L("settings.update.frequency"), to: view, y: y)
-        let updateFrequencyPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: 150, height: 32))
+        let updateFrequencyPopup = NSPopUpButton()
         for frequency in UpdateManager.CheckFrequency.allCases {
             updateFrequencyPopup.addItem(withTitle: frequency.displayName)
         }
         updateFrequencyPopup.selectItem(withTitle: UpdateManager.shared.checkFrequency.displayName)
         updateFrequencyPopup.target = self
         updateFrequencyPopup.action = #selector(updateFrequencyChanged(_:))
-        view.addSubview(updateFrequencyPopup)
+        updateFrequencyPopup.widthAnchor.constraint(equalToConstant: 150).isActive = true
 
-        let checkNowButton = NSButton(frame: NSRect(x: controlX + 160, y: y - 2, width: 100, height: 28))
-        checkNowButton.title = L("settings.update.checkNow")
+        let checkNowButton = NSButton(title: L("settings.update.checkNow"), target: self, action: #selector(checkForUpdatesNow))
         checkNowButton.bezelStyle = .rounded
-        checkNowButton.target = self
-        checkNowButton.action = #selector(checkForUpdatesNow)
-        view.addSubview(checkNowButton)
 
-        y -= rowHeight
+        let updateRow = NSStackView(views: [updateFrequencyPopup, checkNowButton])
+        updateRow.orientation = .horizontal
+        updateRow.spacing = 12
+        updateRow.alignment = .centerY
+        stack.addArrangedSubview(makeRow(label: L("settings.update.frequency"), control: updateRow))
 
         // Row: Permissions
-        let permissionsButton = NSButton(frame: NSRect(x: controlX, y: y, width: 200, height: 32))
-        permissionsButton.title = L("settings.permissions")
+        let permissionsButton = NSButton(title: L("settings.permissions"), target: self, action: #selector(checkPermissions))
         permissionsButton.bezelStyle = .rounded
-        permissionsButton.target = self
-        permissionsButton.action = #selector(checkPermissions)
-        view.addSubview(permissionsButton)
+        stack.addArrangedSubview(makeRow(label: "", control: permissionsButton))
 
-        return view
+        return wrapInTopAlignedContainer(stack)
     }
 
     // MARK: - Clipboard Tab
-    // 4 rows: Hotkey, MaxCount, MaxDays, Clear
 
     private func createClipboardTab() -> NSView {
-        let viewHeight: CGFloat = 180
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
-        view.autoresizingMask = [.width, .height]
-
-        var y = viewHeight - 10  // Start with minimal top padding
+        let stack = makeVerticalStack()
 
         // Row: Hotkey
-        addLabel(L("settings.clipboard.hotkey"), to: view, y: y)
-        let clipboardHotkeyRecorder = HotkeyRecorderButton(frame: NSRect(x: controlX, y: y - 4, width: 150, height: 32))
+        let clipboardHotkeyRecorder = HotkeyRecorderButton()
         clipboardHotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.clipboardHotkeyChanged(recorder: recorder)
         }
@@ -256,102 +253,85 @@ final class SettingsWindow: NSWindow {
         } else {
             clipboardHotkeyRecorder.setShortcut(keyCode: UInt16(9), modifiers: [.command, .shift])
         }
-        view.addSubview(clipboardHotkeyRecorder)
-
-        y -= rowHeight
+        stack.addArrangedSubview(makeRow(label: L("settings.clipboard.hotkey"), control: clipboardHotkeyRecorder))
 
         // Row: Max Count
-        addLabel(L("settings.clipboard.maxCount"), to: view, y: y)
-        let maxCountField = NSTextField(frame: NSRect(x: controlX, y: y, width: 80, height: 24))
+        let maxCountField = NSTextField()
         let currentMaxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500
         maxCountField.stringValue = String(currentMaxCount)
         maxCountField.target = self
         maxCountField.action = #selector(clipboardMaxCountChanged(_:))
-        view.addSubview(maxCountField)
-
-        y -= rowHeight
+        maxCountField.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.clipboard.maxCount"), control: maxCountField))
 
         // Row: Max Days
-        addLabel(L("settings.clipboard.maxDays"), to: view, y: y)
-        let maxDaysField = NSTextField(frame: NSRect(x: controlX, y: y, width: 80, height: 24))
+        let maxDaysField = NSTextField()
         maxDaysField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxDays") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxDays") : 30)
         maxDaysField.target = self
         maxDaysField.action = #selector(clipboardMaxDaysChanged(_:))
-        view.addSubview(maxDaysField)
-
-        y -= rowHeight
+        maxDaysField.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.clipboard.maxDays"), control: maxDaysField))
 
         // Row: Clear
-        let clearButton = NSButton(frame: NSRect(x: controlX, y: y, width: 200, height: 32))
-        clearButton.title = L("settings.clipboard.clear")
+        let clearButton = NSButton(title: L("settings.clipboard.clear"), target: self, action: #selector(clearClipboardHistory))
         clearButton.bezelStyle = .rounded
-        clearButton.target = self
-        clearButton.action = #selector(clearClipboardHistory)
-        view.addSubview(clearButton)
+        stack.addArrangedSubview(makeRow(label: "", control: clearButton))
 
-        return view
+        return wrapInTopAlignedContainer(stack)
     }
 
     // MARK: - Advanced Tab
 
     private func createAdvancedTab() -> NSView {
-        let viewHeight: CGFloat = 320
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
-        view.autoresizingMask = [.width, .height]
-
-        var y = viewHeight - 10  // Start with minimal top padding
+        let stack = makeVerticalStack()
 
         // Row: Ignored Apps label
-        addLabel(L("settings.advanced.ignoredApps"), to: view, y: y)
-
-        y -= rowHeight + 10
+        let ignoredLabel = NSTextField(labelWithString: L("settings.advanced.ignoredApps"))
+        stack.addArrangedSubview(ignoredLabel)
 
         // Table view for ignored apps
-        let scrollView = NSScrollView(frame: NSRect(x: controlX, y: y - 180, width: 300, height: 200))
+        let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.borderType = .bezelBorder
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        scrollView.heightAnchor.constraint(equalToConstant: 200).isActive = true
 
-        let tableView = NSTableView(frame: scrollView.bounds)
+        let tableView = NSTableView()
         tableView.identifier = NSUserInterfaceItemIdentifier("ignoredAppsTable")
         tableView.headerView = nil
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("appPath"))
-        column.width = 280
+        column.width = 380
         tableView.addTableColumn(column)
         tableView.delegate = self
         tableView.dataSource = self
 
         scrollView.documentView = tableView
-        view.addSubview(scrollView)
+        stack.addArrangedSubview(scrollView)
 
         // Empty label
         let emptyLabel = NSTextField(labelWithString: L("settings.advanced.ignoredApps.empty"))
-        emptyLabel.frame = NSRect(x: controlX + 10, y: y - 90, width: 280, height: 20)
         emptyLabel.alignment = .center
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.identifier = NSUserInterfaceItemIdentifier("emptyLabel")
         emptyLabel.isHidden = !IgnoredAppsManager.shared.getAllIgnored().isEmpty
-        view.addSubview(emptyLabel)
+        emptyLabel.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        stack.addArrangedSubview(emptyLabel)
 
-        y -= 220
-
-        // Add button
-        let addButton = NSButton(frame: NSRect(x: controlX, y: y, width: 80, height: 32))
-        addButton.title = L("settings.advanced.ignoredApps.add")
+        // Buttons row
+        let addButton = NSButton(title: L("settings.advanced.ignoredApps.add"), target: self, action: #selector(addIgnoredApp))
         addButton.bezelStyle = .rounded
-        addButton.target = self
-        addButton.action = #selector(addIgnoredApp)
-        view.addSubview(addButton)
-
-        // Remove button
-        let removeButton = NSButton(frame: NSRect(x: controlX + 90, y: y, width: 80, height: 32))
-        removeButton.title = L("settings.advanced.ignoredApps.remove")
+        let removeButton = NSButton(title: L("settings.advanced.ignoredApps.remove"), target: self, action: #selector(removeIgnoredApp))
         removeButton.bezelStyle = .rounded
-        removeButton.target = self
-        removeButton.action = #selector(removeIgnoredApp)
-        view.addSubview(removeButton)
 
-        return view
+        let buttonRow = NSStackView(views: [addButton, removeButton])
+        buttonRow.orientation = .horizontal
+        buttonRow.spacing = 12
+        buttonRow.alignment = .centerY
+        stack.addArrangedSubview(buttonRow)
+
+        return wrapInTopAlignedContainer(stack)
     }
 
     @objc private func addIgnoredApp() {
@@ -394,12 +374,10 @@ final class SettingsWindow: NSWindow {
     // MARK: - About Tab
 
     private func createAboutTab() -> NSView {
-        let viewHeight: CGFloat = 300
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
-        view.autoresizingMask = [.width, .height]
+        let container = NSView()
 
         // App Icon
-        let appIcon = NSImageView(frame: NSRect(x: (viewWidth - 80) / 2, y: 200, width: 80, height: 80))
+        let appIcon = NSImageView()
         if let icnsPath = Bundle.main.path(forResource: "Keystarter", ofType: "icns"),
            let image = NSImage(contentsOfFile: icnsPath) {
             appIcon.image = image
@@ -407,56 +385,67 @@ final class SettingsWindow: NSWindow {
             appIcon.image = NSImage(systemSymbolName: "keyboard", accessibilityDescription: nil)
             appIcon.contentTintColor = .controlAccentColor
         }
-        view.addSubview(appIcon)
+        appIcon.translatesAutoresizingMaskIntoConstraints = false
+        appIcon.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        appIcon.heightAnchor.constraint(equalToConstant: 80).isActive = true
+        container.addSubview(appIcon)
 
         // App Name
         let nameLabel = NSTextField(labelWithString: "Keystarter")
-        nameLabel.frame = NSRect(x: 0, y: 160, width: viewWidth, height: 28)
-        nameLabel.alignment = .center
         nameLabel.font = .systemFont(ofSize: 22, weight: .semibold)
-        view.addSubview(nameLabel)
+        nameLabel.alignment = .center
+        nameLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(nameLabel)
 
         // Version
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         let versionLabel = NSTextField(labelWithString: String(format: L("settings.about.version"), version))
-        versionLabel.frame = NSRect(x: 0, y: 130, width: viewWidth, height: 20)
         versionLabel.alignment = .center
         versionLabel.textColor = .secondaryLabelColor
-        view.addSubview(versionLabel)
+        versionLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(versionLabel)
 
         // Copyright
         let copyrightLabel = NSTextField(labelWithString: L("settings.about.copyright"))
-        copyrightLabel.frame = NSRect(x: 0, y: 100, width: viewWidth, height: 20)
         copyrightLabel.alignment = .center
         copyrightLabel.textColor = .secondaryLabelColor
-        view.addSubview(copyrightLabel)
+        copyrightLabel.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(copyrightLabel)
 
         // GitHub link
-        let githubButton = NSButton(frame: NSRect(x: (viewWidth - 220) / 2, y: 50, width: 220, height: 32))
-        githubButton.title = "github.com/J-Liu/Keystarter"
+        let githubButton = NSButton(title: "github.com/J-Liu/Keystarter", target: self, action: #selector(openGitHub))
         githubButton.bezelStyle = .rounded
-        githubButton.target = self
-        githubButton.action = #selector(openGitHub)
-        view.addSubview(githubButton)
+        githubButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(githubButton)
 
         // Check for Updates button
-        let checkUpdatesButton = NSButton(frame: NSRect(x: (viewWidth - 160) / 2, y: 10, width: 160, height: 32))
-        checkUpdatesButton.title = L("menu.checkUpdates")
+        let checkUpdatesButton = NSButton(title: L("menu.checkUpdates"), target: self, action: #selector(checkForUpdatesNow))
         checkUpdatesButton.bezelStyle = .rounded
-        checkUpdatesButton.target = self
-        checkUpdatesButton.action = #selector(checkForUpdatesNow)
-        view.addSubview(checkUpdatesButton)
+        checkUpdatesButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(checkUpdatesButton)
 
-        return view
-    }
+        NSLayoutConstraint.activate([
+            appIcon.topAnchor.constraint(equalTo: container.topAnchor, constant: 40),
+            appIcon.centerXAnchor.constraint(equalTo: container.centerXAnchor),
 
-    // MARK: - Layout Helpers
+            nameLabel.topAnchor.constraint(equalTo: appIcon.bottomAnchor, constant: 16),
+            nameLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
 
-    private func addLabel(_ text: String, to view: NSView, y: CGFloat) {
-        let label = NSTextField(labelWithString: text)
-        label.frame = NSRect(x: labelX, y: y, width: 120, height: 24)
-        label.alignment = .right
-        view.addSubview(label)
+            versionLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor, constant: 8),
+            versionLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+
+            copyrightLabel.topAnchor.constraint(equalTo: versionLabel.bottomAnchor, constant: 8),
+            copyrightLabel.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+
+            githubButton.topAnchor.constraint(equalTo: copyrightLabel.bottomAnchor, constant: 24),
+            githubButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+
+            checkUpdatesButton.topAnchor.constraint(equalTo: githubButton.bottomAnchor, constant: 12),
+            checkUpdatesButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            checkUpdatesButton.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -20)
+        ])
+
+        return container
     }
 
     // MARK: - Key Handlers
@@ -577,12 +566,10 @@ final class SettingsWindow: NSWindow {
         let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
 
         if !hasAccessibility {
-            // 没有权限，直接弹系统对话框
             _ = AXIsProcessTrustedWithOptions([
                 kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
             ] as CFDictionary)
         } else {
-            // 有权限，显示权限状态界面
             showPermissionsStatus()
         }
     }
@@ -594,10 +581,8 @@ final class SettingsWindow: NSWindow {
         alert.alertStyle = .informational
         alert.addButton(withTitle: L("permissions.status.ok"))
 
-        // 创建自定义视图显示权限列表
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
 
-        // Accessibility 权限
         let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 45, width: 20, height: 20))
         accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
         containerView.addSubview(accessibilityIcon)
@@ -606,7 +591,6 @@ final class SettingsWindow: NSWindow {
         accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
         containerView.addSubview(accessibilityLabel)
 
-        // Input Monitoring 权限
         let inputIcon = NSImageView(frame: NSRect(x: 10, y: 15, width: 20, height: 20))
         inputIcon.image = NSImage(named: NSImage.statusAvailableName)
         containerView.addSubview(inputIcon)
