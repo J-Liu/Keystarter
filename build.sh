@@ -50,8 +50,19 @@ if [ -d "${ROOT_DIR}/Resources/MenuBar" ]; then
     cp "${ROOT_DIR}/Resources/MenuBar/"*.png "${APP_BUNDLE}/Contents/Resources/"
 fi
 
-# Copy Info.plist
-cp "${ROOT_DIR}/Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
+# Copy Sparkle.framework
+SPARKLE_BUILD_DIR="$(swift build -c "$BUILD_CONFIG" --show-bin-path)"
+SPARKLE_FRAMEWORK="${SPARKLE_BUILD_DIR}/../../release/Sparkle.framework"
+if [ ! -d "$SPARKLE_FRAMEWORK" ]; then
+    # Try alternate path
+    SPARKLE_FRAMEWORK="${ROOT_DIR}/.build/release/Sparkle.framework"
+fi
+if [ -d "$SPARKLE_FRAMEWORK" ]; then
+    echo "==> Copying Sparkle.framework..."
+    mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
+    cp -R "$SPARKLE_FRAMEWORK" "${APP_BUNDLE}/Contents/Frameworks/"
+fi
+
 # Set LSUIElement to true (hide from Dock by default)
 /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || true
 
