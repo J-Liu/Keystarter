@@ -81,7 +81,7 @@ final class SettingsWindow: NSWindow {
     // MARK: - General Tab
 
     private func createGeneralTab() -> NSView {
-        let viewHeight: CGFloat = 600
+        let viewHeight: CGFloat = 700
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
 
         var y = viewHeight - 20  // Start with top padding
@@ -217,7 +217,7 @@ final class SettingsWindow: NSWindow {
         updateFrequencyPopup.action = #selector(updateFrequencyChanged(_:))
         view.addSubview(updateFrequencyPopup)
 
-        let checkNowButton = NSButton(frame: NSRect(x: controlX + controlWidth + 10, y: y - 2, width: 80, height: 28))
+        let checkNowButton = NSButton(frame: NSRect(x: controlX + controlWidth + 10, y: y - 2, width: 100, height: 28))
         checkNowButton.title = L("settings.update.checkNow")
         checkNowButton.bezelStyle = .rounded
         checkNowButton.target = self
@@ -423,6 +423,7 @@ final class SettingsWindow: NSWindow {
         openPanel.canChooseDirectories = true
         openPanel.canChooseFiles = false
         openPanel.allowsMultipleSelection = false
+        openPanel.directoryURL = URL(fileURLWithPath: "/Applications")
 
         if openPanel.runModal() == .OK, let url = openPanel.url {
             IgnoredAppsManager.shared.ignore(path: url.path)
@@ -498,6 +499,14 @@ final class SettingsWindow: NSWindow {
         githubButton.target = self
         githubButton.action = #selector(openGitHub)
         view.addSubview(githubButton)
+
+        // Check for Updates button
+        let checkUpdatesButton = NSButton(frame: NSRect(x: (viewWidth - 160) / 2, y: 130, width: 160, height: 32))
+        checkUpdatesButton.title = L("menu.checkUpdates")
+        checkUpdatesButton.bezelStyle = .rounded
+        checkUpdatesButton.target = self
+        checkUpdatesButton.action = #selector(checkForUpdatesNow)
+        view.addSubview(checkUpdatesButton)
 
         return view
     }
