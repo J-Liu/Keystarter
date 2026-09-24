@@ -560,17 +560,34 @@ final class LauncherWindow: NSWindow {
         let lowered = query.lowercased()
         var appResults: [LaunchItem] = []
         appResults = results.filter { item in
-            item.name.lowercased().contains(lowered)
+            let name = item.name.lowercased()
+            // Direct match: contains
+            if name.contains(lowered) { return true }
+            // Acronym match: "gc" matches "Google Chrome"
+            let acronym = item.name.components(separatedBy: " ")
+                .compactMap { $0.first?.lowercased() }
+                .joined()
+            return acronym.contains(lowered)
         }
         appResults.sort { a, b in
+            let aName = a.name.lowercased()
+            let bName = b.name.lowercased()
             // Frequency weight
             let aFreq = LaunchHistory.shared.count(for: a.path)
             let bFreq = LaunchHistory.shared.count(for: b.path)
             // Prefix match
-            let aPrefix = a.name.lowercased().hasPrefix(lowered)
-            let bPrefix = b.name.lowercased().hasPrefix(lowered)
-            // Sort: prefix > frequency > name length
+            let aPrefix = aName.hasPrefix(lowered)
+            let bPrefix = bName.hasPrefix(lowered)
+            // Acronym match
+            let aAcronym = a.name.components(separatedBy: " ")
+                .compactMap { $0.first?.lowercased() }.joined()
+            let bAcronym = b.name.components(separatedBy: " ")
+                .compactMap { $0.first?.lowercased() }.joined()
+            let aAcronymMatch = aAcronym.hasPrefix(lowered)
+            let bAcronymMatch = bAcronym.hasPrefix(lowered)
+            // Sort: prefix > acronym > frequency > name length
             if aPrefix != bPrefix { return aPrefix }
+            if aAcronymMatch != bAcronymMatch { return aAcronymMatch }
             if aFreq != bFreq { return aFreq > bFreq }
             return a.name.count < b.name.count
         }
@@ -612,7 +629,9 @@ final class LauncherWindow: NSWindow {
             "/Applications/Xcode.app/Contents/Applications",
             // Developer tools
             "/Applications/Utilities",
-            "/System/Applications/Utilities"
+            "/System/Applications/Utilities",
+            // Additional system locations
+            "/System/Library/CoreServices/Applications"
         ]
 
         var items: [LaunchItem] = []
@@ -626,10 +645,16 @@ final class LauncherWindow: NSWindow {
         items.sort { $0.name.lowercased() < $1.name.lowercased() }
         results = items
         filteredResults = items
+
+        // Debug log
+        print("[LauncherWindow] Loaded \(items.count) applications")
     }
 
     private func scanDirectoryForApps(at path: String, fileManager: FileManager, items: inout [LaunchItem], seenPaths: inout Set<String>) {
-        guard let contents = try? fileManager.contentsOfDirectory(atPath: path) else { return }
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: path) else {
+            print("[LauncherWindow] Failed to scan: \(path)")
+            return
+        }
 
         for name in contents {
             // Skip hidden files and directories
