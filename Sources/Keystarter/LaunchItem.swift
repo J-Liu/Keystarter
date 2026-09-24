@@ -9,6 +9,9 @@ struct LaunchItem {
         case application
         case command
         case file
+        case bookmark
+        case history
+        case clipboard
     }
 
     let name: String
@@ -30,6 +33,10 @@ struct LaunchItem {
             return NSWorkspace.shared.icon(forFile: path)
         case .command:
             return NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
+        case .bookmark, .history:
+            return NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+        case .clipboard:
+            return NSImage(systemSymbolName: "doc.on.clipboard", accessibilityDescription: nil)
         }
     }
 
@@ -43,6 +50,13 @@ struct LaunchItem {
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
         case .command:
             break
+        case .bookmark, .history:
+            if let url = URL(string: path) {
+                NSWorkspace.shared.open(url)
+            }
+        case .clipboard:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(path, forType: .string)
         }
     }
 }

@@ -560,9 +560,49 @@ final class LauncherWindow: NSWindow {
             }
         }
 
-        // 3. Merge: plugin results first, then apps
+        // 4. Browser bookmarks
+        var bookmarkResults: [LaunchItem] = []
+        let bookmarkMatches = BrowserBookmarksManager.shared.search(query)
+        bookmarkResults = bookmarkMatches.map { bookmark in
+            LaunchItem(
+                name: bookmark.title,
+                path: bookmark.url,
+                type: .bookmark,
+                category: nil
+            )
+        }
+
+        // 5. Browser history
+        var historyResults: [LaunchItem] = []
+        let historyMatches = BrowserHistoryManager.shared.search(query, limit: 10)
+        historyResults = historyMatches.map { history in
+            LaunchItem(
+                name: history.title.isEmpty ? history.url : history.title,
+                path: history.url,
+                type: .history,
+                category: nil
+            )
+        }
+
+        // 6. Clipboard history
+        var clipboardResults: [LaunchItem] = []
+        let clipboardMatches = ClipboardManager.shared.db.search(query, limit: 5)
+        clipboardResults = clipboardMatches.filter { $0.type == "text" }.map { item in
+            let preview = item.content.count > 50 ? String(item.content.prefix(50)) + "..." : item.content
+            return LaunchItem(
+                name: preview,
+                path: item.content,
+                type: .clipboard,
+                category: nil
+            )
+        }
+
+        // 7. Merge: plugin results first, then apps, files, bookmarks, history, clipboard
         merged += appResults
         merged += fileResults
+        merged += bookmarkResults
+        merged += historyResults
+        merged += clipboardResults
 
         filteredResults = merged
         tableView.reloadData()

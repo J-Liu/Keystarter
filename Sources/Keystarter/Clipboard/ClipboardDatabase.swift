@@ -89,4 +89,25 @@ final class ClipboardDatabase {
         sqlite3_step(stmt)
         sqlite3_finalize(stmt)
     }
+
+    func search(_ query: String, limit: Int = 10) -> [(id: Int64, type: String, content: String, createdAt: Date)] {
+        lock.lock()
+        defer { lock.unlock() }
+        let sql = "SELECT id, type, content, created_at FROM clipboard WHERE content LIKE ? ORDER BY created_at DESC LIMIT ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        let pattern = "%\(query)%"
+        sqlite3_bind_text(stmt, 1, (pattern as NSString).utf8String, -1, nil)
+        sqlite3_bind_int(stmt, 2, Int32(limit))
+        var results: [(Int64, String, String, Date)] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let id = sqlite3_column_int64(stmt, 0)
+            let type = String(cString: sqlite3_column_text(stmt, 1))
+            let content = String(cString: sqlite3_column_text(stmt, 2))
+            let createdAt = Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 3)))
+            results.append((id, type, content, createdAt))
+        }
+        sqlite3_finalize(stmt)
+        return results
+    }
 }
