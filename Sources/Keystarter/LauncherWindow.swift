@@ -60,15 +60,61 @@ final class LauncherWindow: NSWindow {
         setupUI()
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isVisible else { return event }
-            if event.keyCode == 53 { // Esc
-                self.hide()
+            
+            // Esc - close window
+            if event.keyCode == 53 {
+                self.orderOut(nil)
                 return nil
             }
-            // Cmd+W to close
+            
+            // Cmd+W - close window
             if event.modifierFlags.contains(.command) && event.keyCode == 13 {
-                self.hide()
+                self.orderOut(nil)
                 return nil
             }
+            
+            // Handle standard editing commands manually for the search field
+            if let fieldEditor = self.searchField.currentEditor() {
+                // Tab - autocomplete
+                if event.keyCode == 48 {
+                    self.performAutocomplete()
+                    return nil
+                }
+                
+                if event.modifierFlags.contains(.command) {
+                    // Cmd+C - copy
+                    if event.keyCode == 8 {
+                        fieldEditor.copy(nil)
+                        return nil
+                    }
+                    // Cmd+V - paste
+                    if event.keyCode == 9 {
+                        fieldEditor.paste(nil)
+                        return nil
+                    }
+                    // Cmd+X - cut
+                    if event.keyCode == 7 {
+                        fieldEditor.cut(nil)
+                        return nil
+                    }
+                    // Cmd+A - select all
+                    if event.keyCode == 0 {
+                        fieldEditor.selectAll(nil)
+                        return nil
+                    }
+                    // Cmd+Z - undo
+                    if event.keyCode == 6 && !event.modifierFlags.contains(.shift) {
+                        (fieldEditor as? NSTextView)?.undoManager?.undo()
+                        return nil
+                    }
+                    // Cmd+Shift+Z - redo
+                    if event.keyCode == 6 && event.modifierFlags.contains(.shift) {
+                        (fieldEditor as? NSTextView)?.undoManager?.redo()
+                        return nil
+                    }
+                }
+            }
+            
             return event
         }
 
@@ -333,6 +379,12 @@ final class LauncherWindow: NSWindow {
         // Save current input source
         if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
             savedInputSource = currentSource
+            
+            // Debug: log saved input source to file
+            if let sourceID = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID) {
+                let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
+                writeToLog("[SHOW] Saved input source: \(sourceIDString)")
+            }
         }
 
         // Find English input source
@@ -348,18 +400,44 @@ final class LauncherWindow: NSWindow {
             if sourceIDString.contains("com.apple.keylayout.ABC") ||
                sourceIDString.contains("com.apple.keylayout.US") ||
                sourceIDString == "com.apple.keylayout.ABC" {
+                writeToLog("[SHOW] Switching to English: \(sourceIDString)")
                 TISSelectInputSource(source)
                 break
             }
         }
     }
+    
+    private func writeToLog(_ message: String) {
+        let logPath = NSHomeDirectory() + "/keystarter_input_debug.log"
+        let log = "[\(Date())] \(message)\n"
+        guard let data = log.data(using: .utf8) else { return }
+        
+        let fileURL = URL(fileURLWithPath: logPath)
+        if FileManager.default.fileExists(atPath: logPath) {
+            if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
+                fileHandle.write(data)
+                try? fileHandle.close()
+            }
+        } else {
+            try? data.write(to: fileURL)
+        }
+    }
 
     /// Restore previously saved input source
     private func restoreInputSource() {
-        if let savedSource = savedInputSource {
-            TISSelectInputSource(savedSource)
-            savedInputSource = nil
+        guard let savedSource = savedInputSource else {
+            writeToLog("[HIDE] No saved input source to restore")
+            return 
         }
+        
+        // Debug: log restoring input source to file
+        if let sourceID = TISGetInputSourceProperty(savedSource, kTISPropertyInputSourceID) {
+            let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
+            writeToLog("[HIDE] Restoring input source: \(sourceIDString)")
+        }
+        
+        savedInputSource = nil
+        TISSelectInputSource(savedSource)
     }
 
     // MARK: - Show / Hide
@@ -374,8 +452,7 @@ final class LauncherWindow: NSWindow {
     }
 
     func show() {
-        // Switch to English input
-        switchToEnglishInput()
+        // Don't switch input source here - wait until window has focus
 
         // Reset search
         searchField.stringValue = ""
@@ -403,6 +480,12 @@ final class LauncherWindow: NSWindow {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         makeFirstResponder(searchField)
+        
+        // Switch to English input AFTER window has focus
+        // Use async to ensure focus is fully transferred
+        DispatchQueue.main.async {
+            self.switchToEnglishInput()
+        }
     }
 
     /// Center the window on the screen where the mouse cursor is located.
@@ -429,16 +512,23 @@ final class LauncherWindow: NSWindow {
     }
 
     func hide() {
-        // Restore input source before hiding
-        restoreInputSource()
+        guard isVisible else { return }
         orderOut(nil)
+        // Restore input source after window is fully hidden
+        DispatchQueue.main.async {
+            self.restoreInputSource()
+        }
     }
 
     // MARK: - Focus Handling
 
     override func resignKey() {
         super.resignKey()
-        hide()
+        // Restore input source when window loses key status
+        // Use async to ensure it happens after any pending orderOut
+        DispatchQueue.main.async {
+            self.restoreInputSource()
+        }
     }
 
     override var canBecomeKey: Bool { true }
@@ -963,6 +1053,7 @@ extension LauncherWindow: NSSearchFieldDelegate {
             performAutocomplete()
             return true
         default:
+            // Let the system handle all other commands (copy, paste, cut, undo, redo, etc.)
             return false
         }
     }
