@@ -351,7 +351,7 @@ final class LauncherWindow: NSWindow {
         let groupHeaderHeight: CGFloat = 24
 
         // Read grouping preference
-        let groupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "category"
+        let groupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "frequency"
 
         // Group apps
         let groupedApps: [(String, [LaunchItem])]
@@ -363,11 +363,23 @@ final class LauncherWindow: NSWindow {
                 }
                 return "#"
             }.sorted { $0.key < $1.key }
-        } else {
+        } else if groupBy == "category" {
             // Group by category (function)
             groupedApps = Dictionary(grouping: results) { app -> String in
                 app.category ?? "Other"
             }.sorted { $0.key < $1.key }
+        } else {
+            // Group by frequency (most used)
+            let sorted = results.sorted { a, b in
+                let aFreq = LaunchHistory.shared.count(for: a.path)
+                let bFreq = LaunchHistory.shared.count(for: b.path)
+                if aFreq != bFreq { return aFreq > bFreq }
+                let aDate = LaunchHistory.shared.lastLaunched(for: a.path) ?? .distantPast
+                let bDate = LaunchHistory.shared.lastLaunched(for: b.path) ?? .distantPast
+                if aDate != bDate { return aDate > bDate }
+                return a.name < b.name
+            }
+            groupedApps = [(L("settings.groupBy.frequency"), sorted)]
         }
 
         // Calculate total height needed

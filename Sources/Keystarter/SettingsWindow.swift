@@ -162,10 +162,17 @@ final class SettingsWindow: NSWindow {
         // Row: Group By
         addLabel(L("settings.groupBy"), to: view, y: y)
         let groupByPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        groupByPopup.addItem(withTitle: L("settings.groupBy.frequency"))
         groupByPopup.addItem(withTitle: L("settings.groupBy.category"))
         groupByPopup.addItem(withTitle: L("settings.groupBy.letter"))
-        let savedGroupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "category"
-        groupByPopup.selectItem(withTitle: savedGroupBy == "letter" ? L("settings.groupBy.letter") : L("settings.groupBy.category"))
+        let savedGroupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "frequency"
+        let selectedTitle: String
+        switch savedGroupBy {
+        case "letter": selectedTitle = L("settings.groupBy.letter")
+        case "category": selectedTitle = L("settings.groupBy.category")
+        default: selectedTitle = L("settings.groupBy.frequency")
+        }
+        groupByPopup.selectItem(withTitle: selectedTitle)
         groupByPopup.target = self
         groupByPopup.action = #selector(groupByChanged(_:))
         view.addSubview(groupByPopup)
@@ -484,7 +491,15 @@ final class SettingsWindow: NSWindow {
     }
 
     @objc private func groupByChanged(_ sender: NSPopUpButton) {
-        let groupBy = sender.title == L("settings.groupBy.letter") ? "letter" : "category"
+        let title = sender.title
+        let groupBy: String
+        if title == L("settings.groupBy.letter") {
+            groupBy = "letter"
+        } else if title == L("settings.groupBy.category") {
+            groupBy = "category"
+        } else {
+            groupBy = "frequency"
+        }
         UserDefaults.standard.set(groupBy, forKey: "launcher.groupBy")
     }
 
