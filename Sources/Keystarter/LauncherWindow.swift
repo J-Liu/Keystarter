@@ -20,6 +20,15 @@ final class LauncherWindow: NSWindow {
     private var results: [LaunchItem] = []
     private var filteredResults: [LaunchItem] = []
 
+    /// Input history for command recall
+    private var inputHistory: [String] = []
+    private var historyIndex: Int = -1
+    private var currentInput: String = ""
+
+    /// Autocomplete suggestions
+    private var autocompleteSuggestions: [String] = []
+    private var isAutocompleteMode = false
+
     init() {
         // Initial frame: centered, fixed size
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
@@ -73,6 +82,108 @@ final class LauncherWindow: NSWindow {
     @objc private func openSettings() {
         hide()
         (NSApp.delegate as? AppDelegate)?.showSettings()
+    }
+
+    // MARK: - Autocomplete
+
+    /// Get autocomplete suggestions based on current input
+    private func getAutocompleteSuggestions(for input: String) -> [String] {
+        guard !input.isEmpty else { return [] }
+
+        var suggestions: [String] = []
+        let lowercasedInput = input.lowercased()
+
+        // Plugin keywords
+        let pluginKeywords = ["dict", "tr", "calc", "kill", "sleep", "lock", "empty trash", "restart", "shutdown", "logout", "ip", "stock", "convert"]
+        for keyword in pluginKeywords {
+            if keyword.hasPrefix(lowercasedInput) {
+                suggestions.append(keyword)
+            }
+        }
+
+        // App names
+        for app in results {
+            let appName = app.name.lowercased()
+            if appName.hasPrefix(lowercasedInput) {
+                suggestions.append(app.name)
+            }
+        }
+
+        // Remove duplicates and limit to 10
+        return Array(Set(suggestions).sorted()).prefix(10).map { $0 }
+    }
+
+    /// Perform autocomplete
+    private func performAutocomplete() {
+        let currentText = searchField.stringValue
+        guard !currentText.isEmpty else { return }
+
+        if autocompleteSuggestions.isEmpty || !isAutocompleteMode {
+            // First Tab press - get suggestions
+            autocompleteSuggestions = getAutocompleteSuggestions(for: currentText)
+            isAutocompleteMode = true
+        }
+
+        guard !autocompleteSuggestions.isEmpty else { return }
+
+        // Complete with the first suggestion
+        let completion = autocompleteSuggestions[0]
+        searchField.stringValue = completion
+        searchField.currentEditor()?.selectedRange = NSRange(location: completion.count, length: 0)
+
+        // Update suggestions to show all matches
+        filterResults(with: completion)
+    }
+
+    // MARK: - Input History
+
+    /// Save current input to history
+    private func saveToHistory() {
+        let text = searchField.stringValue
+        guard !text.isEmpty else { return }
+
+        // Remove if already exists
+        inputHistory.removeAll { $0 == text }
+        // Add to front
+        inputHistory.insert(text, at: 0)
+        // Limit history size
+        if inputHistory.count > 50 {
+            inputHistory = Array(inputHistory.prefix(50))
+        }
+        historyIndex = -1
+    }
+
+    /// Navigate to previous input in history
+    private func navigateHistoryUp() {
+        guard !inputHistory.isEmpty else { return }
+
+        if historyIndex == -1 {
+            // Save current input before navigating
+            currentInput = searchField.stringValue
+        }
+
+        if historyIndex < inputHistory.count - 1 {
+            historyIndex += 1
+            searchField.stringValue = inputHistory[historyIndex]
+            searchField.currentEditor()?.selectedRange = NSRange(location: searchField.stringValue.count, length: 0)
+            filterResults(with: searchField.stringValue)
+        }
+    }
+
+    /// Navigate to next input in history
+    private func navigateHistoryDown() {
+        if historyIndex > 0 {
+            historyIndex -= 1
+            searchField.stringValue = inputHistory[historyIndex]
+            searchField.currentEditor()?.selectedRange = NSRange(location: searchField.stringValue.count, length: 0)
+            filterResults(with: searchField.stringValue)
+        } else if historyIndex == 0 {
+            // Return to current input
+            historyIndex = -1
+            searchField.stringValue = currentInput
+            searchField.currentEditor()?.selectedRange = NSRange(location: searchField.stringValue.count, length: 0)
+            filterResults(with: searchField.stringValue)
+        }
     }
 
     // MARK: - UI Setup
@@ -227,6 +338,12 @@ final class LauncherWindow: NSWindow {
         updateGridView()
         previewTextView.string = ""
 
+        // Reset autocomplete and history
+        isAutocompleteMode = false
+        autocompleteSuggestions = []
+        historyIndex = -1
+        currentInput = ""
+
         // Scroll to top
         if gridView.bounds.height > gridScrollView.bounds.height {
             gridScrollView.contentView.scroll(to: NSPoint(x: 0, y: gridView.bounds.height - gridScrollView.bounds.height))
@@ -280,6 +397,9 @@ final class LauncherWindow: NSWindow {
     // MARK: - Actions
 
     @objc private func searchFieldChanged() {
+        // Reset autocomplete mode when user types
+        isAutocompleteMode = false
+        autocompleteSuggestions = []
         filterResults(with: searchField.stringValue)
     }
 
@@ -746,18 +866,37 @@ extension LauncherWindow: NSSearchFieldDelegate {
             return true
         case #selector(NSResponder.moveUp(_:)):
             if isSearchMode {
+                // In search mode, navigate results
                 moveSelection(by: -1)
+            } else {
+                // In grid mode, navigate history
+                navigateHistoryUp()
             }
             return true
         case #selector(NSResponder.moveDown(_:)):
             if isSearchMode {
+                // In search mode, navigate results
                 moveSelection(by: 1)
+            } else {
+                // In grid mode, navigate history
+                navigateHistoryDown()
             }
             return true
         case #selector(NSResponder.insertNewline(_:)):
-            if isSearchMode {
+            if isAutocompleteMode && !autocompleteSuggestions.isEmpty {
+                // Confirm autocomplete
+                saveToHistory()
+                isAutocompleteMode = false
+                autocompleteSuggestions = []
+            } else if isSearchMode {
+                // Execute selected item
+                saveToHistory()
                 executeSelected()
             }
+            return true
+        case #selector(NSResponder.insertTab(_:)):
+            // Tab autocomplete
+            performAutocomplete()
             return true
         default:
             return false
