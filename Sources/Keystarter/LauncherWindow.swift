@@ -607,7 +607,12 @@ final class LauncherWindow: NSWindow {
         let appDirs = [
             "/Applications",
             "/System/Applications",
-            NSHomeDirectory() + "/Applications"
+            NSHomeDirectory() + "/Applications",
+            // Xcode bundled apps
+            "/Applications/Xcode.app/Contents/Applications",
+            // Developer tools
+            "/Applications/Utilities",
+            "/System/Applications/Utilities"
         ]
 
         var items: [LaunchItem] = []
