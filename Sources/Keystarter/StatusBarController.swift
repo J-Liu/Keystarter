@@ -138,13 +138,7 @@ final class StatusBarController {
     }
 
     @objc private func checkUpdates() {
-        // Placeholder - would call UpdateManager when Sparkle is integrated
-        let alert = NSAlert()
-        alert.messageText = "Check for Updates"
-        alert.informativeText = "Auto-update is not configured yet.\nSee docs/SPARKLE_SETUP.md for instructions."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        UpdateManager.shared.checkForUpdates()
     }
 
     @objc private func checkPermissions() {

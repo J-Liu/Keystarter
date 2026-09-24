@@ -79,11 +79,11 @@ final class SettingsWindow: NSWindow {
     // 10 rows: Language, Hotkey, StatusBar, CornerRadius, Opacity, GroupBy, Login, Dock, Update, Permissions
 
     private func createGeneralTab() -> NSView {
-        let viewHeight: CGFloat = 420
+        let viewHeight: CGFloat = 400
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
         view.autoresizingMask = [.width, .height]
 
-        var y = viewHeight - 20  // Start with minimal top padding
+        var y = viewHeight - 10  // Start with minimal top padding
 
         // Row: Language
         addLabel(L("settings.language"), to: view, y: y)
@@ -241,7 +241,7 @@ final class SettingsWindow: NSWindow {
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
         view.autoresizingMask = [.width, .height]
 
-        var y = viewHeight - 20  // Start with minimal top padding
+        var y = viewHeight - 10  // Start with minimal top padding
 
         // Row: Hotkey
         addLabel(L("settings.clipboard.hotkey"), to: view, y: y)
@@ -295,11 +295,11 @@ final class SettingsWindow: NSWindow {
     // MARK: - Advanced Tab
 
     private func createAdvancedTab() -> NSView {
-        let viewHeight: CGFloat = 380
+        let viewHeight: CGFloat = 320
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
         view.autoresizingMask = [.width, .height]
 
-        var y = viewHeight - 20  // Start with minimal top padding
+        var y = viewHeight - 10  // Start with minimal top padding
 
         // Row: Ignored Apps label
         addLabel(L("settings.advanced.ignoredApps"), to: view, y: y)
@@ -394,12 +394,12 @@ final class SettingsWindow: NSWindow {
     // MARK: - About Tab
 
     private func createAboutTab() -> NSView {
-        let viewHeight: CGFloat = 340
+        let viewHeight: CGFloat = 300
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
         view.autoresizingMask = [.width, .height]
 
         // App Icon
-        let appIcon = NSImageView(frame: NSRect(x: (viewWidth - 80) / 2, y: 240, width: 80, height: 80))
+        let appIcon = NSImageView(frame: NSRect(x: (viewWidth - 80) / 2, y: 200, width: 80, height: 80))
         if let icnsPath = Bundle.main.path(forResource: "Keystarter", ofType: "icns"),
            let image = NSImage(contentsOfFile: icnsPath) {
             appIcon.image = image
@@ -411,7 +411,7 @@ final class SettingsWindow: NSWindow {
 
         // App Name
         let nameLabel = NSTextField(labelWithString: "Keystarter")
-        nameLabel.frame = NSRect(x: 0, y: 200, width: viewWidth, height: 28)
+        nameLabel.frame = NSRect(x: 0, y: 160, width: viewWidth, height: 28)
         nameLabel.alignment = .center
         nameLabel.font = .systemFont(ofSize: 22, weight: .semibold)
         view.addSubview(nameLabel)
@@ -419,20 +419,20 @@ final class SettingsWindow: NSWindow {
         // Version
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         let versionLabel = NSTextField(labelWithString: String(format: L("settings.about.version"), version))
-        versionLabel.frame = NSRect(x: 0, y: 170, width: viewWidth, height: 20)
+        versionLabel.frame = NSRect(x: 0, y: 130, width: viewWidth, height: 20)
         versionLabel.alignment = .center
         versionLabel.textColor = .secondaryLabelColor
         view.addSubview(versionLabel)
 
         // Copyright
         let copyrightLabel = NSTextField(labelWithString: L("settings.about.copyright"))
-        copyrightLabel.frame = NSRect(x: 0, y: 140, width: viewWidth, height: 20)
+        copyrightLabel.frame = NSRect(x: 0, y: 100, width: viewWidth, height: 20)
         copyrightLabel.alignment = .center
         copyrightLabel.textColor = .secondaryLabelColor
         view.addSubview(copyrightLabel)
 
         // GitHub link
-        let githubButton = NSButton(frame: NSRect(x: (viewWidth - 220) / 2, y: 90, width: 220, height: 32))
+        let githubButton = NSButton(frame: NSRect(x: (viewWidth - 220) / 2, y: 50, width: 220, height: 32))
         githubButton.title = "github.com/J-Liu/Keystarter"
         githubButton.bezelStyle = .rounded
         githubButton.target = self
@@ -440,7 +440,7 @@ final class SettingsWindow: NSWindow {
         view.addSubview(githubButton)
 
         // Check for Updates button
-        let checkUpdatesButton = NSButton(frame: NSRect(x: (viewWidth - 160) / 2, y: 50, width: 160, height: 32))
+        let checkUpdatesButton = NSButton(frame: NSRect(x: (viewWidth - 160) / 2, y: 10, width: 160, height: 32))
         checkUpdatesButton.title = L("menu.checkUpdates")
         checkUpdatesButton.bezelStyle = .rounded
         checkUpdatesButton.target = self
