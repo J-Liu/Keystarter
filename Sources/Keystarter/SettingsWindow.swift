@@ -22,7 +22,7 @@ final class SettingsWindow: NSWindow {
     init() {
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
         let width: CGFloat = 600
-        let height: CGFloat = 580
+        let height: CGFloat = 650
         let x = screenFrame.midX - width / 2
         let y = screenFrame.midY - height / 2
         let frame = NSRect(x: x, y: y, width: width, height: height)
@@ -36,7 +36,7 @@ final class SettingsWindow: NSWindow {
 
         self.title = "Keystarter Settings"
         self.isReleasedWhenClosed = false
-        self.minSize = NSSize(width: 600, height: 580)
+        self.minSize = NSSize(width: 600, height: 650)
 
         setupUI()
         setupKeyHandlers()
@@ -73,7 +73,7 @@ final class SettingsWindow: NSWindow {
     // MARK: - General Tab
 
     private func createGeneralTab() -> NSView {
-        let viewHeight: CGFloat = 520
+        let viewHeight: CGFloat = 600
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
 
         var y = viewHeight - 20  // Start with top padding
