@@ -4,31 +4,54 @@
 import AppKit
 import Carbon
 
-/// Manages a single global hotkey using CGEvent tap.
+/// Manages global hotkeys using CGEvent tap.
 /// Requires Accessibility permission.
 final class HotkeyManager {
 
+    static let shared = HotkeyManager()
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private let callback: () -> Void
-    private var targetKeyCode: UInt16 = 49 // Space
-    private var targetModifiers: NSEvent.ModifierFlags = .command
+    private var hotkeys: [UInt16: (modifiers: NSEvent.ModifierFlags, callback: () -> Void)] = [:]
     private var permissionCheckTimer: Timer?
     private var isRegistered = false
 
-    init(callback: @escaping () -> Void) {
-        self.callback = callback
-    }
+    private init() {}
 
-    /// Register the global hotkey with custom key and modifiers.
-    func register(keyCode: UInt16 = 49, modifiers: NSEvent.ModifierFlags = .command) {
-        targetKeyCode = keyCode
-        targetModifiers = modifiers
+    /// Register a global hotkey with custom key and modifiers.
+    func register(keyCode: UInt16, modifiers: NSEvent.ModifierFlags, callback: @escaping () -> Void) {
+        hotkeys[keyCode] = (modifiers: modifiers, callback: callback)
 
         tryRegister()
 
         // Start checking for permission changes
         startPermissionCheck()
+    }
+
+    /// Unregister a specific hotkey.
+    func unregister(keyCode: UInt16) {
+        hotkeys.removeValue(forKey: keyCode)
+
+        if hotkeys.isEmpty {
+            unregisterAll()
+        }
+    }
+
+    /// Unregister all hotkeys.
+    func unregisterAll() {
+        stopPermissionCheck()
+
+        if let eventTap = eventTap {
+            CGEvent.tapEnable(tap: eventTap, enable: false)
+            if let runLoopSource = runLoopSource {
+                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
+            }
+            self.eventTap = nil
+            self.runLoopSource = nil
+        }
+        isRegistered = false
+        hotkeys.removeAll()
+        print("[HotkeyManager] All hotkeys unregistered")
     }
 
     /// Try to register the event tap.
@@ -75,7 +98,7 @@ final class HotkeyManager {
         CGEvent.tapEnable(tap: eventTap, enable: true)
 
         isRegistered = true
-        print("[HotkeyManager] Hotkey registered")
+        print("[HotkeyManager] Hotkeys registered: \(hotkeys.keys)")
     }
 
     /// Start periodic permission check.
@@ -106,28 +129,28 @@ final class HotkeyManager {
             return Unmanaged.passRetained(event)
         }
 
-        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
 
-        // Check if this matches our hotkey
-        if keyCode == Int64(targetKeyCode) {
+        // Check if this matches any registered hotkey
+        if let hotkey = hotkeys[keyCode] {
             let hasCommand = flags.contains(.maskCommand)
             let hasOption = flags.contains(.maskAlternate)
             let hasControl = flags.contains(.maskControl)
             let hasShift = flags.contains(.maskShift)
 
-            let wantCommand = targetModifiers.contains(.command)
-            let wantOption = targetModifiers.contains(.option)
-            let wantControl = targetModifiers.contains(.control)
-            let wantShift = targetModifiers.contains(.shift)
+            let wantCommand = hotkey.modifiers.contains(.command)
+            let wantOption = hotkey.modifiers.contains(.option)
+            let wantControl = hotkey.modifiers.contains(.control)
+            let wantShift = hotkey.modifiers.contains(.shift)
 
             if hasCommand == wantCommand &&
                hasOption == wantOption &&
                hasControl == wantControl &&
                hasShift == wantShift {
                 // Match! Call callback and consume event
-                DispatchQueue.main.async { [weak self] in
-                    self?.callback()
+                DispatchQueue.main.async {
+                    hotkey.callback()
                 }
                 return nil // Consume the event
             }
@@ -136,23 +159,7 @@ final class HotkeyManager {
         return Unmanaged.passRetained(event)
     }
 
-    /// Unregister the global hotkey.
-    func unregister() {
-        stopPermissionCheck()
-
-        if let eventTap = eventTap {
-            CGEvent.tapEnable(tap: eventTap, enable: false)
-            if let runLoopSource = runLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
-            }
-            self.eventTap = nil
-            self.runLoopSource = nil
-        }
-        isRegistered = false
-        print("[HotkeyManager] Hotkey unregistered")
-    }
-
     deinit {
-        unregister()
+        unregisterAll()
     }
 }

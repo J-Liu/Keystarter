@@ -6,8 +6,6 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var launcherWindow: LauncherWindow?
-    private var hotkeyManager: HotkeyManager?
-    private var clipboardHotkeyManager: HotkeyManager?
     private var clipboardPanel: ClipboardPanel?
     private var statusBarController: StatusBarController?
     private var settingsWindow: SettingsWindow?
@@ -15,6 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var indexScanner: IndexScanner?
     private var indexWatcher: IndexWatcher?
     var isIndexReady = false
+
+    // Hotkey key codes for tracking
+    private var launcherKeyCode: UInt16 = 49
+    private var launcherModifiers: NSEvent.ModifierFlags = .command
+    private var clipboardKeyCode: UInt16 = 9
+    private var clipboardModifiers: NSEvent.ModifierFlags = [.command, .shift]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenu()
@@ -28,16 +32,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Register global hotkey with saved or default settings
         let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
         let savedModifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
-        let keyCode = savedKeyCode > 0 ? UInt16(savedKeyCode) : UInt16(49) // Space
-        var modifiers: NSEvent.ModifierFlags = .command
+        launcherKeyCode = savedKeyCode > 0 ? UInt16(savedKeyCode) : UInt16(49) // Space
         if savedModifiers > 0 {
-            modifiers = NSEvent.ModifierFlags(rawValue: UInt(savedModifiers))
+            launcherModifiers = NSEvent.ModifierFlags(rawValue: UInt(savedModifiers))
         }
 
-        hotkeyManager = HotkeyManager { [weak self] in
+        HotkeyManager.shared.register(keyCode: launcherKeyCode, modifiers: launcherModifiers) { [weak self] in
             self?.launcherWindow?.toggle()
         }
-        hotkeyManager?.register(keyCode: keyCode, modifiers: modifiers)
 
         PluginManager.shared.register(DictionaryPlugin())
         PluginManager.shared.register(TranslatePlugin())
@@ -53,10 +55,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Setup clipboard panel and hotkey
         clipboardPanel = ClipboardPanel()
-        clipboardHotkeyManager = HotkeyManager { [weak self] in
+        
+        // Load saved clipboard hotkey
+        let savedClipboardKeyCode = UserDefaults.standard.integer(forKey: "clipboard.hotkey.keyCode")
+        let savedClipboardModifiers = UserDefaults.standard.integer(forKey: "clipboard.hotkey.modifiers")
+        if savedClipboardKeyCode > 0 {
+            clipboardKeyCode = UInt16(savedClipboardKeyCode)
+        }
+        if savedClipboardModifiers > 0 {
+            clipboardModifiers = NSEvent.ModifierFlags(rawValue: UInt(savedClipboardModifiers))
+        }
+
+        HotkeyManager.shared.register(keyCode: clipboardKeyCode, modifiers: clipboardModifiers) { [weak self] in
             self?.clipboardPanel?.toggle()
         }
-        clipboardHotkeyManager?.register(keyCode: 9, modifiers: [.command, .shift]) // V + Cmd + Shift
 
         // Show setup wizard on first launch
         if PermissionManager.shared.isFirstLaunch {
@@ -81,16 +93,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Update the global hotkey.
     func updateHotkey(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
-        hotkeyManager?.unregister()
-        hotkeyManager?.register(keyCode: keyCode, modifiers: modifiers)
+        HotkeyManager.shared.unregister(keyCode: launcherKeyCode)
+        launcherKeyCode = keyCode
+        launcherModifiers = modifiers
+        HotkeyManager.shared.register(keyCode: launcherKeyCode, modifiers: launcherModifiers) { [weak self] in
+            self?.launcherWindow?.toggle()
+        }
         UserDefaults.standard.set(Int(keyCode), forKey: "hotkey.keyCode")
         UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "hotkey.modifiers")
     }
 
     /// Update the clipboard hotkey.
     func updateClipboardHotkey(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
-        clipboardHotkeyManager?.unregister()
-        clipboardHotkeyManager?.register(keyCode: keyCode, modifiers: modifiers)
+        HotkeyManager.shared.unregister(keyCode: clipboardKeyCode)
+        clipboardKeyCode = keyCode
+        clipboardModifiers = modifiers
+        HotkeyManager.shared.register(keyCode: clipboardKeyCode, modifiers: clipboardModifiers) { [weak self] in
+            self?.clipboardPanel?.toggle()
+        }
         UserDefaults.standard.set(Int(keyCode), forKey: "clipboard.hotkey.keyCode")
         UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "clipboard.hotkey.modifiers")
     }
@@ -266,8 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        hotkeyManager?.unregister()
-        clipboardHotkeyManager?.unregister()
+        HotkeyManager.shared.unregisterAll()
         ClipboardManager.shared.stop()
     }
 
