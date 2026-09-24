@@ -64,6 +64,11 @@ final class LauncherWindow: NSWindow {
                 self.hide()
                 return nil
             }
+            // Cmd+W to close
+            if event.modifierFlags.contains(.command) && event.keyCode == 13 {
+                self.hide()
+                return nil
+            }
             return event
         }
 
