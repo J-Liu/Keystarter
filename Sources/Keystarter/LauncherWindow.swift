@@ -661,10 +661,11 @@ final class LauncherWindow: NSWindow {
 
         var merged: [LaunchItem] = []
 
-        // 1. Plugin results (if any) - store for later
-        var pluginResults: [LaunchItem] = []
+        // 1. Plugin results (if any) - separate stock plugin results
+        var nonStockPluginResults: [LaunchItem] = []
+        var stockPluginResults: [LaunchItem] = []
         if let results = PluginManager.shared.dispatch(query) {
-            pluginResults = results.map { result in
+            let allPluginResults = results.map { result in
                 LaunchItem(
                     name: result.title,
                     path: result.subtitle ?? "",
@@ -674,6 +675,16 @@ final class LauncherWindow: NSWindow {
                     pluginIcon: result.icon,
                     detailText: result.detailText
                 )
+            }
+            
+            // Check if this is a stock query (starts with "stock" or is a 6-digit code)
+            let isStockQuery = query.lowercased().hasPrefix("stock ") || 
+                              (query.count == 6 && query.allSatisfy { $0.isNumber })
+            
+            if isStockQuery {
+                stockPluginResults = allPluginResults
+            } else {
+                nonStockPluginResults = allPluginResults
             }
         }
 
@@ -768,9 +779,10 @@ final class LauncherWindow: NSWindow {
             )
         }
 
-        // 7. Merge: apps first, then plugin results, files, bookmarks, history, clipboard
+        // 7. Merge: non-stock plugins first, then apps, stock plugins, files, bookmarks, history, clipboard
+        merged += nonStockPluginResults
         merged += appResults
-        merged += pluginResults
+        merged += stockPluginResults
         merged += fileResults
         merged += bookmarkResults
         merged += historyResults
