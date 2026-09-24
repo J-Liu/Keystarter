@@ -4,15 +4,15 @@
 import AppKit
 import Foundation
 
-/// 股票查询插件
-/// 支持通过 "stock" 命令或直接输入股票名称/代码/首字母
+/// Stock query plugin
+/// Supports "stock" command or direct input of stock name/code/initials
 final class StockPlugin: Plugin {
     let keyword = "stock"
-    let pluginDescription = "查询股票信息"
+    let pluginDescription = "Query stock information"
 
     private var stockList: [StockInfo] = []
     private var lastFetchTime: Date?
-    private let cacheDuration: TimeInterval = 60 // 缓存1分钟
+    private let cacheDuration: TimeInterval = 60 // Cache for 1 minute
 
     struct StockInfo {
         let code: String
@@ -34,26 +34,26 @@ final class StockPlugin: Plugin {
     func matchesDirect(_ input: String) -> Bool {
         let trimmed = input.trimmingCharacters(in: .whitespaces).lowercased()
 
-        // 只匹配6位数字股票代码
+        // Only match 6-digit stock codes
         if trimmed.count == 6 && trimmed.allSatisfy({ $0.isNumber }) {
             return true
         }
 
-        // 不匹配其他输入，避免卡顿
+        // Don't match other inputs to avoid lag
         return false
     }
 
     func queryDirect(_ input: String) -> [PluginResult] {
         let query = input.trimmingCharacters(in: .whitespaces).lowercased()
         guard !query.isEmpty else {
-            return [PluginResult(title: "请输入股票名称或代码", subtitle: "例如：宇树科技 或 YSKJ")]
+            return [PluginResult(title: L("stock.enterNameOrCode"), subtitle: L("stock.example"))]
         }
 
-        // 同步获取股票数据
+        // Fetch stock data synchronously
         let results = fetchStockDataSync(query: query)
 
         if results.isEmpty {
-            return [PluginResult(title: "未找到匹配的股票", subtitle: "请检查输入是否正确")]
+            return [PluginResult(title: L("stock.noMatch"), subtitle: L("stock.checkInput"))]
         }
 
         return results
@@ -62,32 +62,32 @@ final class StockPlugin: Plugin {
     func query(_ input: String) -> [PluginResult] {
         let query = input.trimmingCharacters(in: .whitespaces).lowercased()
         guard !query.isEmpty else {
-            return [PluginResult(title: "请输入股票名称或代码", subtitle: "例如：宇树科技 或 YSKJ")]
+            return [PluginResult(title: L("stock.enterNameOrCode"), subtitle: L("stock.example"))]
         }
 
-        // 同步获取股票数据
+        // Fetch stock data synchronously
         let results = fetchStockDataSync(query: query)
 
         if results.isEmpty {
-            return [PluginResult(title: "未找到匹配的股票", subtitle: "请检查输入是否正确")]
+            return [PluginResult(title: L("stock.noMatch"), subtitle: L("stock.checkInput"))]
         }
 
         return results
     }
 
     private func fetchStockDataSync(query: String) -> [PluginResult] {
-        // 检查缓存
+        // Check cache
         if let lastFetch = lastFetchTime,
            Date().timeIntervalSince(lastFetch) < cacheDuration,
            !stockList.isEmpty {
             return filterAndFormatStocks(query: query)
         }
 
-        // 使用东方财富API获取A股数据
+        // Fetch A-share data from East Money API
         let urlString = "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fields=f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f14,f15,f16,f17,f18,f20,f21,f23,f100&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23"
 
         guard let url = URL(string: urlString) else {
-            return [PluginResult(title: "查询失败", subtitle: "无效的URL")]
+            return [PluginResult(title: L("stock.queryFailed"), subtitle: L("stock.invalidURL"))]
         }
 
         var results: [PluginResult] = []
@@ -99,12 +99,12 @@ final class StockPlugin: Plugin {
             guard let self = self else { return }
 
             if let error = error {
-                results = [PluginResult(title: "查询失败", subtitle: error.localizedDescription)]
+                results = [PluginResult(title: L("stock.queryFailed"), subtitle: error.localizedDescription)]
                 return
             }
 
             guard let data = data else {
-                results = [PluginResult(title: "查询失败", subtitle: "无数据")]
+                results = [PluginResult(title: L("stock.queryFailed"), subtitle: L("stock.noData"))]
                 return
             }
 
@@ -132,7 +132,7 @@ final class StockPlugin: Plugin {
                         let marketCap = item["f20"] as? Double ?? 0
                         let circulatingCap = item["f21"] as? Double ?? 0
                         let peRatio = item["f9"] as? Double ?? 0
-                        let industry = item["f100"] as? String ?? "未知"
+                        let industry = item["f100"] as? String ?? L("stock.unknown")
 
                         let stockInfo = StockInfo(
                             code: code,
@@ -159,10 +159,10 @@ final class StockPlugin: Plugin {
 
                     results = self.filterAndFormatStocks(query: query)
                 } else {
-                    results = [PluginResult(title: "查询失败", subtitle: "解析数据失败")]
+                    results = [PluginResult(title: L("stock.queryFailed"), subtitle: L("stock.parseFailed"))]
                 }
             } catch {
-                results = [PluginResult(title: "查询失败", subtitle: error.localizedDescription)]
+                results = [PluginResult(title: L("stock.queryFailed"), subtitle: error.localizedDescription)]
             }
         }.resume()
 
@@ -181,14 +181,14 @@ final class StockPlugin: Plugin {
             return matchesCode || matchesName || matchesInitials
         }
 
-        // 只返回前10个结果
+        // Return only top 10 results
         let limitedStocks = Array(matchedStocks.prefix(10))
 
         return limitedStocks.map { formatStockResult($0) }
     }
 
     private func getInitials(from name: String) -> String {
-        // 简化的拼音首字母映射表
+        // Simplified pinyin initial mapping
         let pinyinMap: [String: String] = [
             "阿": "A", "啊": "A", "爱": "A", "安": "A", "暗": "A",
             "八": "B", "把": "B", "百": "B", "办": "B", "半": "B", "报": "B", "北": "B", "本": "B", "比": "B", "必": "B", "边": "B", "变": "B", "标": "B", "表": "B", "别": "B", "兵": "B", "病": "B", "并": "B", "不": "B", "部": "B",
@@ -232,7 +232,7 @@ final class StockPlugin: Plugin {
         let highStr = String(format: "%.2f", stock.high)
         let lowStr = String(format: "%.2f", stock.low)
 
-        let volumeStr = formatLargeNumber(stock.volume * 100) // 手转股
+        let volumeStr = formatLargeNumber(stock.volume * 100) // Convert lots to shares
         let amountStr = formatLargeNumber(stock.amount)
         let turnoverStr = String(format: "%.2f%%", stock.turnoverRate)
         let marketCapStr = formatLargeNumber(stock.marketCap)
@@ -240,24 +240,24 @@ final class StockPlugin: Plugin {
         let peStr = String(format: "%.2f", stock.peRatio)
 
         let detail = """
-        股票代码：\(stock.code)
-        股票名称：\(stock.name)
-        首字母：\(stock.initials)
+        \(L("stock.detail.code")): \(stock.code)
+        \(L("stock.detail.name")): \(stock.name)
+        \(L("stock.detail.initials")): \(stock.initials)
 
-        当前价格：¥\(priceStr)
-        今日开盘：¥\(openStr)
-        今日最高：¥\(highStr)
-        今日最低：¥\(lowStr)
+        \(L("stock.detail.price")): ¥\(priceStr)
+        \(L("stock.detail.open")): ¥\(openStr)
+        \(L("stock.detail.high")): ¥\(highStr)
+        \(L("stock.detail.low")): ¥\(lowStr)
 
-        成交量：\(volumeStr)股
-        成交额：¥\(amountStr)
-        换手率：\(turnoverStr)
+        \(L("stock.detail.volume")): \(volumeStr)\(L("stock.detail.shares"))
+        \(L("stock.detail.amount")): ¥\(amountStr)
+        \(L("stock.detail.turnover")): \(turnoverStr)
 
-        总市值：¥\(marketCapStr)
-        流通市值：¥\(circCapStr)
-        市盈率：\(peStr)
+        \(L("stock.detail.marketCap")): ¥\(marketCapStr)
+        \(L("stock.detail.circCap")): ¥\(circCapStr)
+        \(L("stock.detail.peRatio")): \(peStr)
 
-        所属行业：\(stock.industry)
+        \(L("stock.detail.industry")): \(stock.industry)
         """
 
         return PluginResult(
@@ -274,12 +274,12 @@ final class StockPlugin: Plugin {
     }
 
     private func formatLargeNumber(_ value: Double) -> String {
-        if value >= 100_000_000_000 {
-            return String(format: "%.2f万亿", value / 100_000_000_000)
+        if value >= 1_000_000_000_000 {
+            return String(format: "%.2f%@", value / 1_000_000_000_000, L("stock.unit.trillion"))
         } else if value >= 100_000_000 {
-            return String(format: "%.2f亿", value / 100_000_000)
-        } else if value >= 10000 {
-            return String(format: "%.2f万", value / 10000)
+            return String(format: "%.2f%@", value / 100_000_000, L("stock.unit.hundredMillion"))
+        } else if value >= 10_000 {
+            return String(format: "%.2f%@", value / 10_000, L("stock.unit.tenThousand"))
         } else {
             return String(format: "%.0f", value)
         }
