@@ -48,6 +48,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PluginManager.shared.register(SystemCommandPlugin())
         PluginManager.shared.register(IPPlugin())
         PluginManager.shared.register(ColorPlugin())
+        PluginManager.shared.register(ConvertPlugin())
 
         // Load Alfred workflows
         AlfredWorkflowManager.shared.loadAll()
