@@ -34,10 +34,14 @@ final class SystemCommandPlugin: Plugin {
         }
 
         return matched.map { cmd in
-            PluginResult(
-                title: cmd.1,
-                subtitle: "Press Enter to \(cmd.1.lowercased())",
-                icon: NSImage(systemSymbolName: "power", accessibilityDescription: nil),
+            // Use trash icon for empty trash command
+            let iconName = cmd.0 == "empty trash" ? "trash" : "power"
+            let title = L("command.\(cmd.0.replacingOccurrences(of: " ", with: "."))")
+
+            return PluginResult(
+                title: title,
+                subtitle: String(format: L("command.pressEnter"), title.lowercased()),
+                icon: NSImage(systemSymbolName: iconName, accessibilityDescription: nil),
                 action: {
                     let task = Process()
                     task.launchPath = "/bin/bash"

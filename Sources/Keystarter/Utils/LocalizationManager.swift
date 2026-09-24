@@ -151,6 +151,15 @@ final class LocalizationManager {
             "permissions.status.ok": "OK",
             "permissions.status.accessibility": "Accessibility",
             "permissions.status.inputMonitoring": "Input Monitoring",
+
+            // System Commands
+            "command.sleep": "Sleep",
+            "command.lock": "Lock Screen",
+            "command.empty.trash": "Empty Trash",
+            "command.restart": "Restart",
+            "command.shutdown": "Shut Down",
+            "command.logout": "Log Out",
+            "command.pressEnter": "Press Enter to %@",
         ],
 
         .simplifiedChinese: [
@@ -248,6 +257,15 @@ final class LocalizationManager {
             "permissions.status.ok": "确定",
             "permissions.status.accessibility": "辅助功能",
             "permissions.status.inputMonitoring": "输入监控",
+
+            // System Commands
+            "command.sleep": "睡眠",
+            "command.lock": "锁定屏幕",
+            "command.empty.trash": "清空废纸篓",
+            "command.restart": "重新启动",
+            "command.shutdown": "关机",
+            "command.logout": "注销",
+            "command.pressEnter": "按回车执行%@",
         ],
 
         .traditionalChinese: [
@@ -345,6 +363,15 @@ final class LocalizationManager {
             "permissions.status.ok": "確定",
             "permissions.status.accessibility": "輔助功能",
             "permissions.status.inputMonitoring": "輸入監控",
+
+            // System Commands
+            "command.sleep": "睡眠",
+            "command.lock": "鎖定螢幕",
+            "command.empty.trash": "清空垃圾桶",
+            "command.restart": "重新啟動",
+            "command.shutdown": "關機",
+            "command.logout": "登出",
+            "command.pressEnter": "按 Enter 執行%@",
         ]
     ]
 }

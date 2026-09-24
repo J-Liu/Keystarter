@@ -34,20 +34,12 @@ final class StockPlugin: Plugin {
     func matchesDirect(_ input: String) -> Bool {
         let trimmed = input.trimmingCharacters(in: .whitespaces).lowercased()
 
-        // 检查是否是股票代码（6位数字）
+        // 只匹配6位数字股票代码
         if trimmed.count == 6 && trimmed.allSatisfy({ $0.isNumber }) {
             return true
         }
 
-        // 检查是否是可能的股票名称或首字母
-        if trimmed.count >= 2 && trimmed.count <= 8 {
-            // 排除明显的非股票查询
-            let excludedKeywords = ["calc", "kill", "ip", "sleep", "lock", "restart", "shutdown", "logout", "empty", "trash", "dict", "tr", "https", "http", "www"]
-            if !excludedKeywords.contains(trimmed) {
-                return true
-            }
-        }
-
+        // 不匹配其他输入，避免卡顿
         return false
     }
 

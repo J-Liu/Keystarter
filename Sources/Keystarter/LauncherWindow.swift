@@ -326,7 +326,9 @@ final class LauncherWindow: NSWindow {
     /// Save current input source and switch to English
     private func switchToEnglishInput() {
         // Save current input source
-        savedInputSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue()
+        if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
+            savedInputSource = currentSource
+        }
 
         // Find English input source
         guard let inputSources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
@@ -349,9 +351,10 @@ final class LauncherWindow: NSWindow {
 
     /// Restore previously saved input source
     private func restoreInputSource() {
-        guard let savedSource = savedInputSource else { return }
-        TISSelectInputSource(savedSource)
-        savedInputSource = nil
+        if let savedSource = savedInputSource {
+            TISSelectInputSource(savedSource)
+            savedInputSource = nil
+        }
     }
 
     // MARK: - Show / Hide
@@ -653,9 +656,10 @@ final class LauncherWindow: NSWindow {
 
         var merged: [LaunchItem] = []
 
-        // 1. Plugin results (if any)
-        if let pluginResults = PluginManager.shared.dispatch(query) {
-            merged += pluginResults.map { result in
+        // 1. Plugin results (if any) - store for later
+        var pluginResults: [LaunchItem] = []
+        if let results = PluginManager.shared.dispatch(query) {
+            pluginResults = results.map { result in
                 LaunchItem(
                     name: result.title,
                     path: result.subtitle ?? "",
@@ -759,8 +763,9 @@ final class LauncherWindow: NSWindow {
             )
         }
 
-        // 7. Merge: plugin results first, then apps, files, bookmarks, history, clipboard
+        // 7. Merge: apps first, then plugin results, files, bookmarks, history, clipboard
         merged += appResults
+        merged += pluginResults
         merged += fileResults
         merged += bookmarkResults
         merged += historyResults
