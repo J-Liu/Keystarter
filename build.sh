@@ -66,6 +66,9 @@ fi
 # Set LSUIElement to true (hide from Dock by default)
 /usr/libexec/PlistBuddy -c "Set :LSUIElement true" "${APP_BUNDLE}/Contents/Info.plist" 2>/dev/null || true
 
+# Add rpath for frameworks
+install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
+
 # 3. Ad-hoc sign (required on Apple Silicon)
 echo "==> Signing..."
 codesign --force --deep --sign - "$APP_BUNDLE"
