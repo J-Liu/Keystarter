@@ -144,6 +144,13 @@ final class LocalizationManager {
             "alert.permissions.title": "Accessibility Permission Required",
             "alert.permissions.message": "Keystarter needs Accessibility permission to paste content.",
             "alert.grant": "Grant Permission",
+
+            // Permissions Status
+            "permissions.status.title": "Permission Status",
+            "permissions.status.allGranted": "All required permissions have been granted:",
+            "permissions.status.ok": "OK",
+            "permissions.status.accessibility": "Accessibility",
+            "permissions.status.inputMonitoring": "Input Monitoring",
         ],
 
         .simplifiedChinese: [
@@ -234,6 +241,13 @@ final class LocalizationManager {
             "alert.permissions.title": "需要辅助功能权限",
             "alert.permissions.message": "Keystarter 需要辅助功能权限来粘贴内容。",
             "alert.grant": "授予权限",
+
+            // Permissions Status
+            "permissions.status.title": "权限状态",
+            "permissions.status.allGranted": "所有必需权限已授予：",
+            "permissions.status.ok": "确定",
+            "permissions.status.accessibility": "辅助功能",
+            "permissions.status.inputMonitoring": "输入监控",
         ],
 
         .traditionalChinese: [
@@ -324,6 +338,13 @@ final class LocalizationManager {
             "alert.permissions.title": "需要輔助功能權限",
             "alert.permissions.message": "Keystarter 需要輔助功能權限來貼上內容。",
             "alert.grant": "授予權限",
+
+            // Permissions Status
+            "permissions.status.title": "權限狀態",
+            "permissions.status.allGranted": "所有必需權限已授予：",
+            "permissions.status.ok": "確定",
+            "permissions.status.accessibility": "輔助功能",
+            "permissions.status.inputMonitoring": "輸入監控",
         ]
     ]
 }

@@ -79,10 +79,11 @@ final class SettingsWindow: NSWindow {
     // 10 rows: Language, Hotkey, StatusBar, CornerRadius, Opacity, GroupBy, Login, Dock, Update, Permissions
 
     private func createGeneralTab() -> NSView {
-        let viewHeight: CGFloat = 440
+        let viewHeight: CGFloat = 420
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
+        view.autoresizingMask = [.width, .height]
 
-        var y = viewHeight - rowHeight
+        var y = viewHeight - 20  // Start with minimal top padding
 
         // Row: Language
         addLabel(L("settings.language"), to: view, y: y)
@@ -236,10 +237,11 @@ final class SettingsWindow: NSWindow {
     // 4 rows: Hotkey, MaxCount, MaxDays, Clear
 
     private func createClipboardTab() -> NSView {
-        let viewHeight: CGFloat = 200
+        let viewHeight: CGFloat = 180
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
+        view.autoresizingMask = [.width, .height]
 
-        var y = viewHeight - rowHeight
+        var y = viewHeight - 20  // Start with minimal top padding
 
         // Row: Hotkey
         addLabel(L("settings.clipboard.hotkey"), to: view, y: y)
@@ -293,10 +295,11 @@ final class SettingsWindow: NSWindow {
     // MARK: - Advanced Tab
 
     private func createAdvancedTab() -> NSView {
-        let viewHeight: CGFloat = 400
+        let viewHeight: CGFloat = 380
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
+        view.autoresizingMask = [.width, .height]
 
-        var y = viewHeight - rowHeight
+        var y = viewHeight - 20  // Start with minimal top padding
 
         // Row: Ignored Apps label
         addLabel(L("settings.advanced.ignoredApps"), to: view, y: y)
@@ -391,8 +394,9 @@ final class SettingsWindow: NSWindow {
     // MARK: - About Tab
 
     private func createAboutTab() -> NSView {
-        let viewHeight: CGFloat = 360
+        let viewHeight: CGFloat = 340
         let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
+        view.autoresizingMask = [.width, .height]
 
         // App Icon
         let appIcon = NSImageView(frame: NSRect(x: (viewWidth - 80) / 2, y: 240, width: 80, height: 80))
@@ -585,10 +589,10 @@ final class SettingsWindow: NSWindow {
 
     private func showPermissionsStatus() {
         let alert = NSAlert()
-        alert.messageText = "权限状态"
-        alert.informativeText = "所有必需权限已授予："
+        alert.messageText = L("permissions.status.title")
+        alert.informativeText = L("permissions.status.allGranted")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: "确定")
+        alert.addButton(withTitle: L("permissions.status.ok"))
 
         // 创建自定义视图显示权限列表
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
@@ -598,7 +602,7 @@ final class SettingsWindow: NSWindow {
         accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
         containerView.addSubview(accessibilityIcon)
 
-        let accessibilityLabel = NSTextField(labelWithString: "辅助功能 (Accessibility)")
+        let accessibilityLabel = NSTextField(labelWithString: L("permissions.status.accessibility"))
         accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
         containerView.addSubview(accessibilityLabel)
 
@@ -607,7 +611,7 @@ final class SettingsWindow: NSWindow {
         inputIcon.image = NSImage(named: NSImage.statusAvailableName)
         containerView.addSubview(inputIcon)
 
-        let inputLabel = NSTextField(labelWithString: "输入监控 (Input Monitoring)")
+        let inputLabel = NSTextField(labelWithString: L("permissions.status.inputMonitoring"))
         inputLabel.frame = NSRect(x: 35, y: 15, width: 250, height: 20)
         containerView.addSubview(inputLabel)
 

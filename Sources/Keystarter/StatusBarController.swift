@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon
 
 /// Manages the status bar icon and menu.
 final class StatusBarController {
@@ -147,9 +148,49 @@ final class StatusBarController {
     }
 
     @objc private func checkPermissions() {
-        PermissionManager.shared.requestAllPermissions {
-            // Permissions granted
+        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
+
+        if !hasAccessibility {
+            // 没有权限，直接弹系统对话框
+            _ = AXIsProcessTrustedWithOptions([
+                kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+            ] as CFDictionary)
+        } else {
+            // 有权限，显示权限状态界面
+            showPermissionsStatus()
         }
+    }
+
+    private func showPermissionsStatus() {
+        let alert = NSAlert()
+        alert.messageText = L("permissions.status.title")
+        alert.informativeText = L("permissions.status.allGranted")
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: L("permissions.status.ok"))
+
+        // 创建自定义视图显示权限列表
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+
+        // Accessibility 权限
+        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 45, width: 20, height: 20))
+        accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
+        containerView.addSubview(accessibilityIcon)
+
+        let accessibilityLabel = NSTextField(labelWithString: L("permissions.status.accessibility"))
+        accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
+        containerView.addSubview(accessibilityLabel)
+
+        // Input Monitoring 权限
+        let inputIcon = NSImageView(frame: NSRect(x: 10, y: 15, width: 20, height: 20))
+        inputIcon.image = NSImage(named: NSImage.statusAvailableName)
+        containerView.addSubview(inputIcon)
+
+        let inputLabel = NSTextField(labelWithString: L("permissions.status.inputMonitoring"))
+        inputLabel.frame = NSRect(x: 35, y: 15, width: 250, height: 20)
+        containerView.addSubview(inputLabel)
+
+        alert.accessoryView = containerView
+        alert.runModal()
     }
 
     @objc private func openSettings() {

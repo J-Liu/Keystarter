@@ -72,7 +72,7 @@ final class SetupWizardWindow: NSWindow {
         contentView.addSubview(skipButton)
 
         // Next button
-        nextButton = NSButton(frame: NSRect(x: 380, y: 20, width: 100, height: 32))
+        nextButton = NSButton(frame: NSRect(x: 360, y: 20, width: 120, height: 32))
         nextButton.title = "Next"
         nextButton.bezelStyle = .rounded
         nextButton.target = self
