@@ -19,7 +19,6 @@ final class LauncherWindow: NSWindow {
     /// Data source for the result list.
     private var results: [LaunchItem] = []
     private var filteredResults: [LaunchItem] = []
-    private var recentApps: [LaunchItem] = []
 
     init() {
         // Initial frame: centered, fixed size
@@ -225,7 +224,6 @@ final class LauncherWindow: NSWindow {
         gridScrollView.isHidden = false
         scrollView.isHidden = true
         previewScrollView.isHidden = true // Hide preview in grid mode
-        loadRecentApps()
         updateGridView()
         previewTextView.string = ""
 
@@ -327,17 +325,6 @@ final class LauncherWindow: NSWindow {
 
     // MARK: - Grid View
 
-    private func loadRecentApps() {
-        // Get top 8 most frequently used apps
-        let topItems = LaunchHistory.shared.topIdentifiers(limit: 8)
-        recentApps = []
-        for (path, _) in topItems {
-            if let app = results.first(where: { $0.path == path }) {
-                recentApps.append(app)
-            }
-        }
-    }
-
     private func updateGridView() {
         // Clear existing subviews
         for subview in gridView.subviews {
@@ -385,14 +372,6 @@ final class LauncherWindow: NSWindow {
         // Calculate total height needed
         var totalHeight: CGFloat = 10 // top padding
 
-        // Recent apps section
-        if !recentApps.isEmpty {
-            totalHeight += 18 // label height
-            let recentRows = Int(ceil(Double(recentApps.count) / Double(columns)))
-            totalHeight += CGFloat(recentRows) * (itemHeight + spacing)
-            totalHeight += 8 // separator and spacing
-        }
-
         // All apps section - grouped
         for (_, apps) in groupedApps {
             totalHeight += groupHeaderHeight // group header
@@ -408,44 +387,6 @@ final class LauncherWindow: NSWindow {
         // Start placing items from top
         var y: CGFloat = contentHeight - 10
         var x: CGFloat = 10
-
-        // Recent apps section
-        if !recentApps.isEmpty {
-            // Label for recent apps
-            let recentLabel = NSTextField(labelWithString: "Recent")
-            recentLabel.frame = NSRect(x: 10, y: y - 14, width: 100, height: 14)
-            recentLabel.font = .systemFont(ofSize: 11, weight: .medium)
-            recentLabel.textColor = .secondaryLabelColor
-            gridView.addSubview(recentLabel)
-            y -= 18
-
-            var index = 0
-            for app in recentApps {
-                let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
-                itemView.frame = NSRect(x: x, y: y - itemHeight, width: itemWidth, height: itemHeight)
-                gridView.addSubview(itemView)
-
-                index += 1
-                x += itemWidth + spacing
-                if index % columns == 0 {
-                    x = 10
-                    y -= itemHeight + spacing
-                }
-            }
-
-            // Reset for next row if not at start
-            if index % columns != 0 {
-                y -= itemHeight + spacing
-            }
-
-            // Separator line
-            y -= 2
-            let separator = NSView(frame: NSRect(x: 10, y: y, width: gridView.bounds.width - 20, height: 1))
-            separator.wantsLayer = true
-            separator.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.3).cgColor
-            gridView.addSubview(separator)
-            y -= 6
-        }
 
         // All apps section - grouped
         let allLabel = NSTextField(labelWithString: "All Apps")
