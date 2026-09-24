@@ -653,6 +653,9 @@ final class LauncherWindow: NSWindow {
             scanDirectoryForApps(at: dir, fileManager: fileManager, items: &items, seenPaths: &seenPaths)
         }
 
+        // Filter out ignored apps
+        items = items.filter { !IgnoredAppsManager.shared.isIgnored(path: $0.path) }
+
         // Sort alphabetically
         items.sort { $0.name.lowercased() < $1.name.lowercased() }
         results = items

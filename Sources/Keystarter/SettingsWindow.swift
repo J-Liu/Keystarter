@@ -9,6 +9,7 @@ final class SettingsWindow: NSWindow {
     private var tabView: NSTabView!
     private var generalTab: NSView!
     private var clipboardTab: NSView!
+    private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
 
@@ -59,6 +60,13 @@ final class SettingsWindow: NSWindow {
         clipboardItem.label = L("settings.tab.clipboard")
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
+
+        // Advanced tab
+        advancedTab = createAdvancedTab()
+        let advancedItem = NSTabViewItem(identifier: "advanced")
+        advancedItem.label = L("settings.tab.advanced")
+        advancedItem.view = advancedTab
+        tabView.addTabViewItem(advancedItem)
 
         // About tab
         aboutTab = createAboutTab()
@@ -347,6 +355,104 @@ final class SettingsWindow: NSWindow {
         return view
     }
 
+    // MARK: - Advanced Tab
+
+    private func createAdvancedTab() -> NSView {
+        let viewHeight: CGFloat = 500
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: viewHeight))
+
+        var y = viewHeight - 20
+
+        // Title
+        addLabel(L("settings.advanced.ignoredApps"), to: view, y: y)
+
+        y -= 30
+
+        // Table view for ignored apps
+        let scrollView = NSScrollView(frame: NSRect(x: controlX, y: y - 200, width: 300, height: 200))
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+
+        let tableView = NSTableView(frame: scrollView.bounds)
+        tableView.identifier = NSUserInterfaceItemIdentifier("ignoredAppsTable")
+        tableView.headerView = nil
+
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("appPath"))
+        column.width = 280
+        tableView.addTableColumn(column)
+        tableView.delegate = self
+        tableView.dataSource = self
+
+        scrollView.documentView = tableView
+        view.addSubview(scrollView)
+
+        // Empty label
+        let emptyLabel = NSTextField(labelWithString: L("settings.advanced.ignoredApps.empty"))
+        emptyLabel.frame = NSRect(x: controlX + 10, y: y - 110, width: 280, height: 20)
+        emptyLabel.alignment = .center
+        emptyLabel.textColor = .secondaryLabelColor
+        emptyLabel.identifier = NSUserInterfaceItemIdentifier("emptyLabel")
+        emptyLabel.isHidden = !IgnoredAppsManager.shared.getAllIgnored().isEmpty
+        view.addSubview(emptyLabel)
+
+        y -= 240
+
+        // Add button
+        let addButton = NSButton(frame: NSRect(x: controlX, y: y, width: 80, height: 32))
+        addButton.title = L("settings.advanced.ignoredApps.add")
+        addButton.bezelStyle = .rounded
+        addButton.target = self
+        addButton.action = #selector(addIgnoredApp)
+        view.addSubview(addButton)
+
+        // Remove button
+        let removeButton = NSButton(frame: NSRect(x: controlX + 90, y: y, width: 80, height: 32))
+        removeButton.title = L("settings.advanced.ignoredApps.remove")
+        removeButton.bezelStyle = .rounded
+        removeButton.target = self
+        removeButton.action = #selector(removeIgnoredApp)
+        view.addSubview(removeButton)
+
+        return view
+    }
+
+    @objc private func addIgnoredApp() {
+        let openPanel = NSOpenPanel()
+        openPanel.title = L("settings.advanced.ignoredApps.addTitle")
+        openPanel.allowedContentTypes = [.applicationBundle]
+        openPanel.canChooseDirectories = true
+        openPanel.canChooseFiles = false
+        openPanel.allowsMultipleSelection = false
+
+        if openPanel.runModal() == .OK, let url = openPanel.url {
+            IgnoredAppsManager.shared.ignore(path: url.path)
+            refreshIgnoredAppsTable()
+        }
+    }
+
+    @objc private func removeIgnoredApp() {
+        guard let tableView = advancedTab?.subviews.compactMap({ $0 as? NSScrollView }).first?.documentView as? NSTableView else { return }
+        let selectedRow = tableView.selectedRow
+        guard selectedRow >= 0 else { return }
+
+        let ignoredApps = IgnoredAppsManager.shared.getAllIgnored()
+        guard selectedRow < ignoredApps.count else { return }
+
+        let pathToRemove = ignoredApps[selectedRow]
+        IgnoredAppsManager.shared.unignore(path: pathToRemove)
+        refreshIgnoredAppsTable()
+    }
+
+    private func refreshIgnoredAppsTable() {
+        guard let tableView = advancedTab?.subviews.compactMap({ $0 as? NSScrollView }).first?.documentView as? NSTableView else { return }
+        tableView.reloadData()
+
+        // Update empty label
+        if let emptyLabel = advancedTab?.subviews.first(where: { $0.identifier?.rawValue == "emptyLabel" }) as? NSTextField {
+            emptyLabel.isHidden = !IgnoredAppsManager.shared.getAllIgnored().isEmpty
+        }
+    }
+
     // MARK: - About Tab
 
     private func createAboutTab() -> NSView {
@@ -471,6 +577,12 @@ final class SettingsWindow: NSWindow {
         clipboardItem.label = L("settings.tab.clipboard")
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
+
+        advancedTab = createAdvancedTab()
+        let advancedItem = NSTabViewItem(identifier: "advanced")
+        advancedItem.label = L("settings.tab.advanced")
+        advancedItem.view = advancedTab
+        tabView.addTabViewItem(advancedItem)
 
         aboutTab = createAboutTab()
         let aboutItem = NSTabViewItem(identifier: "about")
@@ -635,5 +747,34 @@ final class SettingsWindow: NSWindow {
 
     func selectTab(withIdentifier identifier: String) {
         tabView.selectTabViewItem(withIdentifier: identifier)
+    }
+}
+
+// MARK: - NSTableViewDelegate / NSTableViewDataSource
+
+extension SettingsWindow: NSTableViewDelegate, NSTableViewDataSource {
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        if tableView.identifier?.rawValue == "ignoredAppsTable" {
+            return IgnoredAppsManager.shared.getAllIgnored().count
+        }
+        return 0
+    }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        if tableView.identifier?.rawValue == "ignoredAppsTable" {
+            let ignoredApps = IgnoredAppsManager.shared.getAllIgnored()
+            guard row < ignoredApps.count else { return nil }
+
+            let path = ignoredApps[row]
+            let name = IgnoredAppsManager.shared.appName(from: path)
+
+            let cellIdentifier = NSUserInterfaceItemIdentifier("appCell")
+            let cell = tableView.makeView(withIdentifier: cellIdentifier, owner: self) as? NSTextField ?? NSTextField(labelWithString: "")
+            cell.identifier = cellIdentifier
+            cell.stringValue = name
+            cell.toolTip = path
+            return cell
+        }
+        return nil
     }
 }

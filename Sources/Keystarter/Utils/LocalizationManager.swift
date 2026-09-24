@@ -61,6 +61,7 @@ final class LocalizationManager {
             "settings.title": "Keystarter Settings",
             "settings.tab.general": "General",
             "settings.tab.clipboard": "Clipboard",
+            "settings.tab.advanced": "Advanced",
             "settings.tab.about": "About",
 
             // General Tab
@@ -109,6 +110,13 @@ final class LocalizationManager {
             "settings.about.version": "Version %@",
             "settings.about.copyright": "© 2026 Jia Liu. All rights reserved.",
 
+            // Advanced Tab
+            "settings.advanced.ignoredApps": "Ignored Apps:",
+            "settings.advanced.ignoredApps.empty": "No ignored apps",
+            "settings.advanced.ignoredApps.add": "Add...",
+            "settings.advanced.ignoredApps.remove": "Remove",
+            "settings.advanced.ignoredApps.addTitle": "Select App to Ignore",
+
             // Launcher Window
             "launcher.search.placeholder": "Search apps, files...",
             "launcher.grid.recent": "Recent",
@@ -143,6 +151,7 @@ final class LocalizationManager {
             "settings.title": "Keystarter 设置",
             "settings.tab.general": "通用",
             "settings.tab.clipboard": "剪切板",
+            "settings.tab.advanced": "高级",
             "settings.tab.about": "关于",
 
             // General Tab
@@ -191,6 +200,13 @@ final class LocalizationManager {
             "settings.about.version": "版本 %@",
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有权利。",
 
+            // Advanced Tab
+            "settings.advanced.ignoredApps": "忽略的应用：",
+            "settings.advanced.ignoredApps.empty": "没有忽略的应用",
+            "settings.advanced.ignoredApps.add": "添加...",
+            "settings.advanced.ignoredApps.remove": "移除",
+            "settings.advanced.ignoredApps.addTitle": "选择要忽略的应用",
+
             // Launcher Window
             "launcher.search.placeholder": "搜索应用、文件...",
             "launcher.grid.recent": "最近使用",
@@ -225,6 +241,7 @@ final class LocalizationManager {
             "settings.title": "Keystarter 設定",
             "settings.tab.general": "一般",
             "settings.tab.clipboard": "剪貼簿",
+            "settings.tab.advanced": "進階",
             "settings.tab.about": "關於",
 
             // General Tab
@@ -272,6 +289,13 @@ final class LocalizationManager {
             // About Tab
             "settings.about.version": "版本 %@",
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有權利。",
+
+            // Advanced Tab
+            "settings.advanced.ignoredApps": "忽略的應用：",
+            "settings.advanced.ignoredApps.empty": "沒有忽略的應用",
+            "settings.advanced.ignoredApps.add": "新增...",
+            "settings.advanced.ignoredApps.remove": "移除",
+            "settings.advanced.ignoredApps.addTitle": "選擇要忽略的應用",
 
             // Launcher Window
             "launcher.search.placeholder": "搜尋應用、檔案...",
