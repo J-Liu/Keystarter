@@ -8,6 +8,9 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: macos-latest
@@ -15,6 +18,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Cache Swift packages
       uses: actions/cache@v4
@@ -31,6 +36,11 @@ jobs:
         chmod +x build.sh
         ./build.sh
 
+    - name: Create ZIP for Sparkle
+      run: |
+        VERSION="${GITHUB_REF_NAME#v}"
+        zip -r "Keystarter-${VERSION}.zip" Keystarter.app
+
     - name: Create DMG
       run: |
         APP_NAME="Keystarter"
@@ -42,11 +52,22 @@ jobs:
         hdiutil convert "${TEMP_DMG}" -format UDZO -o "${DMG_NAME}"
         rm "${TEMP_DMG}"
 
-        echo "DMG created at ${DMG_NAME}"
-
-    - name: Create ZIP for Sparkle
+    - name: Sign update
+      if: startsWith(github.ref, 'refs/tags/')
+      id: sign
       run: |
-        zip -r "Keystarter-${GITHUB_REF_NAME#v}.zip" Keystarter.app
+        VERSION="${GITHUB_REF_NAME#v}"
+        ZIP="Keystarter-${VERSION}.zip"
+
+        echo "${{ secrets.SPARKLE_PRIVATE_KEY }}" > /tmp/sparkle_key.txt
+        SIGNATURE=$(./.build/artifacts/sparkle/Sparkle/bin/sign_update "$ZIP" --ed-key-file /tmp/sparkle_key.txt)
+        rm /tmp/sparkle_key.txt
+
+        LENGTH=$(stat -f%z "$ZIP")
+
+        echo "signature=$SIGNATURE" >> "$GITHUB_OUTPUT"
+        echo "length=$LENGTH" >> "$GITHUB_OUTPUT"
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
     - name: Upload app bundle
       uses: actions/upload-artifact@v4
@@ -60,7 +81,7 @@ jobs:
         name: Keystarter-dmg
         path: Keystarter-macOS.dmg
 
-    - name: Create Release (on tag)
+    - name: Create Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v2
       with:
@@ -69,3 +90,56 @@ jobs:
           Keystarter-*.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Update appcast
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        VERSION="${{ steps.sign.outputs.version }}"
+        SIGNATURE="${{ steps.sign.outputs.signature }}"
+        LENGTH="${{ steps.sign.outputs.length }}"
+        DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
+
+        # Build the new item block
+        NEW_ITEM=$(cat <<EOF
+        <item>
+            <title>Version ${VERSION}</title>
+            <pubDate>${DATE}</pubDate>
+            <sparkle:version>${VERSION}</sparkle:version>
+            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <enclosure
+                url="https://github.com/J-Liu/Keystarter/releases/download/v${VERSION}/Keystarter-${VERSION}.zip"
+                sparkle:edSignature="${SIGNATURE}"
+                length="${LENGTH}"
+                type="application/octet-stream"/>
+        </item>
+        EOF
+        )
+
+        # Insert the new item right after <language>en</language>
+        python3 - <<PYEOF
+        import re
+        path = "docs/appcast.xml"
+        with open(path) as f:
+            content = f.read()
+
+        new_item = """${NEW_ITEM}"""
+
+        # Insert after <language>en</language>
+        content = re.sub(
+            r'(<language>en</language>)',
+            r'\1\n    ' + new_item,
+            content,
+            count=1
+        )
+
+        with open(path, "w") as f:
+            f.write(content)
+        PYEOF
+
+        # Commit and push
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add docs/appcast.xml
+        git commit -m "Update appcast for v${VERSION}"
+        git push

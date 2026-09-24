@@ -86,6 +86,16 @@ final class LocalizationManager {
             "settings.log.choose": "Choose...",
             "settings.permissions": "Check Permissions...",
 
+            // Update Settings
+            "settings.update": "Update:",
+            "settings.update.frequency": "Check for updates:",
+            "settings.update.frequency.everyLaunch": "Every launch",
+            "settings.update.frequency.daily": "Daily",
+            "settings.update.frequency.weekly": "Weekly",
+            "settings.update.frequency.monthly": "Monthly",
+            "settings.update.frequency.never": "Never",
+            "settings.update.checkNow": "Check Now",
+
             // Clipboard Tab
             "settings.clipboard.hotkey": "Hotkey:",
             "settings.clipboard.maxCount": "Max Count:",
@@ -157,6 +167,16 @@ final class LocalizationManager {
             "settings.log.choose": "选择...",
             "settings.permissions": "检查权限...",
 
+            // Update Settings
+            "settings.update": "更新：",
+            "settings.update.frequency": "检查更新：",
+            "settings.update.frequency.everyLaunch": "每次启动",
+            "settings.update.frequency.daily": "每天",
+            "settings.update.frequency.weekly": "每周",
+            "settings.update.frequency.monthly": "每月",
+            "settings.update.frequency.never": "从不",
+            "settings.update.checkNow": "立即检查",
+
             // Clipboard Tab
             "settings.clipboard.hotkey": "快捷键：",
             "settings.clipboard.maxCount": "最大条数：",
@@ -227,6 +247,16 @@ final class LocalizationManager {
             "settings.log.enable": "啟用",
             "settings.log.choose": "選擇...",
             "settings.permissions": "檢查權限...",
+
+            // Update Settings
+            "settings.update": "更新：",
+            "settings.update.frequency": "檢查更新：",
+            "settings.update.frequency.everyLaunch": "每次啟動",
+            "settings.update.frequency.daily": "每天",
+            "settings.update.frequency.weekly": "每週",
+            "settings.update.frequency.monthly": "每月",
+            "settings.update.frequency.never": "從不",
+            "settings.update.checkNow": "立即檢查",
 
             // Clipboard Tab
             "settings.clipboard.hotkey": "快速鍵：",

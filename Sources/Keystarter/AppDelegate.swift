@@ -48,6 +48,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start clipboard manager (has its own database)
         ClipboardManager.shared.start()
 
+        // Start update manager
+        UpdateManager.shared.startUpdater()
+
         // Setup clipboard panel and hotkey
         clipboardPanel = ClipboardPanel()
         clipboardHotkeyManager = HotkeyManager { [weak self] in
@@ -171,12 +174,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func checkForUpdates() {
-        let alert = NSAlert()
-        alert.messageText = "Check for Updates"
-        alert.informativeText = "Auto-update is not configured yet.\nSee docs/SPARKLE_SETUP.md for instructions."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
+        UpdateManager.shared.checkForUpdates()
     }
 
     @objc private func checkPermissionsFromMenu() {

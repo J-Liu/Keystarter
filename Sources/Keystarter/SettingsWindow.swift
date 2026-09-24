@@ -190,6 +190,27 @@ final class SettingsWindow: NSWindow {
 
         y -= rowHeight
 
+        // Row: Update
+        addLabel(L("settings.update.frequency"), to: view, y: y)
+        let updateFrequencyPopup = NSPopUpButton(frame: NSRect(x: controlX, y: y - 4, width: controlWidth, height: 32))
+        for frequency in UpdateManager.CheckFrequency.allCases {
+            updateFrequencyPopup.addItem(withTitle: frequency.displayName)
+        }
+        let currentFrequency = UpdateManager.shared.checkFrequency
+        updateFrequencyPopup.selectItem(withTitle: currentFrequency.displayName)
+        updateFrequencyPopup.target = self
+        updateFrequencyPopup.action = #selector(updateFrequencyChanged(_:))
+        view.addSubview(updateFrequencyPopup)
+
+        let checkNowButton = NSButton(frame: NSRect(x: controlX + controlWidth + 10, y: y - 2, width: 80, height: 28))
+        checkNowButton.title = L("settings.update.checkNow")
+        checkNowButton.bezelStyle = .rounded
+        checkNowButton.target = self
+        checkNowButton.action = #selector(checkForUpdatesNow)
+        view.addSubview(checkNowButton)
+
+        y -= rowHeight
+
         // Row: Log
         addLabel(L("settings.log"), to: view, y: y)
         let enableLogCheckbox = NSButton(checkboxWithTitle: L("settings.log.enable"), target: self, action: #selector(generalLogEnabledChanged(_:)))
@@ -477,6 +498,15 @@ final class SettingsWindow: NSWindow {
         let showDock = sender.state == .on
         UserDefaults.standard.set(showDock, forKey: "showDockIcon")
         (NSApp.delegate as? AppDelegate)?.updateDockIconVisibility()
+    }
+
+    @objc private func updateFrequencyChanged(_ sender: NSPopUpButton) {
+        let frequency = UpdateManager.CheckFrequency.allCases.first { $0.displayName == sender.title } ?? .weekly
+        UpdateManager.shared.checkFrequency = frequency
+    }
+
+    @objc private func checkForUpdatesNow() {
+        UpdateManager.shared.checkForUpdates()
     }
 
     @objc private func checkPermissions() {
