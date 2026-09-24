@@ -357,7 +357,12 @@ final class LauncherWindow: NSWindow {
             }.sorted { $0.key < $1.key }
         } else {
             // Group by frequency (most used)
+            let runningPaths = getRunningAppPaths()
             let sorted = results.sorted { a, b in
+                let aRunning = runningPaths.contains(a.path)
+                let bRunning = runningPaths.contains(b.path)
+                // Running apps first
+                if aRunning != bRunning { return aRunning }
                 let aFreq = LaunchHistory.shared.count(for: a.path)
                 let bFreq = LaunchHistory.shared.count(for: b.path)
                 if aFreq != bFreq { return aFreq > bFreq }
@@ -387,14 +392,6 @@ final class LauncherWindow: NSWindow {
         // Start placing items from top
         var y: CGFloat = contentHeight - 10
         var x: CGFloat = 10
-
-        // All apps section - grouped
-        let allLabel = NSTextField(labelWithString: "All Apps")
-        allLabel.frame = NSRect(x: 10, y: y - 14, width: 100, height: 14)
-        allLabel.font = .systemFont(ofSize: 11, weight: .medium)
-        allLabel.textColor = .secondaryLabelColor
-        gridView.addSubview(allLabel)
-        y -= 18
 
         for (groupName, apps) in groupedApps {
             // Group header
@@ -525,6 +522,10 @@ final class LauncherWindow: NSWindow {
         appResults.sort { a, b in
             let aName = a.name.lowercased()
             let bName = b.name.lowercased()
+            // Running apps boost
+            let runningPaths = getRunningAppPaths()
+            let aRunning = runningPaths.contains(a.path)
+            let bRunning = runningPaths.contains(b.path)
             // Frequency weight
             let aFreq = LaunchHistory.shared.count(for: a.path)
             let bFreq = LaunchHistory.shared.count(for: b.path)
@@ -538,9 +539,10 @@ final class LauncherWindow: NSWindow {
                 .compactMap { $0.first?.lowercased() }.joined()
             let aAcronymMatch = aAcronym.hasPrefix(lowered)
             let bAcronymMatch = bAcronym.hasPrefix(lowered)
-            // Sort: prefix > acronym > frequency > name length
+            // Sort: prefix > acronym > running > frequency > name length
             if aPrefix != bPrefix { return aPrefix }
             if aAcronymMatch != bAcronymMatch { return aAcronymMatch }
+            if aRunning != bRunning { return aRunning }
             if aFreq != bFreq { return aFreq > bFreq }
             return a.name.count < b.name.count
         }
@@ -604,6 +606,18 @@ final class LauncherWindow: NSWindow {
 
         // Debug log
         print("[LauncherWindow] Loaded \(items.count) applications")
+    }
+
+    /// Get paths of currently running applications.
+    private func getRunningAppPaths() -> Set<String> {
+        var paths = Set<String>()
+        let workspace = NSWorkspace.shared
+        for app in workspace.runningApplications {
+            if let url = app.bundleURL {
+                paths.insert(url.path)
+            }
+        }
+        return paths
     }
 
     private func scanDirectoryForApps(at path: String, fileManager: FileManager, items: inout [LaunchItem], seenPaths: inout Set<String>) {

@@ -5,7 +5,7 @@ import AppKit
 
 /// A plugin responds to a trigger keyword and returns results for the launcher.
 protocol Plugin {
-    /// The trigger keyword, e.g. "dict", "tr".
+    /// The trigger keyword, e.g. "dict", "tr". Empty string for direct-match plugins.
     var keyword: String { get }
 
     /// Human-readable description shown in help / settings.
@@ -13,6 +13,17 @@ protocol Plugin {
 
     /// Given the query after the keyword, return a list of results.
     func query(_ input: String) -> [PluginResult]
+
+    /// Check if this plugin should handle the input directly (without keyword).
+    func matchesDirect(_ input: String) -> Bool
+
+    /// Handle direct input (without keyword).
+    func queryDirect(_ input: String) -> [PluginResult]
+}
+
+extension Plugin {
+    func matchesDirect(_ input: String) -> Bool { return false }
+    func queryDirect(_ input: String) -> [PluginResult] { return [] }
 }
 
 /// A single result produced by a plugin.

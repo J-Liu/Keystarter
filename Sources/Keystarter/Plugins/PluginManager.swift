@@ -29,9 +29,16 @@ final class PluginManager {
         let keyword = String(first).lowercased()
         let rest = parts.count > 1 ? String(parts[1]) : ""
 
-        guard let plugin = plugins.first(where: { $0.keyword == keyword }) else {
-            return nil
+        // Try keyword-based plugins first
+        if let plugin = plugins.first(where: { $0.keyword == keyword }) {
+            return plugin.query(rest)
         }
-        return plugin.query(rest)
+
+        // Try direct-match plugins
+        if let plugin = plugins.first(where: { $0.matchesDirect(trimmed) }) {
+            return plugin.queryDirect(trimmed)
+        }
+
+        return nil
     }
 }
