@@ -465,6 +465,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             launcherWindow?.show()
         }
-        return true
+        return false  // We handled it, don't let system do anything else
     }
 }
