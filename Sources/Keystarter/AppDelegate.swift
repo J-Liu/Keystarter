@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupStatusBar()
         setupIndex()
         updateDockIconVisibility()
+        
+        // Start running app monitoring (every hour)
+        startRunningAppMonitoring()
 
         // Create the launcher window (hidden initially)
         launcherWindow = LauncherWindow()
@@ -353,6 +356,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         HotkeyManager.shared.unregisterAll()
         ClipboardManager.shared.stop()
+    }
+    
+    // MARK: - Running App Monitoring
+    
+    private var runningAppTimer: Timer?
+    
+    private func startRunningAppMonitoring() {
+        // Check running apps every hour
+        runningAppTimer = Timer.scheduledTimer(withTimeInterval: 3600, repeats: true) { [weak self] _ in
+            self?.recordRunningApps()
+        }
+        
+        // Also check immediately on launch
+        recordRunningApps()
+    }
+    
+    private func recordRunningApps() {
+        let workspace = NSWorkspace.shared
+        for app in workspace.runningApplications {
+            // Skip our own app only
+            guard app.bundleIdentifier != Bundle.main.bundleIdentifier else { continue }
+            
+            // Only record apps that appear in UI (not background daemons)
+            guard app.activationPolicy == .regular else { continue }
+            
+            // Record the app path to boost its frequency
+            if let url = app.bundleURL {
+                LaunchHistory.shared.record(identifier: url.path)
+            }
+        }
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
