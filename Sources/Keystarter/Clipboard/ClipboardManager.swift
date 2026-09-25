@@ -4,6 +4,10 @@
 import AppKit
 import CommonCrypto
 
+extension Notification.Name {
+    static let clipboardChanged = Notification.Name("clipboardChanged")
+}
+
 /// Monitors clipboard changes and stores history.
 final class ClipboardManager {
 
@@ -82,6 +86,9 @@ final class ClipboardManager {
             let hash = sha256(text)
             let inserted = db.insertClipboard(type: "text", content: text, hash: hash)
             log("Inserted: \(inserted)")
+            if inserted {
+                NotificationCenter.default.post(name: .clipboardChanged, object: nil)
+            }
             return
         }
     }
@@ -95,6 +102,11 @@ final class ClipboardManager {
         let hash = sha256(data)
         let inserted = db.insertClipboard(type: "image", content: path, hash: hash)
         log("Image saved: \(filename), inserted: \(inserted)")
+        if inserted {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .clipboardChanged, object: nil)
+            }
+        }
     }
 
     private func sha256(_ string: String) -> String {

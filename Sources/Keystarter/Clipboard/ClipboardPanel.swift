@@ -18,8 +18,32 @@ final class ClipboardPanel: NSObject {
     private var entries: [ClipboardEntry] = []
     private var previousApp: NSRunningApplication?
 
+    /// Cached entries for instant display
+    private var cachedEntries: [ClipboardEntry] = []
+    private let cacheQueue = DispatchQueue(label: "com.keystarter.clipboard.cache", qos: .utility)
+
     override init() {
         super.init()
+        refreshCache()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(refreshCache),
+            name: .clipboardChanged,
+            object: nil
+        )
+    }
+
+    @objc private func refreshCache() {
+        cacheQueue.async { [weak self] in
+            let maxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount")
+            let limit = maxCount > 0 ? maxCount : 500
+            let entries = ClipboardManager.shared.db.getClipboard(limit: limit).map {
+                ClipboardEntry(id: $0.id, type: $0.type, content: $0.content, createdAt: $0.createdAt)
+            }
+            DispatchQueue.main.async {
+                self?.cachedEntries = entries
+            }
+        }
     }
 
     func toggle() {
@@ -31,7 +55,7 @@ final class ClipboardPanel: NSObject {
     }
 
     func show() {
-        loadEntries()
+        entries = cachedEntries
         buildMenu()
 
         previousApp = NSWorkspace.shared.frontmostApplication
@@ -57,11 +81,7 @@ final class ClipboardPanel: NSObject {
     }
 
     private func loadEntries() {
-        let maxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount")
-        let limit = maxCount > 0 ? maxCount : 500
-        entries = ClipboardManager.shared.db.getClipboard(limit: limit).map {
-            ClipboardEntry(id: $0.id, type: $0.type, content: $0.content, createdAt: $0.createdAt)
-        }
+        entries = cachedEntries
     }
 
     private func buildMenu() {
