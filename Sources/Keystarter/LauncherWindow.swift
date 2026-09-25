@@ -81,7 +81,10 @@ final class LauncherWindow: NSWindow {
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self = self, self.isVisible else { return }
             // Skip if we're handling a Dock click (prevent race condition)
-            guard !self.isHandlingDockClick else { return }
+            guard !self.isHandlingDockClick else {
+                print("[Window] Skipping global monitor - handling Dock click")
+                return
+            }
             let clickPoint = event.locationInWindow
             let windowFrame = self.frame
             // If click is outside window, hide it
@@ -100,7 +103,11 @@ final class LauncherWindow: NSWindow {
                     )
                     return dockArea.contains(clickPoint)
                 }
-                if isOnDock { return }
+                if isOnDock {
+                    print("[Window] Click on Dock, skipping hide")
+                    return
+                }
+                print("[Window] Click outside window, calling hide()")
                 self.hide()  // Use hide() to restore input source
             }
         }
@@ -110,13 +117,13 @@ final class LauncherWindow: NSWindow {
             
             // Esc - close window
             if event.keyCode == 53 {
-                self.orderOut(nil)
+                self.hide()
                 return nil
             }
             
             // Cmd+W - close window
             if event.modifierFlags.contains(.command) && event.keyCode == 13 {
-                self.orderOut(nil)
+                self.hide()
                 return nil
             }
             
@@ -421,6 +428,11 @@ final class LauncherWindow: NSWindow {
         // Save current input source
         if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
             savedInputSource = currentSource
+            let sourceID = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID)
+            let sourceIDString = sourceID != nil ? (Unmanaged<CFString>.fromOpaque(sourceID!).takeUnretainedValue() as String) : "unknown"
+            print("[Input] Saved current input: \(sourceIDString)")
+        } else {
+            print("[Input] No current input source to save")
         }
 
         // Find English input source
@@ -436,6 +448,7 @@ final class LauncherWindow: NSWindow {
             if sourceIDString.contains("com.apple.keylayout.ABC") ||
                sourceIDString.contains("com.apple.keylayout.US") ||
                sourceIDString == "com.apple.keylayout.ABC" {
+                print("[Input] Switching to English: \(sourceIDString)")
                 TISSelectInputSource(source)
                 break
             }
@@ -444,8 +457,14 @@ final class LauncherWindow: NSWindow {
 
     /// Restore previously saved input source
     private func restoreInputSource() {
-        guard let savedSource = savedInputSource else { return }
+        guard let savedSource = savedInputSource else {
+            print("[Input] No saved input source to restore")
+            return
+        }
         savedInputSource = nil
+        let sourceID = TISGetInputSourceProperty(savedSource, kTISPropertyInputSourceID)
+        let sourceIDString = sourceID != nil ? (Unmanaged<CFString>.fromOpaque(sourceID!).takeUnretainedValue() as String) : "unknown"
+        print("[Input] Restoring to: \(sourceIDString)")
         TISSelectInputSource(savedSource)
     }
 
@@ -505,12 +524,11 @@ final class LauncherWindow: NSWindow {
 
     func hide() {
         guard isVisible else { return }
+        print("[Window] hide() called")
         isHandlingDockClick = true
         orderOut(nil)
-        // Restore input source after window is fully hidden
-        DispatchQueue.main.async {
-            self.restoreInputSource()
-        }
+        // Restore input source immediately after hiding
+        restoreInputSource()
         // Clear the flag after a short delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.isHandlingDockClick = false
@@ -544,11 +562,8 @@ final class LauncherWindow: NSWindow {
 
     override func resignKey() {
         super.resignKey()
-        // Restore input source when window loses key status
-        // Use async to ensure it happens after any pending orderOut
-        DispatchQueue.main.async {
-            self.restoreInputSource()
-        }
+        // Don't restore input source here - let hide() handle it
+        // This prevents duplicate calls
     }
 
     override var canBecomeKey: Bool { true }
