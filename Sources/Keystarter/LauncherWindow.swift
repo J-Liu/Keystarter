@@ -33,6 +33,11 @@ final class LauncherWindow: NSWindow {
     /// Saved input source for restoration
     private var savedInputSource: TISInputSource?
 
+    /// Debounce for search
+    private var searchDebounceWorkItem: DispatchWorkItem?
+    private let searchQueue = DispatchQueue(label: "com.keystarter.search", qos: .userInitiated)
+    private var currentSearchId = 0
+
     init() {
         // Initial frame: centered, fixed size
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
@@ -139,11 +144,6 @@ final class LauncherWindow: NSWindow {
         )
 
         loadApplications()
-    }
-
-    @objc private func refreshResults() {
-        // Re-filter to pick up async results
-        filterResults(with: searchField.stringValue)
     }
 
     @objc private func openSettings() {
@@ -519,7 +519,221 @@ final class LauncherWindow: NSWindow {
         // Reset autocomplete mode when user types
         isAutocompleteMode = false
         autocompleteSuggestions = []
-        filterResults(with: searchField.stringValue)
+        scheduleSearch(query: searchField.stringValue)
+    }
+
+    private func scheduleSearch(query: String) {
+        // Cancel previous search
+        searchDebounceWorkItem?.cancel()
+
+        // If empty, update immediately
+        if query.isEmpty {
+            filterResultsAsync(query: query, searchId: 0)
+            return
+        }
+
+        // Debounce: wait 100ms before searching
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.filterResultsAsync(query: query, searchId: 0)
+        }
+        searchDebounceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: workItem)
+    }
+
+    private func filterResultsAsync(query: String, searchId: Int) {
+        currentSearchId += 1
+        let thisSearchId = currentSearchId
+
+        if query.isEmpty {
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.currentSearchId == thisSearchId else { return }
+                self.applyFilterResults(query: query, merged: [])
+            }
+            return
+        }
+
+        // Run search on background queue
+        searchQueue.async { [weak self] in
+            guard let self = self else { return }
+
+            var merged: [LaunchItem] = []
+
+            // 1. Plugin results
+            var nonStockPluginResults: [LaunchItem] = []
+            var stockPluginResults: [LaunchItem] = []
+            if let results = PluginManager.shared.dispatch(query) {
+                let allPluginResults = results.map { result in
+                    LaunchItem(
+                        name: result.title,
+                        path: result.subtitle ?? "",
+                        type: .command,
+                        category: nil,
+                        pluginAction: result.action,
+                        pluginIcon: result.icon,
+                        detailText: result.detailText
+                    )
+                }
+
+                let isStockQuery = query.lowercased().hasPrefix("stock ") ||
+                                  (query.count == 6 && query.allSatisfy { $0.isNumber })
+
+                if isStockQuery {
+                    stockPluginResults = allPluginResults
+                } else {
+                    nonStockPluginResults = allPluginResults
+                }
+            }
+
+            // 2. App filtering
+            let lowered = query.lowercased()
+            var appResults: [LaunchItem] = []
+            appResults = self.results.filter { item in
+                let name = item.name.lowercased()
+                if name.contains(lowered) { return true }
+                let acronym = item.name.components(separatedBy: " ")
+                    .compactMap { $0.first?.lowercased() }
+                    .joined()
+                return acronym.contains(lowered)
+            }
+            appResults.sort { a, b in
+                let aName = a.name.lowercased()
+                let bName = b.name.lowercased()
+                let runningPaths = self.getRunningAppPaths()
+                let aRunning = runningPaths.contains(a.path)
+                let bRunning = runningPaths.contains(b.path)
+                let aFreq = LaunchHistory.shared.count(for: a.path)
+                let bFreq = LaunchHistory.shared.count(for: b.path)
+                let aPrefix = aName.hasPrefix(lowered)
+                let bPrefix = bName.hasPrefix(lowered)
+                let aAcronym = a.name.components(separatedBy: " ")
+                    .compactMap { $0.first?.lowercased() }.joined()
+                let bAcronym = b.name.components(separatedBy: " ")
+                    .compactMap { $0.first?.lowercased() }.joined()
+                let aAcronymMatch = aAcronym.hasPrefix(lowered)
+                let bAcronymMatch = bAcronym.hasPrefix(lowered)
+                if aPrefix != bPrefix { return aPrefix }
+                if aAcronymMatch != bAcronymMatch { return aAcronymMatch }
+                if aRunning != bRunning { return aRunning }
+                if aFreq != bFreq { return aFreq > bFreq }
+                return a.name.count < b.name.count
+            }
+
+            // 3. File search with fuzzy/pinyin
+            var fileResults: [LaunchItem] = []
+            if (NSApp.delegate as? AppDelegate)?.isIndexReady == true,
+               let db = (NSApp.delegate as? AppDelegate)?.indexDB {
+                let files = db.search(query)
+                var fileSet = Set(files.map { $0.path })
+
+                let allFiles = db.getAllFiles(limit: 5000)
+                for file in allFiles {
+                    if fileSet.contains(file.path) { continue }
+
+                    if PinyinConverter.shared.matchesInitials(query: query, text: file.name) ||
+                       PinyinConverter.shared.matchesFullPinyin(query: query, text: file.name) {
+                        fileSet.insert(file.path)
+                        continue
+                    }
+
+                    if FuzzyMatcher.shared.matches(query: query, text: file.name) {
+                        fileSet.insert(file.path)
+                    }
+                }
+
+                let matchedFiles = files + allFiles.filter { fileSet.contains($0.path) && !files.contains(where: { $0.path == $0.path }) }
+                fileResults = matchedFiles.prefix(20).map { file in
+                    LaunchItem(
+                        name: file.name,
+                        path: file.path,
+                        type: .file,
+                        category: nil
+                    )
+                }
+            }
+
+            // 4. Browser bookmarks
+            var bookmarkResults: [LaunchItem] = []
+            let bookmarkMatches = BrowserBookmarksManager.shared.search(query)
+            bookmarkResults = bookmarkMatches.map { bookmark in
+                LaunchItem(
+                    name: bookmark.title,
+                    path: bookmark.url,
+                    type: .bookmark,
+                    category: nil
+                )
+            }
+
+            // 5. Browser history
+            var historyResults: [LaunchItem] = []
+            let historyMatches = BrowserHistoryManager.shared.search(query, limit: 10)
+            historyResults = historyMatches.map { history in
+                LaunchItem(
+                    name: history.title.isEmpty ? history.url : history.title,
+                    path: history.url,
+                    type: .history,
+                    category: nil
+                )
+            }
+
+            // 6. Clipboard history
+            var clipboardResults: [LaunchItem] = []
+            let clipboardMatches = ClipboardManager.shared.db.search(query, limit: 5)
+            clipboardResults = clipboardMatches.filter { $0.type == "text" }.map { item in
+                let preview = item.content.count > 50 ? String(item.content.prefix(50)) + "..." : item.content
+                return LaunchItem(
+                    name: preview,
+                    path: item.content,
+                    type: .clipboard,
+                    category: nil
+                )
+            }
+
+            // 7. Merge
+            merged += nonStockPluginResults
+            merged += appResults
+            merged += stockPluginResults
+            merged += fileResults
+            merged += bookmarkResults
+            merged += historyResults
+            merged += clipboardResults
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.currentSearchId == thisSearchId else { return }
+                self.applyFilterResults(query: query, merged: merged)
+            }
+        }
+    }
+
+    private func applyFilterResults(query: String, merged: [LaunchItem]) {
+        if query.isEmpty {
+            isSearchMode = false
+            gridScrollView.isHidden = false
+            scrollView.isHidden = true
+            previewScrollView.isHidden = true
+            updateGridView()
+            previewTextView.string = ""
+            return
+        }
+
+        isSearchMode = true
+        gridScrollView.isHidden = true
+        scrollView.isHidden = false
+        previewScrollView.isHidden = false
+
+        filteredResults = merged
+        tableView.reloadData()
+        if !filteredResults.isEmpty {
+            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        }
+        updatePreview()
+    }
+
+    private func filterResults(with query: String) {
+        scheduleSearch(query: query)
+    }
+
+    @objc private func refreshResults() {
+        scheduleSearch(query: searchField.stringValue)
     }
 
     @objc private func tableClicked() {
@@ -713,185 +927,6 @@ final class LauncherWindow: NSWindow {
               let path = view.identifier?.rawValue,
               let app = results.first(where: { $0.path == path }) else { return }
         executeItem(app)
-    }
-
-    // MARK: - Filtering
-
-    private func filterResults(with query: String) {
-        if query.isEmpty {
-            isSearchMode = false
-            gridScrollView.isHidden = false
-            scrollView.isHidden = true
-            previewScrollView.isHidden = true // Hide preview in grid mode
-            updateGridView()
-            previewTextView.string = ""
-            return
-        }
-
-        isSearchMode = true
-        gridScrollView.isHidden = true
-        scrollView.isHidden = false
-        previewScrollView.isHidden = false // Show preview in search mode
-
-        var merged: [LaunchItem] = []
-
-        // 1. Plugin results (if any) - separate stock plugin results
-        var nonStockPluginResults: [LaunchItem] = []
-        var stockPluginResults: [LaunchItem] = []
-        if let results = PluginManager.shared.dispatch(query) {
-            let allPluginResults = results.map { result in
-                LaunchItem(
-                    name: result.title,
-                    path: result.subtitle ?? "",
-                    type: .command,
-                    category: nil,
-                    pluginAction: result.action,
-                    pluginIcon: result.icon,
-                    detailText: result.detailText
-                )
-            }
-            
-            // Check if this is a stock query (starts with "stock" or is a 6-digit code)
-            let isStockQuery = query.lowercased().hasPrefix("stock ") || 
-                              (query.count == 6 && query.allSatisfy { $0.isNumber })
-            
-            if isStockQuery {
-                stockPluginResults = allPluginResults
-            } else {
-                nonStockPluginResults = allPluginResults
-            }
-        }
-
-        // 2. App filtering (always runs)
-        let lowered = query.lowercased()
-        var appResults: [LaunchItem] = []
-        appResults = results.filter { item in
-            let name = item.name.lowercased()
-            // Direct match: contains
-            if name.contains(lowered) { return true }
-            // Acronym match: "gc" matches "Google Chrome"
-            let acronym = item.name.components(separatedBy: " ")
-                .compactMap { $0.first?.lowercased() }
-                .joined()
-            return acronym.contains(lowered)
-        }
-        appResults.sort { a, b in
-            let aName = a.name.lowercased()
-            let bName = b.name.lowercased()
-            // Running apps boost
-            let runningPaths = getRunningAppPaths()
-            let aRunning = runningPaths.contains(a.path)
-            let bRunning = runningPaths.contains(b.path)
-            // Frequency weight
-            let aFreq = LaunchHistory.shared.count(for: a.path)
-            let bFreq = LaunchHistory.shared.count(for: b.path)
-            // Prefix match
-            let aPrefix = aName.hasPrefix(lowered)
-            let bPrefix = bName.hasPrefix(lowered)
-            // Acronym match
-            let aAcronym = a.name.components(separatedBy: " ")
-                .compactMap { $0.first?.lowercased() }.joined()
-            let bAcronym = b.name.components(separatedBy: " ")
-                .compactMap { $0.first?.lowercased() }.joined()
-            let aAcronymMatch = aAcronym.hasPrefix(lowered)
-            let bAcronymMatch = bAcronym.hasPrefix(lowered)
-            // Sort: prefix > acronym > running > frequency > name length
-            if aPrefix != bPrefix { return aPrefix }
-            if aAcronymMatch != bAcronymMatch { return aAcronymMatch }
-            if aRunning != bRunning { return aRunning }
-            if aFreq != bFreq { return aFreq > bFreq }
-            return a.name.count < b.name.count
-        }
-
-        var fileResults: [LaunchItem] = []
-        if (NSApp.delegate as? AppDelegate)?.isIndexReady == true,
-           let db = (NSApp.delegate as? AppDelegate)?.indexDB {
-            // Use FTS for direct matches
-            let files = db.search(query)
-            var fileSet = Set(files.map { $0.path })
-
-            // Add pinyin and fuzzy matches
-            let allFiles = db.getAllFiles(limit: 5000)
-            for file in allFiles {
-                if fileSet.contains(file.path) { continue }
-
-                // Pinyin matching (for Chinese filenames)
-                if PinyinConverter.shared.matchesInitials(query: query, text: file.name) ||
-                   PinyinConverter.shared.matchesFullPinyin(query: query, text: file.name) {
-                    fileSet.insert(file.path)
-                    continue
-                }
-
-                // Fuzzy matching (e.g., "rdme" -> "readme.md")
-                if FuzzyMatcher.shared.matches(query: query, text: file.name) {
-                    fileSet.insert(file.path)
-                }
-            }
-
-            // Re-query to get sorted results, or build results from our set
-            let matchedFiles = files + allFiles.filter { fileSet.contains($0.path) && !files.contains(where: { $0.path == $0.path }) }
-            fileResults = matchedFiles.prefix(20).map { file in
-                LaunchItem(
-                    name: file.name,
-                    path: file.path,
-                    type: .file,
-                    category: nil
-                )
-            }
-        }
-
-        // 4. Browser bookmarks
-        var bookmarkResults: [LaunchItem] = []
-        let bookmarkMatches = BrowserBookmarksManager.shared.search(query)
-        bookmarkResults = bookmarkMatches.map { bookmark in
-            LaunchItem(
-                name: bookmark.title,
-                path: bookmark.url,
-                type: .bookmark,
-                category: nil
-            )
-        }
-
-        // 5. Browser history
-        var historyResults: [LaunchItem] = []
-        let historyMatches = BrowserHistoryManager.shared.search(query, limit: 10)
-        historyResults = historyMatches.map { history in
-            LaunchItem(
-                name: history.title.isEmpty ? history.url : history.title,
-                path: history.url,
-                type: .history,
-                category: nil
-            )
-        }
-
-        // 6. Clipboard history
-        var clipboardResults: [LaunchItem] = []
-        let clipboardMatches = ClipboardManager.shared.db.search(query, limit: 5)
-        clipboardResults = clipboardMatches.filter { $0.type == "text" }.map { item in
-            let preview = item.content.count > 50 ? String(item.content.prefix(50)) + "..." : item.content
-            return LaunchItem(
-                name: preview,
-                path: item.content,
-                type: .clipboard,
-                category: nil
-            )
-        }
-
-        // 7. Merge: non-stock plugins first, then apps, stock plugins, files, bookmarks, history, clipboard
-        merged += nonStockPluginResults
-        merged += appResults
-        merged += stockPluginResults
-        merged += fileResults
-        merged += bookmarkResults
-        merged += historyResults
-        merged += clipboardResults
-
-        filteredResults = merged
-        tableView.reloadData()
-        if !filteredResults.isEmpty {
-            tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-        }
-        updatePreview()
     }
 
     // MARK: - Load Applications
