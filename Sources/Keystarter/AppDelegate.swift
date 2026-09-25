@@ -332,9 +332,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             let scanner = IndexScanner(db: db)
             let roots = [
-                NSHomeDirectory() + "/Documents",
                 NSHomeDirectory() + "/Desktop",
-                NSHomeDirectory() + "/Downloads"
+                NSHomeDirectory() + "/Documents"
             ]
             print("[Index] Starting scan...")
             scanner.scan(roots: roots)

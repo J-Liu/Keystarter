@@ -13,7 +13,7 @@ final class IndexScanner {
     private let ignoredDirs: Set<String> = [
         "node_modules", "target", ".venv", "venv", "env",
         "__pycache__", ".git", ".pytest_cache", ".mypy_cache",
-        ".ruff_cache", "dist", "build", ".next", ".nuxt",
+        ".ruff_cache", "dist", "build", ".build", ".next", ".nuxt",
         "DerivedData", "Pods", "Carthage", ".Trash",
         "Library"
     ]

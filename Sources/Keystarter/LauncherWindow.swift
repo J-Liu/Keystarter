@@ -787,7 +787,8 @@ final class LauncherWindow: NSWindow {
         }
 
         var fileResults: [LaunchItem] = []
-        if let db = (NSApp.delegate as? AppDelegate)?.indexDB {
+        if (NSApp.delegate as? AppDelegate)?.isIndexReady == true,
+           let db = (NSApp.delegate as? AppDelegate)?.indexDB {
             let files = db.search(query)
             fileResults = files.map { file in
                 LaunchItem(
