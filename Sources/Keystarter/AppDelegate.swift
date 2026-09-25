@@ -460,11 +460,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if flag {
-            // Window is visible, hide it
+        if launcherWindow?.isVisible == true {
             launcherWindow?.hide()
         } else {
-            // Window is hidden, show it
             launcherWindow?.show()
         }
         return true
