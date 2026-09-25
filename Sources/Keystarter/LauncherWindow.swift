@@ -39,7 +39,7 @@ final class LauncherWindow: NSWindow {
     private var currentSearchId = 0
 
     /// Flag to prevent global click from interfering with Dock click
-    private var isHandlingDockClick = false
+    var isHandlingDockClick = false
 
     /// Cached running app paths for faster sorting
     private var cachedRunningAppPaths: Set<String> = []
@@ -89,24 +89,6 @@ final class LauncherWindow: NSWindow {
             let windowFrame = self.frame
             // If click is outside window, hide it
             if !windowFrame.contains(clickPoint) {
-                // Check if click is on Dock (bottom of screen)
-                // The Dock typically occupies the bottom ~100 pixels of a screen
-                // If so, skip hiding - let applicationShouldHandleReopen handle it
-                let isOnDock = NSScreen.screens.contains { screen in
-                    let screenFrame = screen.frame
-                    // Dock is at the bottom of screen, typically 60-100 pixels
-                    let dockArea = NSRect(
-                        x: screenFrame.minX,
-                        y: screenFrame.minY,
-                        width: screenFrame.width,
-                        height: screen.visibleFrame.minY - screenFrame.minY
-                    )
-                    return dockArea.contains(clickPoint)
-                }
-                if isOnDock {
-                    print("[Window] Click on Dock, skipping hide")
-                    return
-                }
                 print("[Window] Click outside window, calling hide()")
                 self.hide()  // Use hide() to restore input source
             }

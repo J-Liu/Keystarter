@@ -460,6 +460,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // If hide() was just called from global monitor (clicking our Dock icon),
+        // don't re-open the window
+        if launcherWindow?.isHandlingDockClick == true {
+            return false
+        }
+        
         if launcherWindow?.isVisible == true {
             launcherWindow?.hide()
         } else {
