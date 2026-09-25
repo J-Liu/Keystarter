@@ -127,7 +127,8 @@ final class IndexWatcher {
                 if fm.fileExists(atPath: path, isDirectory: &isDir) {
                     let name = (path as NSString).lastPathComponent
                     if !name.hasPrefix(".") {
-                        db.upsert(path: path, name: name, isDir: isDir.boolValue)
+                        let modifiedAt = (try? fm.attributesOfItem(atPath: path)[.modificationDate] as? Date)
+                        db.upsert(path: path, name: name, isDir: isDir.boolValue, modifiedAt: modifiedAt)
                     }
                 }
             }

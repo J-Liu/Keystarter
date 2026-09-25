@@ -58,7 +58,8 @@ final class IndexDatabase {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT NOT NULL UNIQUE,
             name TEXT NOT NULL,
-            is_dir INTEGER NOT NULL DEFAULT 0
+            is_dir INTEGER NOT NULL DEFAULT 0,
+            modified_at INTEGER
         );
         CREATE VIRTUAL TABLE IF NOT EXISTS files_fts USING fts5(
             name,
@@ -84,15 +85,20 @@ final class IndexDatabase {
     }
 
     /// Insert or replace a file entry.
-    func upsert(path: String, name: String, isDir: Bool) {
+    func upsert(path: String, name: String, isDir: Bool, modifiedAt: Date? = nil) {
         lock.lock()
         defer { lock.unlock() }
-        let sql = "INSERT OR REPLACE INTO files (path, name, is_dir) VALUES (?, ?, ?);"
+        let sql = "INSERT OR REPLACE INTO files (path, name, is_dir, modified_at) VALUES (?, ?, ?, ?);"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
         sqlite3_bind_text(stmt, 1, (path as NSString).utf8String, -1, nil)
         sqlite3_bind_text(stmt, 2, (name as NSString).utf8String, -1, nil)
         sqlite3_bind_int(stmt, 3, isDir ? 1 : 0)
+        if let date = modifiedAt {
+            sqlite3_bind_int64(stmt, 4, Int64(date.timeIntervalSince1970))
+        } else {
+            sqlite3_bind_null(stmt, 4)
+        }
         sqlite3_step(stmt)
         sqlite3_finalize(stmt)
     }
@@ -116,35 +122,73 @@ final class IndexDatabase {
         sqlite3_finalize(stmt)
     }
 
-    /// Search by name using FTS5.
-    func search(_ query: String, limit: Int = 50) -> [(path: String, name: String, isDir: Bool)] {
+    /// Search by name using FTS5 with ranking.
+    func search(_ query: String, limit: Int = 20) -> [(path: String, name: String, isDir: Bool)] {
         lock.lock()
         defer { lock.unlock() }
         guard !query.isEmpty else { return [] }
+        
+        // Get all matching files
         let sql = """
-        SELECT f.path, f.name, f.is_dir
+        SELECT f.path, f.name, f.is_dir, f.modified_at
         FROM files_fts fts
         JOIN files f ON f.id = fts.rowid
-        WHERE files_fts MATCH ?
-        LIMIT ?;
+        WHERE files_fts MATCH ?;
         """
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
 
         // FTS5 prefix match: "key*"
-        let matchQuery = query + "*"
+        let matchQuery = query.lowercased() + "*"
         sqlite3_bind_text(stmt, 1, (matchQuery as NSString).utf8String, -1, nil)
-        sqlite3_bind_int(stmt, 2, Int32(limit))
 
-        var results: [(String, String, Bool)] = []
+        var results: [(path: String, name: String, isDir: Bool, score: Double)] = []
+        let queryLower = query.lowercased()
+        
         while sqlite3_step(stmt) == SQLITE_ROW {
             let path = String(cString: sqlite3_column_text(stmt, 0))
             let name = String(cString: sqlite3_column_text(stmt, 1))
             let isDir = sqlite3_column_int(stmt, 2) == 1
-            results.append((path, name, isDir))
+            let modifiedAt: Date?
+            if sqlite3_column_type(stmt, 3) != SQLITE_NULL {
+                modifiedAt = Date(timeIntervalSince1970: Double(sqlite3_column_int64(stmt, 3)))
+            } else {
+                modifiedAt = nil
+            }
+            
+            // Calculate score
+            var score = 0.0
+            let nameLower = name.lowercased()
+            
+            // Prefix match gets higher score
+            if nameLower.hasPrefix(queryLower) {
+                score += 100
+            } else if nameLower.contains(queryLower) {
+                score += 50
+            }
+            
+            // Path depth: shallower = higher score
+            let depth = path.split(separator: "/").count
+            score += Double(max(0, 20 - depth))
+            
+            // Recent modification
+            if let modifiedAt = modifiedAt {
+                let daysSinceMod = Date().timeIntervalSince(modifiedAt) / 86400
+                score += max(0, 30 - daysSinceMod)
+            }
+            
+            // Usage frequency from LaunchHistory
+            let usageCount = LaunchHistory.shared.count(for: path)
+            score += Double(usageCount) * 2
+            
+            results.append((path: path, name: name, isDir: isDir, score: score))
         }
         sqlite3_finalize(stmt)
-        return results
+        
+        // Sort by score and limit
+        return results.sorted { $0.score > $1.score }
+            .prefix(limit)
+            .map { ($0.path, $0.name, $0.isDir) }
     }
 
     func beginTransaction() {

@@ -50,10 +50,15 @@ final class IndexScanner {
             if isDir.boolValue {
                 // Skip ignored directories
                 if ignoredDirs.contains(name) { continue }
-                db.upsert(path: fullPath, name: name, isDir: true)
+                
+                // Get directory modification time
+                let modifiedAt = (try? fm.attributesOfItem(atPath: fullPath)[.modificationDate] as? Date)
+                db.upsert(path: fullPath, name: name, isDir: true, modifiedAt: modifiedAt)
                 scanDirectory(fullPath, depth: depth + 1)
             } else {
-                db.upsert(path: fullPath, name: name, isDir: false)
+                // Get file modification time
+                let modifiedAt = (try? fm.attributesOfItem(atPath: fullPath)[.modificationDate] as? Date)
+                db.upsert(path: fullPath, name: name, isDir: false, modifiedAt: modifiedAt)
             }
         }
     }

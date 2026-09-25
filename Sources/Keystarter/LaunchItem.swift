@@ -47,6 +47,7 @@ struct LaunchItem {
         }
         switch type {
         case .application, .file:
+            LaunchHistory.shared.record(identifier: path)
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
         case .command:
             break
