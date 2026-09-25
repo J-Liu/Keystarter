@@ -138,19 +138,24 @@ final class StatusBarController {
     }
 
     @objc private func checkUpdates() {
-        UpdateManager.shared.checkForUpdates()
+        (NSApp.delegate as? AppDelegate)?.hideLauncher()  // Hide launcher first
+        DispatchQueue.main.async {
+            UpdateManager.shared.checkForUpdates()
+        }
     }
 
     @objc private func checkPermissions() {
+        (NSApp.delegate as? AppDelegate)?.hideLauncher()  // Hide launcher first
+        
         let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
 
         if !hasAccessibility {
-            // 没有权限，直接弹系统对话框
+            // No permission, show system dialog
             _ = AXIsProcessTrustedWithOptions([
                 kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
             ] as CFDictionary)
         } else {
-            // 有权限，显示权限状态界面
+            // Has permission, show permission status
             showPermissionsStatus()
         }
     }
@@ -162,10 +167,10 @@ final class StatusBarController {
         alert.alertStyle = .informational
         alert.addButton(withTitle: L("permissions.status.ok"))
 
-        // 创建自定义视图显示权限列表
+        // Create custom view to show permission list
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
 
-        // Accessibility 权限
+        // Accessibility permission
         let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 45, width: 20, height: 20))
         accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
         containerView.addSubview(accessibilityIcon)
@@ -174,7 +179,7 @@ final class StatusBarController {
         accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
         containerView.addSubview(accessibilityLabel)
 
-        // Input Monitoring 权限
+        // Input Monitoring permission
         let inputIcon = NSImageView(frame: NSRect(x: 10, y: 15, width: 20, height: 20))
         inputIcon.image = NSImage(named: NSImage.statusAvailableName)
         containerView.addSubview(inputIcon)
@@ -188,10 +193,12 @@ final class StatusBarController {
     }
 
     @objc private func openSettings() {
+        (NSApp.delegate as? AppDelegate)?.hideLauncher()  // Hide launcher first
         (NSApp.delegate as? AppDelegate)?.showSettings()
     }
 
     @objc private func showAbout() {
+        (NSApp.delegate as? AppDelegate)?.hideLauncher()  // Hide launcher first
         let settings = SettingsWindow()
         settings.selectTab(withIdentifier: "about")
         settings.makeKeyAndOrderFront(nil)

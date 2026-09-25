@@ -379,12 +379,6 @@ final class LauncherWindow: NSWindow {
         // Save current input source
         if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
             savedInputSource = currentSource
-            
-            // Debug: log saved input source to file
-            if let sourceID = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID) {
-                let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
-                writeToLog("[SHOW] Saved input source: \(sourceIDString)")
-            }
         }
 
         // Find English input source
@@ -400,42 +394,15 @@ final class LauncherWindow: NSWindow {
             if sourceIDString.contains("com.apple.keylayout.ABC") ||
                sourceIDString.contains("com.apple.keylayout.US") ||
                sourceIDString == "com.apple.keylayout.ABC" {
-                writeToLog("[SHOW] Switching to English: \(sourceIDString)")
                 TISSelectInputSource(source)
                 break
             }
         }
     }
-    
-    private func writeToLog(_ message: String) {
-        let logPath = NSHomeDirectory() + "/keystarter_input_debug.log"
-        let log = "[\(Date())] \(message)\n"
-        guard let data = log.data(using: .utf8) else { return }
-        
-        let fileURL = URL(fileURLWithPath: logPath)
-        if FileManager.default.fileExists(atPath: logPath) {
-            if let fileHandle = try? FileHandle(forWritingTo: fileURL) {
-                fileHandle.write(data)
-                try? fileHandle.close()
-            }
-        } else {
-            try? data.write(to: fileURL)
-        }
-    }
 
     /// Restore previously saved input source
     private func restoreInputSource() {
-        guard let savedSource = savedInputSource else {
-            writeToLog("[HIDE] No saved input source to restore")
-            return 
-        }
-        
-        // Debug: log restoring input source to file
-        if let sourceID = TISGetInputSourceProperty(savedSource, kTISPropertyInputSourceID) {
-            let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
-            writeToLog("[HIDE] Restoring input source: \(sourceIDString)")
-        }
-        
+        guard let savedSource = savedInputSource else { return }
         savedInputSource = nil
         TISSelectInputSource(savedSource)
     }

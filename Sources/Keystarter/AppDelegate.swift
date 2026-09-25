@@ -162,6 +162,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
+            withTitle: "Open Keystarter",
+            action: #selector(openLauncherFromMenu),
+            keyEquivalent: " "
+        )
+        appMenu.addItem(
             withTitle: L("menu.checkUpdates"),
             action: #selector(checkForUpdates),
             keyEquivalent: ""
@@ -188,6 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showAbout() {
+        launcherWindow?.hide()  // Hide launcher first
         if settingsWindow == nil {
             settingsWindow = SettingsWindow()
         }
@@ -197,17 +203,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func showSettingsFromMenu() {
+        launcherWindow?.hide()  // Hide launcher first
         showSettings()
     }
 
+    @objc private func openLauncherFromMenu() {
+        showLauncher()
+    }
+
     @objc private func checkForUpdates() {
+        launcherWindow?.hide()  // Hide launcher first
         UpdateManager.shared.checkForUpdates()
     }
 
     @objc private func checkPermissionsFromMenu() {
-        PermissionManager.shared.requestAllPermissions {
-            // Permissions granted
+        launcherWindow?.hide()  // Hide launcher first
+        
+        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
+
+        if !hasAccessibility {
+            // No permission, show system dialog
+            _ = AXIsProcessTrustedWithOptions([
+                kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+            ] as CFDictionary)
+        } else {
+            // Has permission, show permission status
+            showPermissionsStatus()
         }
+    }
+    
+    private func showPermissionsStatus() {
+        let alert = NSAlert()
+        alert.messageText = L("permissions.status.title")
+        alert.informativeText = L("permissions.status.allGranted")
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: L("permissions.status.ok"))
+
+        // Create custom view to show permission list
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+
+        // Accessibility permission
+        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 45, width: 20, height: 20))
+        accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
+        containerView.addSubview(accessibilityIcon)
+
+        let accessibilityLabel = NSTextField(labelWithString: L("permissions.status.accessibility"))
+        accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
+        containerView.addSubview(accessibilityLabel)
+
+        // Input Monitoring permission
+        let inputIcon = NSImageView(frame: NSRect(x: 10, y: 15, width: 20, height: 20))
+        inputIcon.image = NSImage(named: NSImage.statusAvailableName)
+        containerView.addSubview(inputIcon)
+
+        let inputLabel = NSTextField(labelWithString: L("permissions.status.inputMonitoring"))
+        inputLabel.frame = NSRect(x: 35, y: 15, width: 250, height: 20)
+        containerView.addSubview(inputLabel)
+
+        alert.accessoryView = containerView
+        alert.runModal()
     }
 
     @objc private func closeWindow() {
@@ -220,6 +274,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func showLauncher() {
         launcherWindow?.show()
+    }
+    
+    func hideLauncher() {
+        launcherWindow?.hide()
     }
 
     func showSettings() {
