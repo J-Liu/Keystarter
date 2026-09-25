@@ -743,7 +743,13 @@ final class LauncherWindow: NSWindow {
 
     /// Execute the currently selected result.
     private func executeSelected() {
-        let row = tableView.selectedRow
+        var row = tableView.selectedRow
+
+        // If no selection but results exist, use first item
+        if row < 0 && !filteredResults.isEmpty {
+            row = 0
+        }
+
         guard row >= 0 && row < filteredResults.count else { return }
         let item = filteredResults[row]
         // Record launch history
@@ -1190,8 +1196,9 @@ extension LauncherWindow {
 
     private func showSelectedInFinder() {
         guard isSearchMode, !filteredResults.isEmpty else { return }
-        let row = tableView.selectedRow
-        guard row >= 0 && row < filteredResults.count else { return }
+        var row = tableView.selectedRow
+        if row < 0 { row = 0 }
+        guard row < filteredResults.count else { return }
         let item = filteredResults[row]
         hide()
         item.showInFinder()
