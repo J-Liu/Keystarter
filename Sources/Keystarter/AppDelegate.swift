@@ -330,14 +330,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.indexDB = db
             }
 
-            let scanner = IndexScanner(db: db)
             let roots = [
                 NSHomeDirectory() + "/Desktop",
                 NSHomeDirectory() + "/Documents"
             ]
-            print("[Index] Starting scan...")
-            scanner.scan(roots: roots)
-            print("[Index] Scan complete.")
+            
+            // Only scan if index is empty
+            if !db.hasIndex() {
+                print("[Index] Starting full scan...")
+                let scanner = IndexScanner(db: db)
+                scanner.scan(roots: roots)
+                print("[Index] Full scan complete.")
+            } else {
+                print("[Index] Index already exists, skipping full scan.")
+            }
 
             // Start watching for changes
             let watcher = IndexWatcher(db: db)

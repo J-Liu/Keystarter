@@ -33,6 +33,22 @@ final class IndexDatabase {
         createTables()
         return true
     }
+    
+    /// Check if index has any entries.
+    func hasIndex() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM files LIMIT 1;", -1, &stmt, nil) == SQLITE_OK else {
+            return false
+        }
+        var count: Int = 0
+        if sqlite3_step(stmt) == SQLITE_ROW {
+            count = Int(sqlite3_column_int(stmt, 0))
+        }
+        sqlite3_finalize(stmt)
+        return count > 0
+    }
 
     private func createTables() {
         lock.lock()

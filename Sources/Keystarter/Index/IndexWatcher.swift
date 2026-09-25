@@ -12,9 +12,14 @@ final class IndexWatcher {
     private let ignoredDirs: Set<String> = [
         "node_modules", "target", ".venv", "venv", "env",
         "__pycache__", ".git", ".pytest_cache", ".mypy_cache",
-        ".ruff_cache", "dist", "build", ".next", ".nuxt",
+        ".ruff_cache", "dist", "build", ".build", ".next", ".nuxt",
         "DerivedData", "Pods", "Carthage", ".Trash", "Library"
     ]
+    
+    // Debounce: collect events and process in batch
+    private var pendingEvents: [(path: String, flag: FSEventStreamEventFlags)] = []
+    private var debounceWorkItem: DispatchWorkItem?
+    private let debounceInterval: TimeInterval = 0.5
 
     init(db: IndexDatabase) {
         self.db = db
@@ -74,14 +79,42 @@ final class IndexWatcher {
     }
 
     private func handleEvents(numEvents: Int, paths: UnsafePointer<UnsafePointer<CChar>>, flags: UnsafePointer<FSEventStreamEventFlags>) {
-        for i in 0..<numEvents {
-            let path = String(cString: paths[i])
-            let flag = flags[i]
-
-            // Skip events for ignored directories
-            if shouldIgnore(path: path) { continue }
-
-            // Handle different event types
+        // Collect events with debounce
+        queue.sync {
+            for i in 0..<numEvents {
+                let path = String(cString: paths[i])
+                let flag = flags[i]
+                
+                // Skip events for ignored directories
+                if shouldIgnore(path: path) { continue }
+                
+                pendingEvents.append((path: path, flag: flag))
+            }
+            
+            // Cancel previous debounce work item
+            debounceWorkItem?.cancel()
+            
+            // Schedule batch processing after debounce interval
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.processPendingEvents()
+            }
+            debounceWorkItem = workItem
+            queue.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+        }
+    }
+    
+    private func processPendingEvents() {
+        var events: [(path: String, flag: FSEventStreamEventFlags)] = []
+        queue.sync {
+            events = pendingEvents
+            pendingEvents.removeAll()
+        }
+        
+        // Process batch
+        for event in events {
+            let path = event.path
+            let flag = event.flag
+            
             let isRemoved = (flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemRemoved)) != 0
             let isCreated = (flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemCreated)) != 0
             let isRenamed = (flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemRenamed)) != 0
