@@ -39,7 +39,7 @@ final class LauncherWindow: NSWindow {
     private var currentSearchId = 0
 
     /// Flag to prevent global click from interfering with Dock click
-    private var isShowingFromDock = false
+    private var isHandlingDockClick = false
 
     /// Cached running app paths for faster sorting
     private var cachedRunningAppPaths: Set<String> = []
@@ -80,12 +80,27 @@ final class LauncherWindow: NSWindow {
         // Monitor for clicks outside window to auto-hide
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self = self, self.isVisible else { return }
-            // Skip if we're showing from Dock click (prevent race condition)
-            guard !self.isShowingFromDock else { return }
+            // Skip if we're handling a Dock click (prevent race condition)
+            guard !self.isHandlingDockClick else { return }
             let clickPoint = event.locationInWindow
             let windowFrame = self.frame
             // If click is outside window, hide it
             if !windowFrame.contains(clickPoint) {
+                // Check if click is on Dock (bottom of screen)
+                // The Dock typically occupies the bottom ~100 pixels of a screen
+                // If so, skip hiding - let applicationShouldHandleReopen handle it
+                let isOnDock = NSScreen.screens.contains { screen in
+                    let screenFrame = screen.frame
+                    // Dock is at the bottom of screen, typically 60-100 pixels
+                    let dockArea = NSRect(
+                        x: screenFrame.minX,
+                        y: screenFrame.minY,
+                        width: screenFrame.width,
+                        height: screen.visibleFrame.minY - screenFrame.minY
+                    )
+                    return dockArea.contains(clickPoint)
+                }
+                if isOnDock { return }
                 self.hide()  // Use hide() to restore input source
             }
         }
@@ -447,7 +462,7 @@ final class LauncherWindow: NSWindow {
 
     func show() {
         // Don't switch input source here - wait until window has focus
-        isShowingFromDock = true
+        isHandlingDockClick = true
 
         // Reset search
         searchField.stringValue = ""
@@ -476,15 +491,29 @@ final class LauncherWindow: NSWindow {
         NSApp.activate(ignoringOtherApps: true)
         makeFirstResponder(searchField)
 
-        // Clear the Dock click flag after a short delay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.isShowingFromDock = false
+        // Clear the flag after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.isHandlingDockClick = false
         }
 
         // Switch to English input AFTER window has focus
         // Use async to ensure focus is fully transferred
         DispatchQueue.main.async {
             self.switchToEnglishInput()
+        }
+    }
+
+    func hide() {
+        guard isVisible else { return }
+        isHandlingDockClick = true
+        orderOut(nil)
+        // Restore input source after window is fully hidden
+        DispatchQueue.main.async {
+            self.restoreInputSource()
+        }
+        // Clear the flag after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.isHandlingDockClick = false
         }
     }
 
@@ -509,15 +538,6 @@ final class LauncherWindow: NSWindow {
         let y = screenFrame.minY + (screenFrame.height - height) / 2
 
         setFrameOrigin(NSPoint(x: x, y: y))
-    }
-
-    func hide() {
-        guard isVisible else { return }
-        orderOut(nil)
-        // Restore input source after window is fully hidden
-        DispatchQueue.main.async {
-            self.restoreInputSource()
-        }
     }
 
     // MARK: - Focus Handling
