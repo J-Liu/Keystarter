@@ -58,6 +58,18 @@ final class LauncherWindow: NSWindow {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         setupUI()
+
+        // Monitor for clicks outside window to auto-hide
+        NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            guard let self = self, self.isVisible else { return }
+            let clickPoint = event.locationInWindow
+            let windowFrame = self.frame
+            // If click is outside window, hide it
+            if !windowFrame.contains(clickPoint) {
+                self.orderOut(nil)
+            }
+        }
+
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isVisible else { return event }
             

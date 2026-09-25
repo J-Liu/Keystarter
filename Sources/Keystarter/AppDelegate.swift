@@ -416,16 +416,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     
     private func recordRunningApps() {
         let workspace = NSWorkspace.shared
+        let fileManager = FileManager.default
+
         for app in workspace.runningApplications {
             // Skip our own app only
             guard app.bundleIdentifier != Bundle.main.bundleIdentifier else { continue }
-            
+
             // Only record apps that appear in UI (not background daemons)
             guard app.activationPolicy == .regular else { continue }
-            
+
             // Record the app path to boost its frequency
             if let url = app.bundleURL {
-                LaunchHistory.shared.record(identifier: url.path)
+                var pathsToRecord: [String] = []
+                pathsToRecord.append(url.path)
+
+                // Also record common symlink locations
+                let appName = url.lastPathComponent
+
+                // Check /Applications
+                let appPath = "/Applications/\(appName)"
+                if fileManager.fileExists(atPath: appPath) {
+                    pathsToRecord.append(appPath)
+                }
+
+                // Check ~/Applications
+                let homeAppPath = NSHomeDirectory() + "/Applications/\(appName)"
+                if fileManager.fileExists(atPath: homeAppPath) {
+                    pathsToRecord.append(homeAppPath)
+                }
+
+                // Check /System/Applications
+                let systemAppPath = "/System/Applications/\(appName)"
+                if fileManager.fileExists(atPath: systemAppPath) {
+                    pathsToRecord.append(systemAppPath)
+                }
+
+                // Record all possible paths
+                for path in pathsToRecord {
+                    LaunchHistory.shared.record(identifier: path)
+                }
             }
         }
     }
