@@ -618,7 +618,10 @@ final class LauncherWindow: NSWindow {
 
         // All apps section - grouped
         for (_, apps) in groupedApps {
-            totalHeight += groupHeaderHeight // group header
+            // Only add group header height if there are multiple groups
+            if groupedApps.count > 1 {
+                totalHeight += groupHeaderHeight // group header
+            }
             let rows = Int(ceil(Double(apps.count) / Double(columns)))
             totalHeight += CGFloat(rows) * (itemHeight + spacing)
         }
@@ -633,13 +636,15 @@ final class LauncherWindow: NSWindow {
         var x: CGFloat = 10
 
         for (groupName, apps) in groupedApps {
-            // Group header
-            let groupLabel = NSTextField(labelWithString: groupName)
-            groupLabel.frame = NSRect(x: 10, y: y - 16, width: 200, height: 16)
-            groupLabel.font = .systemFont(ofSize: 13, weight: .bold)
-            groupLabel.textColor = .labelColor
-            gridView.addSubview(groupLabel)
-            y -= groupHeaderHeight
+            // Group header - skip if only one group (frequency mode)
+            if groupedApps.count > 1 {
+                let groupLabel = NSTextField(labelWithString: groupName)
+                groupLabel.frame = NSRect(x: 10, y: y - 16, width: 200, height: 16)
+                groupLabel.font = .systemFont(ofSize: 13, weight: .bold)
+                groupLabel.textColor = .labelColor
+                gridView.addSubview(groupLabel)
+                y -= groupHeaderHeight
+            }
 
             x = 10
             var index = 0
