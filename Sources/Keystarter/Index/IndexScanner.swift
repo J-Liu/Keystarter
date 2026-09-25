@@ -18,6 +18,14 @@ final class IndexScanner {
         "Library"
     ]
 
+    /// File extensions to index content for.
+    private let contentExtensions: Set<String> = [
+        "md", "txt", "swift", "py", "js", "json"
+    ]
+
+    /// Max file size for content indexing (100KB).
+    private let maxContentFileSize: UInt64 = 100 * 1024
+
     init(db: IndexDatabase) {
         self.db = db
     }
@@ -26,14 +34,14 @@ final class IndexScanner {
     func scan(roots: [String]) {
         db.clear()
         db.beginTransaction()
+        let indexContent = UserDefaults.standard.bool(forKey: "index.fileContent")
         for root in roots {
-            // scanDirectory(root)
-            scanDirectory(root, depth: 0)
+            scanDirectory(root, depth: 0, indexContent: indexContent)
         }
         db.commitTransaction()
     }
 
-    private func scanDirectory(_ path: String, depth: Int = 0) {
+    private func scanDirectory(_ path: String, depth: Int = 0, indexContent: Bool) {
         if depth > 2 { return }
 
         let fm = FileManager.default
@@ -50,16 +58,36 @@ final class IndexScanner {
             if isDir.boolValue {
                 // Skip ignored directories
                 if ignoredDirs.contains(name) { continue }
-                
+
                 // Get directory modification time
                 let modifiedAt = (try? fm.attributesOfItem(atPath: fullPath)[.modificationDate] as? Date)
                 db.upsert(path: fullPath, name: name, isDir: true, modifiedAt: modifiedAt)
-                scanDirectory(fullPath, depth: depth + 1)
+                scanDirectory(fullPath, depth: depth + 1, indexContent: indexContent)
             } else {
                 // Get file modification time
                 let modifiedAt = (try? fm.attributesOfItem(atPath: fullPath)[.modificationDate] as? Date)
                 db.upsert(path: fullPath, name: name, isDir: false, modifiedAt: modifiedAt)
+
+                // Index file content if enabled
+                if indexContent {
+                    indexFileContent(path: fullPath)
+                }
             }
         }
+    }
+
+    private func indexFileContent(path: String) {
+        let ext = (path as NSString).pathExtension.lowercased()
+        guard contentExtensions.contains(ext) else { return }
+
+        let fm = FileManager.default
+        guard let attrs = try? fm.attributesOfItem(atPath: path),
+              let size = attrs[.size] as? UInt64,
+              size <= maxContentFileSize else { return }
+
+        guard let content = try? String(contentsOfFile: path, encoding: .utf8),
+              !content.isEmpty else { return }
+
+        db.upsertContent(path: path, content: content)
     }
 }

@@ -109,18 +109,23 @@ final class IndexWatcher {
             events = pendingEvents
             pendingEvents.removeAll()
         }
-        
+
+        let indexContent = UserDefaults.standard.bool(forKey: "index.fileContent")
+        let contentExtensions: Set<String> = ["md", "txt", "swift", "py", "js", "json"]
+        let maxContentSize: UInt64 = 100 * 1024
+
         // Process batch
         for event in events {
             let path = event.path
             let flag = event.flag
-            
+
             let isRemoved = (flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemRemoved)) != 0
             let isCreated = (flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemCreated)) != 0
             let isRenamed = (flag & FSEventStreamEventFlags(kFSEventStreamEventFlagItemRenamed)) != 0
 
             if isRemoved {
                 db.delete(path: path)
+                db.deleteContent(path: path)
             } else if isCreated || isRenamed {
                 let fm = FileManager.default
                 var isDir: ObjCBool = false
@@ -129,6 +134,20 @@ final class IndexWatcher {
                     if !name.hasPrefix(".") {
                         let modifiedAt = (try? fm.attributesOfItem(atPath: path)[.modificationDate] as? Date)
                         db.upsert(path: path, name: name, isDir: isDir.boolValue, modifiedAt: modifiedAt)
+
+                        // Index file content if enabled
+                        if indexContent && !isDir.boolValue {
+                            let ext = (path as NSString).pathExtension.lowercased()
+                            if contentExtensions.contains(ext) {
+                                if let attrs = try? fm.attributesOfItem(atPath: path),
+                                   let size = attrs[.size] as? UInt64,
+                                   size <= maxContentSize,
+                                   let content = try? String(contentsOfFile: path, encoding: .utf8),
+                                   !content.isEmpty {
+                                    db.upsertContent(path: path, content: content)
+                                }
+                            }
+                        }
                     }
                 }
             }

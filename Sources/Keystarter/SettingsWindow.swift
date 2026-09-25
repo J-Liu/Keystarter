@@ -209,6 +209,11 @@ final class SettingsWindow: NSWindow {
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
         stack.addArrangedSubview(makeRow(label: L("settings.dockIcon"), control: dockIconCheckbox))
 
+        // Row: File Content Index
+        let contentIndexCheckbox = NSButton(checkboxWithTitle: L("settings.contentIndex.checkbox"), target: self, action: #selector(contentIndexChanged(_:)))
+        contentIndexCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: L("settings.contentIndex"), control: contentIndexCheckbox))
+
         // Row: Update
         let updateFrequencyPopup = NSPopUpButton()
         for frequency in UpdateManager.CheckFrequency.allCases {
@@ -551,6 +556,17 @@ final class SettingsWindow: NSWindow {
         let showDock = sender.state == .on
         UserDefaults.standard.set(showDock, forKey: "showDockIcon")
         (NSApp.delegate as? AppDelegate)?.updateDockIconVisibility()
+    }
+
+    @objc private func contentIndexChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        let wasEnabled = UserDefaults.standard.bool(forKey: "index.fileContent")
+        UserDefaults.standard.set(enabled, forKey: "index.fileContent")
+
+        // Rebuild index if setting changed
+        if enabled != wasEnabled {
+            (NSApp.delegate as? AppDelegate)?.rebuildFileIndex()
+        }
     }
 
     @objc private func updateFrequencyChanged(_ sender: NSPopUpButton) {

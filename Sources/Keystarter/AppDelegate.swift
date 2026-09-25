@@ -358,6 +358,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Rebuild the file index when content indexing setting changes.
+    func rebuildFileIndex() {
+        guard let db = indexDB else { return }
+        isIndexReady = false
+
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let roots = [
+                NSHomeDirectory() + "/Desktop",
+                NSHomeDirectory() + "/Documents"
+            ]
+
+            print("[Index] Rebuilding index...")
+            let scanner = IndexScanner(db: db)
+            scanner.scan(roots: roots)
+            print("[Index] Rebuild complete.")
+
+            DispatchQueue.main.async {
+                self?.isIndexReady = true
+            }
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         HotkeyManager.shared.unregisterAll()
         ClipboardManager.shared.stop()

@@ -73,6 +73,23 @@ final class IndexDatabase {
         CREATE TRIGGER IF NOT EXISTS files_ad AFTER DELETE ON files BEGIN
             INSERT INTO files_fts(files_fts, rowid, name, path) VALUES('delete', old.id, old.name, old.path);
         END;
+        CREATE TABLE IF NOT EXISTS file_contents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT NOT NULL UNIQUE,
+            content TEXT NOT NULL
+        );
+        CREATE VIRTUAL TABLE IF NOT EXISTS file_contents_fts USING fts5(
+            content,
+            path,
+            content='file_contents',
+            content_rowid='id'
+        );
+        CREATE TRIGGER IF NOT EXISTS file_contents_ai AFTER INSERT ON file_contents BEGIN
+            INSERT INTO file_contents_fts(rowid, content, path) VALUES (new.id, new.content, new.path);
+        END;
+        CREATE TRIGGER IF NOT EXISTS file_contents_ad AFTER DELETE ON file_contents BEGIN
+            INSERT INTO file_contents_fts(file_contents_fts, rowid, content, path) VALUES('delete', old.id, old.content, old.path);
+        END;
         CREATE TABLE IF NOT EXISTS clipboard (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             type TEXT NOT NULL,
@@ -108,6 +125,32 @@ final class IndexDatabase {
         lock.lock()
         defer { lock.unlock() }
         sqlite3_exec(db, "DELETE FROM files;", nil, nil, nil)
+        sqlite3_exec(db, "DELETE FROM file_contents;", nil, nil, nil)
+    }
+
+    /// Insert file content for FTS.
+    func upsertContent(path: String, content: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        let sql = "INSERT OR REPLACE INTO file_contents (path, content) VALUES (?, ?);"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        sqlite3_bind_text(stmt, 1, (path as NSString).utf8String, -1, nil)
+        sqlite3_bind_text(stmt, 2, (content as NSString).utf8String, -1, nil)
+        sqlite3_step(stmt)
+        sqlite3_finalize(stmt)
+    }
+
+    /// Delete file content by path.
+    func deleteContent(path: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        let sql = "DELETE FROM file_contents WHERE path = ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return }
+        sqlite3_bind_text(stmt, 1, (path as NSString).utf8String, -1, nil)
+        sqlite3_step(stmt)
+        sqlite3_finalize(stmt)
     }
 
     /// Delete a file entry by path.
@@ -127,24 +170,22 @@ final class IndexDatabase {
         lock.lock()
         defer { lock.unlock() }
         guard !query.isEmpty else { return [] }
-        
-        // Get all matching files
-        let sql = """
+
+        var results: [(path: String, name: String, isDir: Bool, score: Double)] = []
+        let queryLower = query.lowercased()
+        let matchQuery = queryLower + "*"
+
+        // Search filename FTS
+        let filenameSql = """
         SELECT f.path, f.name, f.is_dir, f.modified_at
         FROM files_fts fts
         JOIN files f ON f.id = fts.rowid
         WHERE files_fts MATCH ?;
         """
         var stmt: OpaquePointer?
-        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
-
-        // FTS5 prefix match: "key*"
-        let matchQuery = query.lowercased() + "*"
+        guard sqlite3_prepare_v2(db, filenameSql, -1, &stmt, nil) == SQLITE_OK else { return [] }
         sqlite3_bind_text(stmt, 1, (matchQuery as NSString).utf8String, -1, nil)
 
-        var results: [(path: String, name: String, isDir: Bool, score: Double)] = []
-        let queryLower = query.lowercased()
-        
         while sqlite3_step(stmt) == SQLITE_ROW {
             let path = String(cString: sqlite3_column_text(stmt, 0))
             let name = String(cString: sqlite3_column_text(stmt, 1))
@@ -155,36 +196,76 @@ final class IndexDatabase {
             } else {
                 modifiedAt = nil
             }
-            
-            // Calculate score
+
             var score = 0.0
             let nameLower = name.lowercased()
-            
-            // Prefix match gets higher score
             if nameLower.hasPrefix(queryLower) {
                 score += 100
             } else if nameLower.contains(queryLower) {
                 score += 50
             }
-            
-            // Path depth: shallower = higher score
             let depth = path.split(separator: "/").count
             score += Double(max(0, 20 - depth))
-            
-            // Recent modification
             if let modifiedAt = modifiedAt {
                 let daysSinceMod = Date().timeIntervalSince(modifiedAt) / 86400
                 score += max(0, 30 - daysSinceMod)
             }
-            
-            // Usage frequency from LaunchHistory
             let usageCount = LaunchHistory.shared.count(for: path)
             score += Double(usageCount) * 2
-            
+
             results.append((path: path, name: name, isDir: isDir, score: score))
         }
         sqlite3_finalize(stmt)
-        
+
+        // Search content FTS if enabled
+        let contentEnabled = UserDefaults.standard.bool(forKey: "index.fileContent")
+        if contentEnabled {
+            let contentSql = """
+            SELECT fc.path, f.name, f.is_dir, f.modified_at
+            FROM file_contents_fts fts
+            JOIN file_contents fc ON fc.id = fts.rowid
+            LEFT JOIN files f ON f.path = fc.path
+            WHERE file_contents_fts MATCH ?;
+            """
+            var contentStmt: OpaquePointer?
+            if sqlite3_prepare_v2(db, contentSql, -1, &contentStmt, nil) == SQLITE_OK {
+                sqlite3_bind_text(contentStmt, 1, (matchQuery as NSString).utf8String, -1, nil)
+                while sqlite3_step(contentStmt) == SQLITE_ROW {
+                    let path = String(cString: sqlite3_column_text(contentStmt, 0))
+                    // Skip if already in results
+                    if results.contains(where: { $0.path == path }) { continue }
+
+                    let name: String
+                    if sqlite3_column_type(contentStmt, 1) != SQLITE_NULL {
+                        name = String(cString: sqlite3_column_text(contentStmt, 1))
+                    } else {
+                        name = (path as NSString).lastPathComponent
+                    }
+                    let isDir = sqlite3_column_type(contentStmt, 2) != SQLITE_NULL ? sqlite3_column_int(contentStmt, 2) == 1 : false
+                    let modifiedAt: Date?
+                    if sqlite3_column_type(contentStmt, 3) != SQLITE_NULL {
+                        modifiedAt = Date(timeIntervalSince1970: Double(sqlite3_column_int64(contentStmt, 3)))
+                    } else {
+                        modifiedAt = nil
+                    }
+
+                    // Content matches get lower score than filename matches
+                    var score = 10.0
+                    let depth = path.split(separator: "/").count
+                    score += Double(max(0, 15 - depth))
+                    if let modifiedAt = modifiedAt {
+                        let daysSinceMod = Date().timeIntervalSince(modifiedAt) / 86400
+                        score += max(0, 20 - daysSinceMod)
+                    }
+                    let usageCount = LaunchHistory.shared.count(for: path)
+                    score += Double(usageCount) * 2
+
+                    results.append((path: path, name: name, isDir: isDir, score: score))
+                }
+                sqlite3_finalize(contentStmt)
+            }
+        }
+
         // Sort by score and limit
         return results.sorted { $0.score > $1.score }
             .prefix(limit)
