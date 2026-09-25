@@ -30,19 +30,36 @@ final class IndexScanner {
         self.db = db
     }
 
+    /// Max file count (100k).
+    private let maxFileCount: Int = 100_000
+
+    /// Callback when file count exceeds limit.
+    var onLimitExceeded: ((Int) -> Void)?
+
     /// Full scan of the given roots.
     func scan(roots: [String]) {
         db.clear()
         db.beginTransaction()
         let indexContent = UserDefaults.standard.bool(forKey: "index.fileContent")
+        var totalCount = 0
         for root in roots {
-            scanDirectory(root, depth: 0, indexContent: indexContent)
+            scanDirectory(root, depth: 0, indexContent: indexContent, count: &totalCount)
+            if totalCount > maxFileCount {
+                break
+            }
         }
         db.commitTransaction()
+
+        if totalCount > maxFileCount {
+            DispatchQueue.main.async { [weak self] in
+                self?.onLimitExceeded?(totalCount)
+            }
+        }
     }
 
-    private func scanDirectory(_ path: String, depth: Int = 0, indexContent: Bool) {
+    private func scanDirectory(_ path: String, depth: Int = 0, indexContent: Bool, count: inout Int) {
         if depth > 2 { return }
+        if count > maxFileCount { return }
 
         let fm = FileManager.default
         guard let contents = try? fm.contentsOfDirectory(atPath: path) else { return }
@@ -62,11 +79,13 @@ final class IndexScanner {
                 // Get directory modification time
                 let modifiedAt = (try? fm.attributesOfItem(atPath: fullPath)[.modificationDate] as? Date)
                 db.upsert(path: fullPath, name: name, isDir: true, modifiedAt: modifiedAt)
-                scanDirectory(fullPath, depth: depth + 1, indexContent: indexContent)
+                count += 1
+                scanDirectory(fullPath, depth: depth + 1, indexContent: indexContent, count: &count)
             } else {
                 // Get file modification time
                 let modifiedAt = (try? fm.attributesOfItem(atPath: fullPath)[.modificationDate] as? Date)
                 db.upsert(path: fullPath, name: name, isDir: false, modifiedAt: modifiedAt)
+                count += 1
 
                 // Index file content if enabled
                 if indexContent {

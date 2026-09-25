@@ -146,6 +146,9 @@ final class LocalizationManager {
             "alert.permissions.title": "Accessibility Permission Required",
             "alert.permissions.message": "Keystarter needs Accessibility permission to paste content.",
             "alert.grant": "Grant Permission",
+            "alert.indexLimit.title": "Index File Limit Exceeded",
+            "alert.indexLimit.message": "Found %d files, exceeding the limit of %d. Please narrow your scan scope.",
+            "alert.ok": "OK",
 
             // Permissions Status
             "permissions.status.title": "Permission Status",
@@ -283,6 +286,9 @@ final class LocalizationManager {
             "alert.permissions.title": "需要辅助功能权限",
             "alert.permissions.message": "Keystarter 需要辅助功能权限来粘贴内容。",
             "alert.grant": "授予权限",
+            "alert.indexLimit.title": "索引文件数量超限",
+            "alert.indexLimit.message": "发现 %d 个文件，超过上限 %d。请缩小扫描范围。",
+            "alert.ok": "确定",
 
             // Permissions Status
             "permissions.status.title": "权限状态",
@@ -420,6 +426,9 @@ final class LocalizationManager {
             "alert.permissions.title": "需要輔助功能權限",
             "alert.permissions.message": "Keystarter 需要輔助功能權限來貼上內容。",
             "alert.grant": "授予權限",
+            "alert.indexLimit.title": "索引檔案數量超限",
+            "alert.indexLimit.message": "發現 %d 個檔案，超過上限 %d。請縮小掃描範圍。",
+            "alert.ok": "確定",
 
             // Permissions Status
             "permissions.status.title": "權限狀態",

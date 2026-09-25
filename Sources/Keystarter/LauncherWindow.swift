@@ -789,8 +789,31 @@ final class LauncherWindow: NSWindow {
         var fileResults: [LaunchItem] = []
         if (NSApp.delegate as? AppDelegate)?.isIndexReady == true,
            let db = (NSApp.delegate as? AppDelegate)?.indexDB {
+            // Use FTS for direct matches
             let files = db.search(query)
-            fileResults = files.map { file in
+            var fileSet = Set(files.map { $0.path })
+
+            // Add pinyin and fuzzy matches
+            let allFiles = db.getAllFiles(limit: 5000)
+            for file in allFiles {
+                if fileSet.contains(file.path) { continue }
+
+                // Pinyin matching (for Chinese filenames)
+                if PinyinConverter.shared.matchesInitials(query: query, text: file.name) ||
+                   PinyinConverter.shared.matchesFullPinyin(query: query, text: file.name) {
+                    fileSet.insert(file.path)
+                    continue
+                }
+
+                // Fuzzy matching (e.g., "rdme" -> "readme.md")
+                if FuzzyMatcher.shared.matches(query: query, text: file.name) {
+                    fileSet.insert(file.path)
+                }
+            }
+
+            // Re-query to get sorted results, or build results from our set
+            let matchedFiles = files + allFiles.filter { fileSet.contains($0.path) && !files.contains(where: { $0.path == $0.path }) }
+            fileResults = matchedFiles.prefix(20).map { file in
                 LaunchItem(
                     name: file.name,
                     path: file.path,
@@ -1086,7 +1109,11 @@ extension LauncherWindow {
             hide()
         case 36, 76: // Enter / Return
             if isSearchMode {
-                executeSelected()
+                if event.modifierFlags.contains(.command) {
+                    showSelectedInFinder()
+                } else {
+                    executeSelected()
+                }
             }
         case 125: // Down arrow
             if isSearchMode {
@@ -1107,5 +1134,14 @@ extension LauncherWindow {
         let next = max(0, min(filteredResults.count - 1, current + offset))
         tableView.selectRowIndexes(IndexSet(integer: next), byExtendingSelection: false)
         tableView.scrollRowToVisible(next)
+    }
+
+    private func showSelectedInFinder() {
+        guard isSearchMode, !filteredResults.isEmpty else { return }
+        let row = tableView.selectedRow
+        guard row >= 0 && row < filteredResults.count else { return }
+        let item = filteredResults[row]
+        hide()
+        item.showInFinder()
     }
 }

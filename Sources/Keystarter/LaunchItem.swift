@@ -60,4 +60,18 @@ struct LaunchItem {
             NSPasteboard.general.setString(path, forType: .string)
         }
     }
+
+    /// Show in Finder instead of opening.
+    func showInFinder() {
+        switch type {
+        case .application, .file:
+            NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
+        case .bookmark, .history:
+            if let url = URL(string: path) {
+                NSWorkspace.shared.open(url)
+            }
+        default:
+            break
+        }
+    }
 }

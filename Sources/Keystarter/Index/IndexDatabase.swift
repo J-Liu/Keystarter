@@ -272,6 +272,43 @@ final class IndexDatabase {
             .map { ($0.path, $0.name, $0.isDir) }
     }
 
+    /// Get total file count in index.
+    func fileCount() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, "SELECT COUNT(*) FROM files;", -1, &stmt, nil) == SQLITE_OK else {
+            return 0
+        }
+        var count: Int = 0
+        if sqlite3_step(stmt) == SQLITE_ROW {
+            count = Int(sqlite3_column_int(stmt, 0))
+        }
+        sqlite3_finalize(stmt)
+        return count
+    }
+
+    /// Get all files for fuzzy matching (limited set).
+    func getAllFiles(limit: Int = 10000) -> [(path: String, name: String, isDir: Bool)] {
+        lock.lock()
+        defer { lock.unlock()
+        }
+        let sql = "SELECT path, name, is_dir FROM files LIMIT ?;"
+        var stmt: OpaquePointer?
+        guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return [] }
+        sqlite3_bind_int(stmt, 1, Int32(limit))
+
+        var results: [(String, String, Bool)] = []
+        while sqlite3_step(stmt) == SQLITE_ROW {
+            let path = String(cString: sqlite3_column_text(stmt, 0))
+            let name = String(cString: sqlite3_column_text(stmt, 1))
+            let isDir = sqlite3_column_int(stmt, 2) == 1
+            results.append((path, name, isDir))
+        }
+        sqlite3_finalize(stmt)
+        return results
+    }
+
     func beginTransaction() {
         lock.lock()
         sqlite3_exec(db, "BEGIN;", nil, nil, nil)

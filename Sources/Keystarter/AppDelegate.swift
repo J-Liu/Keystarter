@@ -291,6 +291,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
+    private func showIndexLimitWarning(count: Int) {
+        let alert = NSAlert()
+        alert.messageText = L("alert.indexLimit.title")
+        alert.informativeText = String(format: L("alert.indexLimit.message"), count, 100000)
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L("alert.ok"))
+        alert.runModal()
+    }
+
     func showClipboardSettings() {
         if settingsWindow == nil {
             settingsWindow = SettingsWindow()
@@ -339,6 +348,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if !db.hasIndex() {
                 print("[Index] Starting full scan...")
                 let scanner = IndexScanner(db: db)
+                scanner.onLimitExceeded = { [weak self] count in
+                    self?.showIndexLimitWarning(count: count)
+                }
                 scanner.scan(roots: roots)
                 print("[Index] Full scan complete.")
             } else {
@@ -371,6 +383,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
             print("[Index] Rebuilding index...")
             let scanner = IndexScanner(db: db)
+            scanner.onLimitExceeded = { [weak self] count in
+                self?.showIndexLimitWarning(count: count)
+            }
             scanner.scan(roots: roots)
             print("[Index] Rebuild complete.")
 
