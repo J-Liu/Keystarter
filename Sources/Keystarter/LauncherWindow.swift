@@ -38,6 +38,13 @@ final class LauncherWindow: NSWindow {
     private let searchQueue = DispatchQueue(label: "com.keystarter.search", qos: .userInitiated)
     private var currentSearchId = 0
 
+    /// Flag to prevent global click from interfering with Dock click
+    private var isShowingFromDock = false
+
+    /// Cached running app paths for faster sorting
+    private var cachedRunningAppPaths: Set<String> = []
+    private var runningAppsCacheTimer: Timer?
+
     init() {
         // Initial frame: centered, fixed size
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
@@ -64,14 +71,22 @@ final class LauncherWindow: NSWindow {
 
         setupUI()
 
+        // Cache running apps and update periodically
+        refreshRunningAppsCache()
+        runningAppsCacheTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
+            self?.refreshRunningAppsCache()
+        }
+
         // Monitor for clicks outside window to auto-hide
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self = self, self.isVisible else { return }
+            // Skip if we're showing from Dock click (prevent race condition)
+            guard !self.isShowingFromDock else { return }
             let clickPoint = event.locationInWindow
             let windowFrame = self.frame
             // If click is outside window, hide it
             if !windowFrame.contains(clickPoint) {
-                self.orderOut(nil)
+                self.hide()  // Use hide() to restore input source
             }
         }
 
@@ -432,6 +447,7 @@ final class LauncherWindow: NSWindow {
 
     func show() {
         // Don't switch input source here - wait until window has focus
+        isShowingFromDock = true
 
         // Reset search
         searchField.stringValue = ""
@@ -459,7 +475,12 @@ final class LauncherWindow: NSWindow {
         makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         makeFirstResponder(searchField)
-        
+
+        // Clear the Dock click flag after a short delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.isShowingFromDock = false
+        }
+
         // Switch to English input AFTER window has focus
         // Use async to ensure focus is fully transferred
         DispatchQueue.main.async {
@@ -973,6 +994,10 @@ final class LauncherWindow: NSWindow {
 
     /// Get paths of currently running applications.
     private func getRunningAppPaths() -> Set<String> {
+        return cachedRunningAppPaths
+    }
+
+    private func refreshRunningAppsCache() {
         var paths = Set<String>()
         let workspace = NSWorkspace.shared
         for app in workspace.runningApplications {
@@ -980,7 +1005,7 @@ final class LauncherWindow: NSWindow {
                 paths.insert(url.path)
             }
         }
-        return paths
+        cachedRunningAppPaths = paths
     }
 
     private func scanDirectoryForApps(at path: String, fileManager: FileManager, items: inout [LaunchItem], seenPaths: inout Set<String>) {
