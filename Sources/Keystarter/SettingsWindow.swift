@@ -9,6 +9,7 @@ final class SettingsWindow: NSWindow {
 
     private var tabView: NSTabView!
     private var generalTab: NSView!
+    private var monitorTab: NSView!
     private var clipboardTab: NSView!
     private var advancedTab: NSView!
     private var aboutTab: NSView!
@@ -52,6 +53,12 @@ final class SettingsWindow: NSWindow {
         generalItem.label = L("settings.tab.general")
         generalItem.view = generalTab
         tabView.addTabViewItem(generalItem)
+
+        monitorTab = createMonitorTab()
+        let monitorItem = NSTabViewItem(identifier: "monitor")
+        monitorItem.label = L("settings.tab.monitor")
+        monitorItem.view = monitorTab
+        tabView.addTabViewItem(monitorItem)
 
         clipboardTab = createClipboardTab()
         let clipboardItem = NSTabViewItem(identifier: "clipboard")
@@ -209,8 +216,45 @@ final class SettingsWindow: NSWindow {
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
         stack.addArrangedSubview(makeRow(label: L("settings.dockIcon"), control: dockIconCheckbox))
 
+        // Row: File Content Index
+        let contentIndexCheckbox = NSButton(checkboxWithTitle: L("settings.contentIndex.checkbox"), target: self, action: #selector(contentIndexChanged(_:)))
+        contentIndexCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: L("settings.contentIndex"), control: contentIndexCheckbox))
+
+        // Row: Update
+        let updateFrequencyPopup = NSPopUpButton()
+        for frequency in UpdateManager.CheckFrequency.allCases {
+            updateFrequencyPopup.addItem(withTitle: frequency.displayName)
+        }
+        updateFrequencyPopup.selectItem(withTitle: UpdateManager.shared.checkFrequency.displayName)
+        updateFrequencyPopup.target = self
+        updateFrequencyPopup.action = #selector(updateFrequencyChanged(_:))
+        updateFrequencyPopup.widthAnchor.constraint(equalToConstant: 150).isActive = true
+
+        let checkNowButton = NSButton(title: L("settings.update.checkNow"), target: self, action: #selector(checkForUpdatesNow))
+        checkNowButton.bezelStyle = .rounded
+
+        let updateRow = NSStackView(views: [updateFrequencyPopup, checkNowButton])
+        updateRow.orientation = .horizontal
+        updateRow.spacing = 12
+        updateRow.alignment = .centerY
+        stack.addArrangedSubview(makeRow(label: L("settings.update.frequency"), control: updateRow))
+
+        // Row: Permissions
+        let permissionsButton = NSButton(title: L("settings.permissions"), target: self, action: #selector(checkPermissions))
+        permissionsButton.bezelStyle = .rounded
+        stack.addArrangedSubview(makeRow(label: "", control: permissionsButton))
+
+        return wrapInTopAlignedContainer(stack)
+    }
+
+    // MARK: - Monitor Tab
+
+    private func createMonitorTab() -> NSView {
+        let stack = makeVerticalStack()
+
         // Section: Status Bar Modules
-        let modulesLabel = NSTextField(labelWithString: L("settings.statusModules"))
+        let modulesLabel = NSTextField(labelWithString: L("settings.monitor.modules"))
         modulesLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         stack.addArrangedSubview(modulesLabel)
 
@@ -243,35 +287,6 @@ final class SettingsWindow: NSWindow {
         let sensorCheckbox = NSButton(checkboxWithTitle: L("status.sensor.displayName"), target: self, action: #selector(sensorModuleChanged(_:)))
         sensorCheckbox.state = UserDefaults.standard.bool(forKey: "status.sensor.enabled") ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: sensorCheckbox))
-
-        // Row: File Content Index
-        let contentIndexCheckbox = NSButton(checkboxWithTitle: L("settings.contentIndex.checkbox"), target: self, action: #selector(contentIndexChanged(_:)))
-        contentIndexCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
-        stack.addArrangedSubview(makeRow(label: L("settings.contentIndex"), control: contentIndexCheckbox))
-
-        // Row: Update
-        let updateFrequencyPopup = NSPopUpButton()
-        for frequency in UpdateManager.CheckFrequency.allCases {
-            updateFrequencyPopup.addItem(withTitle: frequency.displayName)
-        }
-        updateFrequencyPopup.selectItem(withTitle: UpdateManager.shared.checkFrequency.displayName)
-        updateFrequencyPopup.target = self
-        updateFrequencyPopup.action = #selector(updateFrequencyChanged(_:))
-        updateFrequencyPopup.widthAnchor.constraint(equalToConstant: 150).isActive = true
-
-        let checkNowButton = NSButton(title: L("settings.update.checkNow"), target: self, action: #selector(checkForUpdatesNow))
-        checkNowButton.bezelStyle = .rounded
-
-        let updateRow = NSStackView(views: [updateFrequencyPopup, checkNowButton])
-        updateRow.orientation = .horizontal
-        updateRow.spacing = 12
-        updateRow.alignment = .centerY
-        stack.addArrangedSubview(makeRow(label: L("settings.update.frequency"), control: updateRow))
-
-        // Row: Permissions
-        let permissionsButton = NSButton(title: L("settings.permissions"), target: self, action: #selector(checkPermissions))
-        permissionsButton.bezelStyle = .rounded
-        stack.addArrangedSubview(makeRow(label: "", control: permissionsButton))
 
         return wrapInTopAlignedContainer(stack)
     }
@@ -537,6 +552,12 @@ final class SettingsWindow: NSWindow {
         generalItem.label = L("settings.tab.general")
         generalItem.view = generalTab
         tabView.addTabViewItem(generalItem)
+
+        monitorTab = createMonitorTab()
+        let monitorItem = NSTabViewItem(identifier: "monitor")
+        monitorItem.label = L("settings.tab.monitor")
+        monitorItem.view = monitorTab
+        tabView.addTabViewItem(monitorItem)
 
         clipboardTab = createClipboardTab()
         let clipboardItem = NSTabViewItem(identifier: "clipboard")
