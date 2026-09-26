@@ -275,8 +275,8 @@ final class ProcessInfoProvider {
             if elapsed > 0 {
                 let prevTotal = prev.user + prev.system
                 let delta = total > prevTotal ? Double(total - prevTotal) : 0
-                // Convert nanoseconds to seconds, then to percentage
-                let cpuTime = delta / 1_000_000_000.0
+                // ri_user_time is already in seconds (not nanoseconds on Apple Silicon)
+                let cpuTime = delta
                 let usage = (cpuTime / elapsed) * 100.0
                 
                 previousProcCPU[pid] = (userTime, systemTime, now)
