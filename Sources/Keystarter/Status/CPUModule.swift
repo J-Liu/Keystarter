@@ -226,7 +226,7 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
             label.frame = NSRect(x: 4, y: 2, width: 212, height: 16)
             cell.addSubview(label)
         } else {
-            let pctText = String(format: "%.1f%%", process.cpuUsage)
+            let pctText = String(format: "%.2f%%", process.cpuUsage)
             let label = NSTextField(labelWithString: pctText)
             label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
             label.textColor = .secondaryLabelColor

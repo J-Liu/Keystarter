@@ -10,9 +10,9 @@ final class StatusItemController: NSObject {
 
     private var statusItems: [String: NSStatusItem] = [:]
     private var popover: NSPopover?
-    
+
     private var modules: [StatusModule] = []
-    
+
     private var refreshTimer: Timer?
     private var lastRefreshTimes: [String: Date] = [:]
     private let dataQueue = DispatchQueue(label: "com.keystarter.status.data", qos: .utility)
@@ -60,13 +60,13 @@ final class StatusItemController: NSObject {
         // Create separate status item for each module (reverse order so first module appears leftmost)
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: 36)
-            
+
             // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
             paraStyle.lineSpacing = -3
             paraStyle.paragraphSpacing = -3
-            
+
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 7, weight: .medium),
@@ -78,10 +78,10 @@ final class StatusItemController: NSObject {
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
-            
+
             attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
             attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
-            
+
             item.button?.attributedTitle = attrString
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked(_:))
@@ -125,13 +125,13 @@ final class StatusItemController: NSObject {
         // Recreate status items for current modules (reverse order so first module appears leftmost)
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: 36)
-            
+
             // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = -3
+            paraStyle.lineSpacing = -1.5
             paraStyle.paragraphSpacing = -3
-            
+
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 7, weight: .medium),
@@ -143,10 +143,10 @@ final class StatusItemController: NSObject {
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
-            
+
             attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
             attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
-            
+
             item.button?.attributedTitle = attrString
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked(_:))
@@ -279,12 +279,12 @@ final class StatusItemController: NSObject {
     private func updateModuleLabel(_ module: StatusModule) {
         guard let item = statusItems[module.identifier],
               let button = item.button else { return }
-        
+
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
         paraStyle.lineSpacing = -3
         paraStyle.paragraphSpacing = -3
-        
+
         let attrString = NSMutableAttributedString()
         let nameAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 7, weight: .medium),
@@ -296,10 +296,10 @@ final class StatusItemController: NSObject {
             .foregroundColor: NSColor.labelColor,
             .paragraphStyle: paraStyle
         ]
-        
+
         attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
         attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
-        
+
         button.attributedTitle = attrString
     }
 
