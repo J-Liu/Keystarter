@@ -30,6 +30,8 @@ final class GPUModule: NSObject, StatusModule {
     
     private var processes: [GPUProcessInfo] = []
     private var gpuUsage: Double = 0
+    private var rendererUtil: Double = 0
+    private var tilerUtil: Double = 0
     private var vramUsed: UInt64 = 0
     private var vramTotal: UInt64 = 0
     
@@ -43,14 +45,16 @@ final class GPUModule: NSObject, StatusModule {
     private var detailTimer: Timer?
     
     func refreshSummary() {
-        let (usage, vramUsed, vramTotal) = getGPUInfo()
-        self.gpuUsage = usage
-        self.vramUsed = vramUsed
-        self.vramTotal = vramTotal
+        let info = getGPUInfo()
+        self.gpuUsage = info.device
+        self.rendererUtil = info.renderer
+        self.tilerUtil = info.tiler
+        self.vramUsed = info.vramUsed
+        self.vramTotal = info.vramTotal
         
         processes = getGPUProcesses(limit: 100)
         
-        let value = String(format: "%.0f%%", usage)
+        let value = String(format: "%.0f%%", info.device)
         summaryText = value
         summaryValue = value
     }
@@ -146,10 +150,12 @@ final class GPUModule: NSObject, StatusModule {
     }
     
     private func refreshDetail() {
-        let (usage, vramUsed, vramTotal) = getGPUInfo()
-        self.gpuUsage = usage
-        self.vramUsed = vramUsed
-        self.vramTotal = vramTotal
+        let info = getGPUInfo()
+        self.gpuUsage = info.device
+        self.rendererUtil = info.renderer
+        self.tilerUtil = info.tiler
+        self.vramUsed = info.vramUsed
+        self.vramTotal = info.vramTotal
         
         processes = getGPUProcesses(limit: 100)
         
@@ -162,16 +168,36 @@ final class GPUModule: NSObject, StatusModule {
         
         chart.subviews.forEach { $0.removeFromSuperview() }
         
-        let barWidth = chart.bounds.width - 24
         let maxBarHeight = chart.bounds.height - 28
-        let barHeight = max(4, min(CGFloat(gpuUsage / 100.0) * maxBarHeight, maxBarHeight))
+        let barSpacing: CGFloat = 4
+        let barAreaWidth = chart.bounds.width - 16
+        let barWidth = (barAreaWidth - CGFloat(2) * barSpacing) / 3.0
         
-        // Usage bar
-        let bar = NSView(frame: NSRect(x: 12, y: 16, width: barWidth, height: barHeight))
-        bar.wantsLayer = true
-        bar.layer?.backgroundColor = NSColor.systemPurple.withAlphaComponent(0.7).cgColor
-        bar.layer?.cornerRadius = 2
-        chart.addSubview(bar)
+        let utils: [(Double, NSColor)] = [
+            (gpuUsage, NSColor.systemPurple),
+            (rendererUtil, NSColor.systemBlue),
+            (tilerUtil, NSColor.systemOrange)
+        ]
+        
+        for (idx, (util, color)) in utils.enumerated() {
+            let x = 8 + CGFloat(idx) * (barWidth + barSpacing)
+            let barHeight = max(4, min(CGFloat(util / 100.0) * maxBarHeight, maxBarHeight))
+            
+            // Bar
+            let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
+            bar.wantsLayer = true
+            bar.layer?.backgroundColor = color.withAlphaComponent(0.7).cgColor
+            bar.layer?.cornerRadius = 2
+            chart.addSubview(bar)
+            
+            // Percentage label
+            let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", util))
+            pctLabel.font = .systemFont(ofSize: 9)
+            pctLabel.textColor = .secondaryLabelColor
+            pctLabel.alignment = .center
+            pctLabel.frame = NSRect(x: x, y: 2, width: barWidth, height: 12)
+            chart.addSubview(pctLabel)
+        }
         
         // VRAM info
         let vramUsedGB = Double(vramUsed) / 1_073_741_824.0
@@ -181,15 +207,8 @@ final class GPUModule: NSObject, StatusModule {
         vramLabel.font = .systemFont(ofSize: 10)
         vramLabel.textColor = .secondaryLabelColor
         vramLabel.alignment = .right
-        vramLabel.frame = NSRect(x: barWidth - 100, y: chart.bounds.height - 12, width: 100, height: 10)
+        vramLabel.frame = NSRect(x: chart.bounds.width - 120, y: chart.bounds.height - 12, width: 110, height: 10)
         chart.addSubview(vramLabel)
-        
-        // Percentage
-        let pctLabel = NSTextField(labelWithString: String(format: "%.1f%%", gpuUsage))
-        pctLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        pctLabel.alignment = .center
-        pctLabel.frame = NSRect(x: 12, y: chart.bounds.height - 16, width: 80, height: 12)
-        chart.addSubview(pctLabel)
     }
     
     private func createUsageChart(frame: NSRect) -> NSView {
@@ -199,15 +218,34 @@ final class GPUModule: NSObject, StatusModule {
         view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         view.layer?.cornerRadius = 4
         
-        let barWidth = frame.width - 24
         let maxBarHeight = frame.height - 28
-        let barHeight = max(4, min(CGFloat(gpuUsage / 100.0) * maxBarHeight, maxBarHeight))
+        let barSpacing: CGFloat = 4
+        let barAreaWidth = frame.width - 16
+        let barWidth = (barAreaWidth - CGFloat(2) * barSpacing) / 3.0
         
-        let bar = NSView(frame: NSRect(x: 12, y: 16, width: barWidth, height: barHeight))
-        bar.wantsLayer = true
-        bar.layer?.backgroundColor = NSColor.systemPurple.withAlphaComponent(0.7).cgColor
-        bar.layer?.cornerRadius = 2
-        view.addSubview(bar)
+        let utils: [(Double, NSColor)] = [
+            (gpuUsage, NSColor.systemPurple),
+            (rendererUtil, NSColor.systemBlue),
+            (tilerUtil, NSColor.systemOrange)
+        ]
+        
+        for (idx, (util, color)) in utils.enumerated() {
+            let x = 8 + CGFloat(idx) * (barWidth + barSpacing)
+            let barHeight = max(4, min(CGFloat(util / 100.0) * maxBarHeight, maxBarHeight))
+            
+            let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
+            bar.wantsLayer = true
+            bar.layer?.backgroundColor = color.withAlphaComponent(0.7).cgColor
+            bar.layer?.cornerRadius = 2
+            view.addSubview(bar)
+            
+            let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", util))
+            pctLabel.font = .systemFont(ofSize: 9)
+            pctLabel.textColor = .secondaryLabelColor
+            pctLabel.alignment = .center
+            pctLabel.frame = NSRect(x: x, y: 2, width: barWidth, height: 12)
+            view.addSubview(pctLabel)
+        }
         
         let vramUsedGB = Double(vramUsed) / 1_073_741_824.0
         let vramTotalGB = Double(vramTotal) / 1_073_741_824.0
@@ -216,22 +254,18 @@ final class GPUModule: NSObject, StatusModule {
         vramLabel.font = .systemFont(ofSize: 10)
         vramLabel.textColor = .secondaryLabelColor
         vramLabel.alignment = .right
-        vramLabel.frame = NSRect(x: barWidth - 100, y: frame.height - 12, width: 100, height: 10)
+        vramLabel.frame = NSRect(x: frame.width - 120, y: frame.height - 12, width: 110, height: 10)
         view.addSubview(vramLabel)
-        
-        let pctLabel = NSTextField(labelWithString: String(format: "%.1f%%", gpuUsage))
-        pctLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        pctLabel.alignment = .center
-        pctLabel.frame = NSRect(x: 12, y: frame.height - 16, width: 80, height: 12)
-        view.addSubview(pctLabel)
         
         return view
     }
     
     // MARK: - GPU Data from IORegistry
     
-    private func getGPUInfo() -> (usage: Double, vramUsed: UInt64, vramTotal: UInt64) {
-        var gpuUsage: Double = 0
+    private func getGPUInfo() -> (device: Double, renderer: Double, tiler: Double, vramUsed: UInt64, vramTotal: UInt64) {
+        var deviceUtil: Double = 0
+        var rendererUtil: Double = 0
+        var tilerUtil: Double = 0
         var vramUsed: UInt64 = 0
         var vramTotal: UInt64 = 0
         
@@ -240,7 +274,7 @@ final class GPUModule: NSObject, StatusModule {
         let result = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator)
         
         guard result == KERN_SUCCESS, iterator != 0 else {
-            return (0, 0, 0)
+            return (0, 0, 0, 0, 0)
         }
         
         defer { IOObjectRelease(iterator) }
@@ -260,23 +294,33 @@ final class GPUModule: NSObject, StatusModule {
             }
             
             // Get Device Utilization %
-            if let deviceUtil = statistics["Device Utilization %"] as? Double {
-                gpuUsage = deviceUtil
-            } else if let deviceUtil = statistics["Device Utilization"] as? Double {
-                gpuUsage = deviceUtil * 100
-            } else if let utilization = statistics["utilization"] as? Double {
-                gpuUsage = utilization
-            } else if let deviceUtil = statistics["Device Utilization"] as? Int {
-                gpuUsage = Double(deviceUtil)
-            } else if let activeTime = statistics["totalActiveTime"] as? UInt64,
-                      let idleTime = statistics["totalIdleTime"] as? UInt64 {
-                let total = activeTime + idleTime
-                if total > 0 {
-                    gpuUsage = Double(activeTime) / Double(total) * 100.0
-                }
+            if let val = statistics["Device Utilization %"] as? Double {
+                deviceUtil = val
+            } else if let val = statistics["Device Utilization"] as? Double {
+                deviceUtil = val * 100
+            } else if let val = statistics["Device Utilization"] as? Int {
+                deviceUtil = Double(val)
             }
             
-            // VRAM (discrete GPUs only, Apple Silicon uses unified memory)
+            // Get Renderer Utilization %
+            if let val = statistics["Renderer Utilization %"] as? Double {
+                rendererUtil = val
+            } else if let val = statistics["Renderer Utilization"] as? Double {
+                rendererUtil = val * 100
+            } else if let val = statistics["Renderer Utilization"] as? Int {
+                rendererUtil = Double(val)
+            }
+            
+            // Get Tiler Utilization %
+            if let val = statistics["Tiler Utilization %"] as? Double {
+                tilerUtil = val
+            } else if let val = statistics["Tiler Utilization"] as? Double {
+                tilerUtil = val * 100
+            } else if let val = statistics["Tiler Utilization"] as? Int {
+                tilerUtil = Double(val)
+            }
+            
+            // VRAM (discrete GPUs only)
             if let vramFree = statistics["vramFreeBytes"] as? UInt64,
                let vramTotalVal = statistics["vramTotalBytes"] as? UInt64 {
                 vramUsed = vramTotalVal - vramFree
@@ -286,7 +330,7 @@ final class GPUModule: NSObject, StatusModule {
             break
         }
         
-        return (gpuUsage, vramUsed, vramTotal)
+        return (deviceUtil, rendererUtil, tilerUtil, vramUsed, vramTotal)
     }
     
     private func getGPUProcesses(limit: Int) -> [GPUProcessInfo] {
