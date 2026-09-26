@@ -100,7 +100,7 @@ static void loadPrivateFunctions(void) {
     
     if (!_IOHIDEventSystemClientCreate || !_IOHIDEventSystemClientSetMatching ||
         !_IOHIDEventSystemClientCopyServices || !_IOHIDServiceClientCopyProperty ||
-        !_IOHIDServiceClientCopyEvent || !_IOHIDEventGetFloatValue || !_IOHIDEventFieldBase) {
+        !_IOHIDServiceClientCopyEvent || !_IOHIDEventGetFloatValue) {
         return nil;
     }
     
@@ -144,8 +144,9 @@ static void loadPrivateFunctions(void) {
             continue;
         }
         
-        // Extract value
-        double value = _IOHIDEventGetFloatValue(event, _IOHIDEventFieldBase((int32_t)type));
+        // Extract value - field is the usage value directly
+        // IOHIDEventFieldBase(eventType) = eventType, so we use type directly
+        double value = _IOHIDEventGetFloatValue(event, (int32_t)type);
         result[name] = @(value);
         
         CFRelease(event);
