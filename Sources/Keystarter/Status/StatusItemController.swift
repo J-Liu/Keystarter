@@ -60,8 +60,8 @@ final class StatusItemController: NSObject {
 
     private func setupStatusItem() {
         // Calculate total width based on number of modules
-        let moduleWidth: CGFloat = 50
-        let spacing: CGFloat = 1
+        let moduleWidth: CGFloat = 40
+        let spacing: CGFloat = 0
         let totalWidth = CGFloat(modules.count) * moduleWidth + CGFloat(max(0, modules.count - 1)) * spacing
 
         statusItem = NSStatusBar.system.statusItem(withLength: totalWidth)
@@ -107,8 +107,8 @@ final class StatusItemController: NSObject {
         }
 
         // Recalculate total width
-        let moduleWidth: CGFloat = 50
-        let spacing: CGFloat = 1
+        let moduleWidth: CGFloat = 40
+        let spacing: CGFloat = 0
         let totalWidth = CGFloat(modules.count) * moduleWidth + CGFloat(max(0, modules.count - 1)) * spacing
 
         // Update status item length
@@ -126,12 +126,11 @@ final class StatusItemController: NSObject {
     }
 
     private func createModuleView(_ module: StatusModule, frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
-        view.identifier = NSUserInterfaceItemIdentifier(module.identifier)
-
-        // Add click gesture
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(moduleClicked(_:)))
-        view.addGestureRecognizer(clickGesture)
+        let view = ModuleClickView(frame: frame)
+        view.moduleIdentifier = module.identifier
+        view.onClicked = { [weak self] in
+            self?.handleModuleClick(identifier: module.identifier, view: view)
+        }
 
         // Vertical stack: name on top, value below
         let stack = NSStackView(frame: view.bounds)
@@ -158,13 +157,7 @@ final class StatusItemController: NSObject {
         return view
     }
 
-    @objc private func moduleClicked(_ gesture: NSClickGestureRecognizer) {
-        guard let view = gesture.view,
-              let identifier = view.identifier?.rawValue else {
-            log("Click: no identifier")
-            return
-        }
-
+    private func handleModuleClick(identifier: String, view: NSView) {
         log("Module clicked: \(identifier)")
         guard let module = modules.first(where: { $0.identifier == identifier }) else {
             log("No module found: \(identifier)")
@@ -309,14 +302,17 @@ final class StatusItemController: NSObject {
     private func showPopover(for module: StatusModule, from view: NSView) {
         popover?.close()
 
-        let popover = NSPopover()
-        popover.behavior = .transient
-        popover.contentViewController = NSViewController()
-        popover.contentViewController?.view = module.makeDetailView()
+        let newPopover = NSPopover()
+        newPopover.behavior = .semitransient
+        newPopover.contentViewController = NSViewController()
+        newPopover.contentViewController?.view = module.makeDetailView()
 
-        popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
-        self.popover = popover
-        log("Popover shown for: \(module.identifier)")
+        // Delay slightly to avoid immediate close
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+            newPopover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+            self?.popover = newPopover
+            self?.log("Popover shown for: \(module.identifier)")
+        }
     }
     
     @objc private func settingsChanged() {
@@ -352,4 +348,20 @@ final class StatusItemController: NSObject {
 
 extension Notification.Name {
     static let statusModuleSettingsChanged = Notification.Name("statusModuleSettingsChanged")
+}
+
+// MARK: - ModuleClickView
+
+/// Custom view that handles mouse clicks directly.
+private class ModuleClickView: NSView {
+    var moduleIdentifier: String?
+    var onClicked: (() -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        onClicked?()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        // Don't forward to superview
+    }
 }
