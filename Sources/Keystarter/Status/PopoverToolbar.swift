@@ -22,7 +22,7 @@ final class PopoverToolbar {
         let openButton = NSButton(frame: NSRect(x: 8, y: 2, width: 24, height: 20))
         openButton.bezelStyle = .inline
         openButton.isBordered = false
-        openButton.image = NSImage(systemSymbolName: "arrow.up.forward.square", accessibilityDescription: "Open")
+        openButton.image = NSImage(systemSymbolName: "macwindow", accessibilityDescription: "Open")
         openButton.imageScaling = .scaleNone
         openButton.contentTintColor = .labelColor
         openButton.target = ToolbarHandler.shared
@@ -44,7 +44,7 @@ final class PopoverToolbar {
         let quitButton = NSButton(frame: NSRect(x: width - 32, y: 2, width: 24, height: 20))
         quitButton.bezelStyle = .inline
         quitButton.isBordered = false
-        quitButton.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: "Quit")
+        quitButton.image = NSImage(systemSymbolName: "power", accessibilityDescription: "Quit")
         quitButton.imageScaling = .scaleNone
         quitButton.contentTintColor = .labelColor
         quitButton.target = ToolbarHandler.shared
@@ -59,11 +59,11 @@ final class ToolbarHandler: NSObject {
     static let shared = ToolbarHandler()
     
     @objc func openAction(_ sender: Any?) {
-        NSApp.activate(ignoringOtherApps: true)
+        (NSApp.delegate as? AppDelegate)?.showLauncher()
     }
     
     @objc func settingsAction(_ sender: Any?) {
-        NotificationCenter.default.post(name: .openSettings, object: nil)
+        (NSApp.delegate as? AppDelegate)?.showSettings()
     }
     
     @objc func quitAction(_ sender: Any?) {
