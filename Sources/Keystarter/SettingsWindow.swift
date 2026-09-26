@@ -3,6 +3,7 @@
 
 import AppKit
 import Carbon
+import UniformTypeIdentifiers
 
 /// Settings window with tabs for configuration.
 final class SettingsWindow: NSWindow {
@@ -14,6 +15,7 @@ final class SettingsWindow: NSWindow {
     private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
+    private var logPathField: NSTextField!
 
     // Layout constants
     private let labelWidth: CGFloat = 120
@@ -386,7 +388,45 @@ final class SettingsWindow: NSWindow {
         buttonRow.alignment = .centerY
         stack.addArrangedSubview(buttonRow)
 
+        // Section: Log
+        let logLabel = NSTextField(labelWithString: L("settings.advanced.log"))
+        logLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        stack.addArrangedSubview(logLabel)
+
+        // Log path display (read-only text field)
+        logPathField = NSTextField()
+        logPathField.stringValue = LogSettings.shared.generalLogPath
+        logPathField.isEditable = false
+        logPathField.isBezeled = true
+        logPathField.bezelStyle = .roundedBezel
+        logPathField.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.advanced.log.path"), control: logPathField))
+
+        // Choose log path button
+        let chooseLogButton = NSButton(title: L("settings.advanced.log.choose"), target: self, action: #selector(chooseLogPath))
+        chooseLogButton.bezelStyle = .rounded
+        stack.addArrangedSubview(makeRow(label: "", control: chooseLogButton))
+
         return wrapInTopAlignedContainer(stack)
+    }
+
+    @objc private func chooseLogPath() {
+        let savePanel = NSSavePanel()
+        savePanel.title = L("settings.advanced.log.chooseTitle")
+        if let logType = UTType(filenameExtension: "log") {
+            savePanel.allowedContentTypes = [logType]
+        }
+        savePanel.canCreateDirectories = true
+        savePanel.nameFieldStringValue = "keystarter.log"
+        
+        // Set initial directory
+        let defaultDir = URL(fileURLWithPath: NSHomeDirectory() + "/Library/Application Support/Keystarter")
+        savePanel.directoryURL = defaultDir
+
+        if savePanel.runModal() == .OK, let url = savePanel.url {
+            LogSettings.shared.generalLogPath = url.path
+            logPathField?.stringValue = url.path
+        }
     }
 
     @objc private func addIgnoredApp() {

@@ -85,9 +85,16 @@ final class CalculatorPlugin: Plugin {
             title: resultString,
             subtitle: "Press Enter to copy",
             icon: NSImage(systemSymbolName: "function", accessibilityDescription: nil),
+            detailText: "\(trimmed) = \(resultString)\n\n────────────────────────\nDouble-click to open Calculator",
             action: {
+                // Copy to clipboard
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(resultString, forType: .string)
+                
+                // Open Calculator app
+                if let url = URL(string: "open -a Calculator") {
+                    NSWorkspace.shared.open(url)
+                }
             }
         )]
     }

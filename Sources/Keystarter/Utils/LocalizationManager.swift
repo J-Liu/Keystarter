@@ -122,6 +122,10 @@ final class LocalizationManager {
             "settings.advanced.ignoredApps.add": "Add...",
             "settings.advanced.ignoredApps.remove": "Remove",
             "settings.advanced.ignoredApps.addTitle": "Select App to Ignore",
+            "settings.advanced.log": "Log Settings",
+            "settings.advanced.log.path": "Log Path:",
+            "settings.advanced.log.choose": "Choose...",
+            "settings.advanced.log.chooseTitle": "Choose Log Location",
 
             // Launcher Window
             "launcher.search.placeholder": "Search apps, files...",
@@ -279,6 +283,10 @@ final class LocalizationManager {
             "settings.advanced.ignoredApps.add": "添加...",
             "settings.advanced.ignoredApps.remove": "移除",
             "settings.advanced.ignoredApps.addTitle": "选择要忽略的应用",
+            "settings.advanced.log": "日志设置",
+            "settings.advanced.log.path": "日志路径：",
+            "settings.advanced.log.choose": "选择...",
+            "settings.advanced.log.chooseTitle": "选择日志保存位置",
 
             // Launcher Window
             "launcher.search.placeholder": "搜索应用、文件...",
@@ -436,6 +444,10 @@ final class LocalizationManager {
             "settings.advanced.ignoredApps.add": "新增...",
             "settings.advanced.ignoredApps.remove": "移除",
             "settings.advanced.ignoredApps.addTitle": "選擇要忽略的應用",
+            "settings.advanced.log": "日誌設定",
+            "settings.advanced.log.path": "日誌路徑：",
+            "settings.advanced.log.choose": "選擇...",
+            "settings.advanced.log.chooseTitle": "選擇日誌儲存位置",
 
             // Launcher Window
             "launcher.search.placeholder": "搜尋應用、檔案...",
