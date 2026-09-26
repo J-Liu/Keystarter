@@ -111,8 +111,13 @@ final class StatusItemController: NSObject {
     }
     
     private func createModuleView(_ module: StatusModule) -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 50, height: 22))
-        
+        let view = ModuleClickView(frame: NSRect(x: 0, y: 0, width: 50, height: 22))
+        view.module = module
+        view.onClicked = { [weak self] in
+            self?.showPopover(for: module, from: view)
+            self?.log("Module clicked: \(module.identifier)")
+        }
+
         // Vertical stack: name on top, value below
         let stack = NSStackView(frame: view.bounds)
         stack.orientation = .vertical
@@ -120,28 +125,21 @@ final class StatusItemController: NSObject {
         stack.spacing = 0
         stack.autoresizingMask = [.width, .height]
         view.addSubview(stack)
-        
+
         // Name label (top)
         let nameLabel = NSTextField(labelWithString: module.shortName)
         nameLabel.font = .systemFont(ofSize: 9, weight: .medium)
         nameLabel.alignment = .center
         nameLabel.textColor = .secondaryLabelColor
         stack.addArrangedSubview(nameLabel)
-        
+
         // Value label (bottom)
         let valueLabel = NSTextField(labelWithString: module.summaryValue)
         valueLabel.font = .systemFont(ofSize: 12, weight: .medium)
         valueLabel.alignment = .center
-        stack.addArrangedSubview(valueLabel)
-        
-        // Store reference for updating
-        view.identifier = NSUserInterfaceItemIdentifier(module.identifier)
         valueLabel.identifier = NSUserInterfaceItemIdentifier("valueLabel")
-        
-        // Click gesture
-        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(moduleClicked(_:)))
-        view.addGestureRecognizer(clickGesture)
-        
+        stack.addArrangedSubview(valueLabel)
+
         return view
     }
     
@@ -277,25 +275,6 @@ final class StatusItemController: NSObject {
     }
     
     // MARK: - Actions
-    
-    @objc private func moduleClicked(_ gesture: NSClickGestureRecognizer) {
-        guard let view = gesture.view,
-              let identifier = view.identifier?.rawValue else {
-            log("Click event: No view or identifier found")
-            return
-        }
-
-        log("Click event: view.identifier = \(identifier)")
-        log("Click event: available modules = \(modules.map { $0.identifier })")
-
-        guard let module = modules.first(where: { $0.identifier == identifier }) else {
-            log("Click event: No module found for identifier: \(identifier)")
-            return
-        }
-
-        log("Click event: Showing popover for module: \(module.identifier)")
-        showPopover(for: module, from: view)
-    }
 
     private func showPopover(for module: StatusModule, from view: NSView) {
         popover?.close()
@@ -343,4 +322,16 @@ final class StatusItemController: NSObject {
 
 extension Notification.Name {
     static let statusModuleSettingsChanged = Notification.Name("statusModuleSettingsChanged")
+}
+
+// MARK: - ModuleClickView
+
+/// Custom view that stores module reference for click handling.
+private class ModuleClickView: NSView {
+    weak var module: StatusModule?
+    var onClicked: (() -> Void)?
+
+    override func mouseDown(with event: NSEvent) {
+        onClicked?()
+    }
 }
