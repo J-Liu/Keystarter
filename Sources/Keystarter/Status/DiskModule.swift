@@ -242,7 +242,18 @@ final class DiskModule: NSObject, StatusModule {
             // Area path
             let readAreaPath = CGMutablePath()
             readAreaPath.move(to: CGPoint(x: readPoints[0].x, y: centerLineY))
-            readAreaPath.addPath(createSmoothPath(points: readPoints))
+            readAreaPath.addLine(to: readPoints[0])
+            
+            // Build smooth curve directly
+            for i in 1..<readPoints.count {
+                let prev = readPoints[i - 1]
+                let curr = readPoints[i]
+                let midX = (prev.x + curr.x) / 2
+                let midY = (prev.y + curr.y) / 2
+                readAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
+                readAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+            }
+            
             readAreaPath.addLine(to: CGPoint(x: readPoints.last!.x, y: centerLineY))
             readAreaPath.closeSubpath()
             
@@ -268,7 +279,18 @@ final class DiskModule: NSObject, StatusModule {
             // Area path
             let writeAreaPath = CGMutablePath()
             writeAreaPath.move(to: CGPoint(x: writePoints[0].x, y: centerLineY))
-            writeAreaPath.addPath(createSmoothPath(points: writePoints))
+            writeAreaPath.addLine(to: writePoints[0])
+            
+            // Build smooth curve directly
+            for i in 1..<writePoints.count {
+                let prev = writePoints[i - 1]
+                let curr = writePoints[i]
+                let midX = (prev.x + curr.x) / 2
+                let midY = (prev.y + curr.y) / 2
+                writeAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
+                writeAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+            }
+            
             writeAreaPath.addLine(to: CGPoint(x: writePoints.last!.x, y: centerLineY))
             writeAreaPath.closeSubpath()
             

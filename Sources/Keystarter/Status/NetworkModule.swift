@@ -240,7 +240,18 @@ final class NetworkModule: NSObject, StatusModule {
         if downPoints.count > 1 {
             let downAreaPath = CGMutablePath()
             downAreaPath.move(to: CGPoint(x: downPoints[0].x, y: centerLineY))
-            downAreaPath.addPath(createSmoothPath(points: downPoints))
+            downAreaPath.addLine(to: downPoints[0])
+            
+            // Build smooth curve directly
+            for i in 1..<downPoints.count {
+                let prev = downPoints[i - 1]
+                let curr = downPoints[i]
+                let midX = (prev.x + curr.x) / 2
+                let midY = (prev.y + curr.y) / 2
+                downAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
+                downAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+            }
+            
             downAreaPath.addLine(to: CGPoint(x: downPoints.last!.x, y: centerLineY))
             downAreaPath.closeSubpath()
             
@@ -264,7 +275,18 @@ final class NetworkModule: NSObject, StatusModule {
         if upPoints.count > 1 {
             let upAreaPath = CGMutablePath()
             upAreaPath.move(to: CGPoint(x: upPoints[0].x, y: centerLineY))
-            upAreaPath.addPath(createSmoothPath(points: upPoints))
+            upAreaPath.addLine(to: upPoints[0])
+            
+            // Build smooth curve directly
+            for i in 1..<upPoints.count {
+                let prev = upPoints[i - 1]
+                let curr = upPoints[i]
+                let midX = (prev.x + curr.x) / 2
+                let midY = (prev.y + curr.y) / 2
+                upAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
+                upAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+            }
+            
             upAreaPath.addLine(to: CGPoint(x: upPoints.last!.x, y: centerLineY))
             upAreaPath.closeSubpath()
             

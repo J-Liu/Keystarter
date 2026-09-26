@@ -196,7 +196,18 @@ final class MemoryModule: NSObject, StatusModule {
         // Create area path with smooth curve
         let areaPath = CGMutablePath()
         areaPath.move(to: CGPoint(x: points[0].x, y: chartPadding))
-        areaPath.addPath(createSmoothPath(points: points))
+        areaPath.addLine(to: points[0])
+        
+        // Build smooth curve directly in area path
+        for i in 1..<points.count {
+            let prev = points[i - 1]
+            let curr = points[i]
+            let midX = (prev.x + curr.x) / 2
+            let midY = (prev.y + curr.y) / 2
+            areaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
+            areaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+        }
+        
         areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartPadding))
         areaPath.closeSubpath()
         
