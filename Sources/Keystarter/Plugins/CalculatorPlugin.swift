@@ -28,6 +28,10 @@ final class CalculatorPlugin: Plugin {
         let firstChar = trimmed.first!
         guard firstChar.isNumber || firstChar == "." || firstChar == "(" else { return false }
 
+        // Check if expression is complete (not ending with operator)
+        let lastChar = trimmed.last!
+        guard lastChar.isNumber || lastChar == ")" || lastChar == "." else { return false }
+
         // Try to evaluate to see if it's valid
         return evaluate(trimmed).first?.title != "Invalid expression"
     }
