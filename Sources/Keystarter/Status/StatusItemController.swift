@@ -61,19 +61,17 @@ final class StatusItemController: NSObject {
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: 36)
             
-            // Create two-line title with proper spacing
+            // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = 0
-            paraStyle.paragraphSpacing = 0
-            paraStyle.minimumLineHeight = 10
+            paraStyle.lineSpacing = -4
+            paraStyle.paragraphSpacing = -4
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 7, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle,
-                .baselineOffset: 2
+                .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 10, weight: .medium),
@@ -128,19 +126,17 @@ final class StatusItemController: NSObject {
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: 36)
             
-            // Create two-line title with proper spacing
+            // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = 0
-            paraStyle.paragraphSpacing = 0
-            paraStyle.minimumLineHeight = 10
+            paraStyle.lineSpacing = -4
+            paraStyle.paragraphSpacing = -4
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 7, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle,
-                .baselineOffset: 2
+                .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 10, weight: .medium),
@@ -286,16 +282,14 @@ final class StatusItemController: NSObject {
         
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
-        paraStyle.lineSpacing = 0
-        paraStyle.paragraphSpacing = 0
-        paraStyle.minimumLineHeight = 10
+        paraStyle.lineSpacing = -4
+        paraStyle.paragraphSpacing = -4
         
         let attrString = NSMutableAttributedString()
         let nameAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 7, weight: .medium),
             .foregroundColor: NSColor.labelColor,
-            .paragraphStyle: paraStyle,
-            .baselineOffset: 2
+            .paragraphStyle: paraStyle
         ]
         let valueAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),

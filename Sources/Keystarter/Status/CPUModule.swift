@@ -216,20 +216,21 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
             if process.isApp {
                 displayName = process.name
             } else {
-                displayName = "⚠️ \(process.name) [\(process.pid)]"
+                displayName = "⚠️ \(process.name) pid:\(process.pid)"
             }
             
             let label = NSTextField(labelWithString: displayName)
-            label.font = .systemFont(ofSize: 11)
+            label.font = .systemFont(ofSize: 10)
             label.lineBreakMode = .byTruncatingTail
-            label.frame = NSRect(x: 4, y: 2, width: 232, height: 16)
+            label.frame = NSRect(x: 2, y: 2, width: 236, height: 16)
             cell.addSubview(label)
         } else {
-            let label = NSTextField(labelWithString: String(format: "%.1f%%", process.cpuUsage))
-            label.font = .systemFont(ofSize: 11)
+            let pctText = String(format: "%.1f%%", process.cpuUsage)
+            let label = NSTextField(labelWithString: pctText)
+            label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
             label.textColor = .secondaryLabelColor
             label.alignment = .right
-            label.frame = NSRect(x: 4, y: 2, width: 92, height: 16)
+            label.frame = NSRect(x: 2, y: 2, width: 96, height: 16)
             cell.addSubview(label)
         }
         
