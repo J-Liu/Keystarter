@@ -85,6 +85,7 @@ final class LocalizationManager {
             "settings.dockIcon": "Dock Icon:",
             "settings.dockIcon.checkbox": "Show Dock icon",
             "settings.monitor.modules": "Status Bar Modules",
+            "settings.monitor.log.enable": "Enable Monitor Log",
             "settings.cpu.enabled": "CPU Usage",
             "settings.memory.enabled": "Memory Usage",
             "settings.contentIndex": "File Content Index:",
@@ -106,6 +107,7 @@ final class LocalizationManager {
 
             // Clipboard Tab
             "settings.clipboard.hotkey": "Hotkey:",
+            "settings.clipboard.log.enable": "Enable Clipboard Log",
             "settings.clipboard.maxCount": "Max Count:",
             "settings.clipboard.maxCount.hint": "entries (groups: %@)",
             "settings.clipboard.maxDays": "Max Days:",
@@ -122,11 +124,8 @@ final class LocalizationManager {
             "settings.advanced.ignoredApps.add": "Add...",
             "settings.advanced.ignoredApps.remove": "Remove",
             "settings.advanced.ignoredApps.addTitle": "Select App to Ignore",
-            "settings.advanced.log": "Log Settings",
-            "settings.advanced.log.enable": "Enable Clipboard Log",
-            "settings.advanced.log.path": "Log Path:",
-            "settings.advanced.log.choose": "Choose...",
-            "settings.advanced.log.chooseTitle": "Choose Log Location",
+            // Launcher Log
+            "settings.launcher.log.enable": "Enable Launcher Log",
 
             // Launcher Window
             "launcher.search.placeholder": "Search apps, files...",
@@ -247,6 +246,7 @@ final class LocalizationManager {
             "settings.dockIcon": "Dock 图标：",
             "settings.dockIcon.checkbox": "显示 Dock 图标",
             "settings.monitor.modules": "状态栏模块",
+            "settings.monitor.log.enable": "启用监控日志",
             "settings.cpu.enabled": "CPU 使用率",
             "settings.memory.enabled": "内存使用",
             "settings.contentIndex": "文件内容索引：",
@@ -268,6 +268,7 @@ final class LocalizationManager {
 
             // Clipboard Tab
             "settings.clipboard.hotkey": "快捷键：",
+            "settings.clipboard.log.enable": "启用剪贴板日志",
             "settings.clipboard.maxCount": "最大条数：",
             "settings.clipboard.maxCount.hint": "条 (分组: %@)",
             "settings.clipboard.maxDays": "保留天数：",
@@ -278,17 +279,8 @@ final class LocalizationManager {
             "settings.about.version": "版本 %@",
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有权利。",
 
-            // Advanced Tab
-            "settings.advanced.ignoredApps": "忽略的应用：",
-            "settings.advanced.ignoredApps.empty": "没有忽略的应用",
-            "settings.advanced.ignoredApps.add": "添加...",
-            "settings.advanced.ignoredApps.remove": "移除",
-            "settings.advanced.ignoredApps.addTitle": "选择要忽略的应用",
-            "settings.advanced.log": "日志设置",
-            "settings.advanced.log.enable": "启用剪贴板日志",
-            "settings.advanced.log.path": "日志路径：",
-            "settings.advanced.log.choose": "选择...",
-            "settings.advanced.log.chooseTitle": "选择日志保存位置",
+            // Launcher Log
+            "settings.launcher.log.enable": "启用启动器日志",
 
             // Launcher Window
             "launcher.search.placeholder": "搜索应用、文件...",
@@ -409,6 +401,7 @@ final class LocalizationManager {
             "settings.dockIcon": "Dock 圖示：",
             "settings.dockIcon.checkbox": "顯示 Dock 圖示",
             "settings.monitor.modules": "狀態列模組",
+            "settings.monitor.log.enable": "啟用監控日誌",
             "settings.cpu.enabled": "CPU 使用率",
             "settings.memory.enabled": "記憶體使用",
             "settings.contentIndex": "檔案內容索引：",
@@ -430,6 +423,7 @@ final class LocalizationManager {
 
             // Clipboard Tab
             "settings.clipboard.hotkey": "快速鍵：",
+            "settings.clipboard.log.enable": "啟用剪貼簿日誌",
             "settings.clipboard.maxCount": "最大條數：",
             "settings.clipboard.maxCount.hint": "條 (分組: %@)",
             "settings.clipboard.maxDays": "保留天數：",
@@ -446,11 +440,9 @@ final class LocalizationManager {
             "settings.advanced.ignoredApps.add": "新增...",
             "settings.advanced.ignoredApps.remove": "移除",
             "settings.advanced.ignoredApps.addTitle": "選擇要忽略的應用",
-            "settings.advanced.log": "日誌設定",
-            "settings.advanced.log.enable": "啟用剪貼簿日誌",
-            "settings.advanced.log.path": "日誌路徑：",
-            "settings.advanced.log.choose": "選擇...",
-            "settings.advanced.log.chooseTitle": "選擇日誌儲存位置",
+
+            // Launcher Log
+            "settings.launcher.log.enable": "啟用啟動器日誌",
 
             // Launcher Window
             "launcher.search.placeholder": "搜尋應用、檔案...",

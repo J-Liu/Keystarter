@@ -15,7 +15,6 @@ final class SettingsWindow: NSWindow {
     private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
-    private var logPathField: NSTextField!
 
     // Layout constants
     private let labelWidth: CGFloat = 120
@@ -247,6 +246,16 @@ final class SettingsWindow: NSWindow {
         permissionsButton.bezelStyle = .rounded
         stack.addArrangedSubview(makeRow(label: "", control: permissionsButton))
 
+        // Section: Log
+        let logLabel = NSTextField(labelWithString: L("settings.log"))
+        logLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        stack.addArrangedSubview(logLabel)
+
+        // Row: Enable Launcher Log
+        let launcherLogCheckbox = NSButton(checkboxWithTitle: L("settings.launcher.log.enable"), target: self, action: #selector(launcherLogChanged(_:)))
+        launcherLogCheckbox.state = LogSettings.shared.launcherLogEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: launcherLogCheckbox))
+
         return wrapInTopAlignedContainer(stack)
     }
 
@@ -290,6 +299,16 @@ final class SettingsWindow: NSWindow {
         sensorCheckbox.state = UserDefaults.standard.bool(forKey: "status.sensor.enabled") ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: sensorCheckbox))
 
+        // Section: Log
+        let logLabel = NSTextField(labelWithString: L("settings.log"))
+        logLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        stack.addArrangedSubview(logLabel)
+
+        // Row: Enable Monitor Log
+        let monitorLogCheckbox = NSButton(checkboxWithTitle: L("settings.monitor.log.enable"), target: self, action: #selector(monitorLogChanged(_:)))
+        monitorLogCheckbox.state = LogSettings.shared.monitorLogEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: monitorLogCheckbox))
+
         return wrapInTopAlignedContainer(stack)
     }
 
@@ -311,6 +330,11 @@ final class SettingsWindow: NSWindow {
             clipboardHotkeyRecorder.setShortcut(keyCode: UInt16(9), modifiers: [.command, .shift])
         }
         stack.addArrangedSubview(makeRow(label: L("settings.clipboard.hotkey"), control: clipboardHotkeyRecorder))
+
+        // Row: Enable Clipboard Log
+        let clipboardLogCheckbox = NSButton(checkboxWithTitle: L("settings.clipboard.log.enable"), target: self, action: #selector(clipboardLogChanged(_:)))
+        clipboardLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: clipboardLogCheckbox))
 
         // Row: Max Count
         let maxCountField = NSTextField()
@@ -388,55 +412,19 @@ final class SettingsWindow: NSWindow {
         buttonRow.alignment = .centerY
         stack.addArrangedSubview(buttonRow)
 
-        // Section: Log
-        let logLabel = NSTextField(labelWithString: L("settings.advanced.log"))
-        logLabel.font = .systemFont(ofSize: 13, weight: .semibold)
-        stack.addArrangedSubview(logLabel)
-
-        // Row: Enable Log
-        let enableLogCheckbox = NSButton(checkboxWithTitle: L("settings.advanced.log.enable"), target: self, action: #selector(enableLogChanged(_:)))
-        enableLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
-        stack.addArrangedSubview(makeRow(label: "", control: enableLogCheckbox))
-
-        // Log path display (read-only text field)
-        logPathField = NSTextField()
-        logPathField.stringValue = LogSettings.shared.clipboardLogPath
-        logPathField.isEditable = false
-        logPathField.isBezeled = true
-        logPathField.bezelStyle = .roundedBezel
-        logPathField.widthAnchor.constraint(equalToConstant: 400).isActive = true
-        stack.addArrangedSubview(makeRow(label: L("settings.advanced.log.path"), control: logPathField))
-
-        // Choose log path button
-        let chooseLogButton = NSButton(title: L("settings.advanced.log.choose"), target: self, action: #selector(chooseLogPath))
-        chooseLogButton.bezelStyle = .rounded
-        stack.addArrangedSubview(makeRow(label: "", control: chooseLogButton))
-
         return wrapInTopAlignedContainer(stack)
     }
 
-    @objc private func chooseLogPath() {
-        let savePanel = NSSavePanel()
-        savePanel.title = L("settings.advanced.log.chooseTitle")
-        if let logType = UTType(filenameExtension: "log") {
-            savePanel.allowedContentTypes = [logType]
-        }
-        savePanel.canCreateDirectories = true
-        savePanel.nameFieldStringValue = "keystarter.log"
-        
-        // Set initial directory
-        let defaultDir = URL(fileURLWithPath: NSHomeDirectory() + "/Library/Application Support/Keystarter")
-        savePanel.directoryURL = defaultDir
-
-        if savePanel.runModal() == .OK, let url = savePanel.url {
-            LogSettings.shared.clipboardLogPath = url.path
-            logPathField?.stringValue = url.path
-        }
+    @objc private func launcherLogChanged(_ sender: NSButton) {
+        LogSettings.shared.launcherLogEnabled = sender.state == .on
     }
 
-    @objc private func enableLogChanged(_ sender: NSButton) {
-        let enabled = sender.state == .on
-        LogSettings.shared.clipboardLogEnabled = enabled
+    @objc private func monitorLogChanged(_ sender: NSButton) {
+        LogSettings.shared.monitorLogEnabled = sender.state == .on
+    }
+
+    @objc private func clipboardLogChanged(_ sender: NSButton) {
+        LogSettings.shared.clipboardLogEnabled = sender.state == .on
     }
 
     @objc private func addIgnoredApp() {
