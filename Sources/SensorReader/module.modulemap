@@ -1,0 +1,4 @@
+module SensorReader {
+    header "SensorReader.h"
+    export *
+}

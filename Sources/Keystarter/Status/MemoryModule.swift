@@ -12,6 +12,7 @@ struct MemoryProcessInfo {
     let icon: NSImage?
     let user: String
     let threads: Int
+    let ppid: Int32
 }
 
 /// Memory monitoring module.
@@ -168,7 +169,9 @@ final class MemoryModule: NSObject, StatusModule {
     private func updateChart() {
         guard let chart = chartView else { return }
 
+        // Remove both subviews and sublayers
         chart.subviews.forEach { $0.removeFromSuperview() }
+        chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
 
         let totalGB = Double(totalMemory) / 1_073_741_824.0
         let usedGB = Double(usedMemory) / 1_073_741_824.0
@@ -183,45 +186,35 @@ final class MemoryModule: NSObject, StatusModule {
         let drawHeight = chartHeight - 24
         let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
 
-        // Create CGMutablePath for area
-        let areaPath = CGMutablePath()
-        areaPath.move(to: CGPoint(x: chartPadding, y: chartPadding))
-
-        // Draw line points
-        for (index, value) in memoryHistory.enumerated() {
-            let x = chartPadding + CGFloat(index) * stepX
+        // Calculate points
+        let points: [CGPoint] = memoryHistory.enumerated().map { index, value in
+            let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
             let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
-            areaPath.addLine(to: CGPoint(x: x, y: y))
+            return CGPoint(x: x, y: y)
         }
 
-        // Close path to bottom
-        let lastX = chartPadding + CGFloat(memoryHistory.count - 1) * stepX
-        areaPath.addLine(to: CGPoint(x: lastX, y: chartPadding))
+        // Create area path with smooth curve
+        let areaPath = CGMutablePath()
+        areaPath.move(to: CGPoint(x: points[0].x, y: chartPadding))
+        areaPath.addPath(createSmoothPath(points: points))
+        areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartPadding))
         areaPath.closeSubpath()
-
-        // Create shape layer for filled area
+        
+        // Create shape layer for filled area - lighter purple-pink
         let areaLayer = CAShapeLayer()
         areaLayer.path = areaPath
-        areaLayer.fillColor = NSColor(red: 0.6, green: 0.3, blue: 0.5, alpha: 0.4).cgColor
+        areaLayer.fillColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.2).cgColor
         chart.layer?.addSublayer(areaLayer)
-
-        // Draw line on top
-        let linePath = CGMutablePath()
-        for (index, value) in memoryHistory.enumerated() {
-            let x = chartPadding + CGFloat(index) * stepX
-            let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
-            if index == 0 {
-                linePath.move(to: CGPoint(x: x, y: y))
-            } else {
-                linePath.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-
+        
+        // Draw smooth line on top
+        let linePath = createSmoothPath(points: points)
         let lineLayer = CAShapeLayer()
         lineLayer.path = linePath
         lineLayer.fillColor = nil
-        lineLayer.strokeColor = NSColor(red: 0.6, green: 0.3, blue: 0.5, alpha: 0.9).cgColor
+        lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.6).cgColor
         lineLayer.lineWidth = 1.5
+        lineLayer.lineCap = .round
+        lineLayer.lineJoin = .round
         chart.layer?.addSublayer(lineLayer)
 
         // Current usage label
@@ -239,6 +232,26 @@ final class MemoryModule: NSObject, StatusModule {
         totalLabel.alignment = .right
         totalLabel.frame = NSRect(x: chartWidth - 70, y: chartHeight - 26, width: 60, height: 10)
         chart.addSubview(totalLabel)
+    }
+    
+    private func createSmoothPath(points: [CGPoint]) -> CGMutablePath {
+        let path = CGMutablePath()
+        guard points.count > 1 else { return path }
+        
+        path.move(to: points[0])
+        
+        for i in 1..<points.count {
+            let prev = points[i - 1]
+            let curr = points[i]
+            
+            let midX = (prev.x + curr.x) / 2
+            let midY = (prev.y + curr.y) / 2
+            
+            path.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
+            path.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+        }
+        
+        return path
     }
 
     private func createAreaChart(frame: NSRect) -> NSView {
@@ -261,26 +274,29 @@ final class MemoryModule: NSObject, StatusModule {
             let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
 
             let areaPath = CGMutablePath()
-            areaPath.move(to: CGPoint(x: chartPadding, y: chartPadding))
-
+            
+            // Start at bottom-left corner
+            let firstX = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1) * stepX
+            areaPath.move(to: CGPoint(x: firstX, y: chartPadding))
+            
             for (index, value) in memoryHistory.enumerated() {
-                let x = chartPadding + CGFloat(index) * stepX
+                let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
                 let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
                 areaPath.addLine(to: CGPoint(x: x, y: y))
             }
-
-            let lastX = chartPadding + CGFloat(memoryHistory.count - 1) * stepX
-            areaPath.addLine(to: CGPoint(x: lastX, y: chartPadding))
+            
+            // Close path
+            areaPath.addLine(to: CGPoint(x: chartWidth - chartPadding, y: chartPadding))
             areaPath.closeSubpath()
 
             let areaLayer = CAShapeLayer()
             areaLayer.path = areaPath
-            areaLayer.fillColor = NSColor(red: 0.6, green: 0.3, blue: 0.5, alpha: 0.4).cgColor
+            areaLayer.fillColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.2).cgColor
             view.layer?.addSublayer(areaLayer)
 
             let linePath = CGMutablePath()
             for (index, value) in memoryHistory.enumerated() {
-                let x = chartPadding + CGFloat(index) * stepX
+                let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
                 let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
                 if index == 0 {
                     linePath.move(to: CGPoint(x: x, y: y))
@@ -292,7 +308,7 @@ final class MemoryModule: NSObject, StatusModule {
             let lineLayer = CAShapeLayer()
             lineLayer.path = linePath
             lineLayer.fillColor = nil
-            lineLayer.strokeColor = NSColor(red: 0.6, green: 0.3, blue: 0.5, alpha: 0.9).cgColor
+            lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.6).cgColor
             lineLayer.lineWidth = 1.5
             view.layer?.addSublayer(lineLayer)
         }
@@ -393,6 +409,7 @@ final class MemoryModule: NSObject, StatusModule {
             let user = getProcessUser(uid: uid)
             let threads = getProcessThreads(pid: pid)
             let memory = getProcessMemoryUsage(pid: pid)
+            let ppid = proc.kp_eproc.e_ppid
 
             processes.append(MemoryProcessInfo(
                 pid: pid,
@@ -401,7 +418,8 @@ final class MemoryModule: NSObject, StatusModule {
                 isApp: isApp,
                 icon: appIcons[pid],
                 user: user,
-                threads: threads
+                threads: threads,
+                ppid: ppid
             ))
         }
 
@@ -485,7 +503,13 @@ extension MemoryModule: NSTableViewDataSource, NSTableViewDelegate {
                 label.frame = NSRect(x: 24, y: 2, width: 122, height: 16)
                 cell.addSubview(label)
             } else {
-                let label = NSTextField(labelWithString: process.name)
+                let typeIndicator: String
+                if process.user == "root" || process.ppid == 1 {
+                    typeIndicator = "🔧"
+                } else {
+                    typeIndicator = "👤"
+                }
+                let label = NSTextField(labelWithString: "\(typeIndicator) \(process.name)")
                 label.font = .systemFont(ofSize: 10)
                 label.lineBreakMode = .byTruncatingTail
                 label.frame = NSRect(x: 4, y: 2, width: 142, height: 16)

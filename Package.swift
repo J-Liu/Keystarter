@@ -12,10 +12,19 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0")
     ],
     targets: [
+        .target(
+            name: "SensorReader",
+            path: "Sources/SensorReader",
+            publicHeadersPath: ".",
+            linkerSettings: [
+                .linkedFramework("IOKit")
+            ]
+        ),
         .executableTarget(
             name: "Keystarter",
             dependencies: [
-                .product(name: "Sparkle", package: "Sparkle")
+                .product(name: "Sparkle", package: "Sparkle"),
+                .target(name: "SensorReader")
             ],
             path: "Sources/Keystarter",
             resources: [

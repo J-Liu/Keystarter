@@ -14,6 +14,7 @@ struct GPUProcessInfo {
     let icon: NSImage?
     let user: String
     let threads: Int
+    let ppid: Int32
 }
 
 /// GPU monitoring module.
@@ -408,6 +409,7 @@ final class GPUModule: NSObject, StatusModule {
             let user = getProcessUser(uid: uid)
             let threads = getProcessThreads(pid: pid)
             let memory = getProcessMemoryUsage(pid: pid)
+            let ppid = getProcessPPID(pid: pid)
             
             processes.append(GPUProcessInfo(
                 pid: pid,
@@ -417,7 +419,8 @@ final class GPUModule: NSObject, StatusModule {
                 isApp: isApp,
                 icon: appIcons[pid],
                 user: user,
-                threads: threads
+                threads: threads,
+                ppid: ppid
             ))
         }
         
@@ -543,6 +546,16 @@ final class GPUModule: NSObject, StatusModule {
         return 0
     }
     
+    private func getProcessPPID(pid: Int32) -> Int32 {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var proc = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        if sysctl(&mib, 4, &proc, &size, nil, 0) == 0 {
+            return proc.kp_eproc.e_ppid
+        }
+        return 0
+    }
+    
     private func getProcessUser(uid: uid_t) -> String {
         if let pw = getpwuid(uid) {
             return String(cString: pw.pointee.pw_name)
@@ -597,7 +610,13 @@ extension GPUModule: NSTableViewDataSource, NSTableViewDelegate {
                 label.frame = NSRect(x: 24, y: 2, width: 122, height: 16)
                 cell.addSubview(label)
             } else {
-                let label = NSTextField(labelWithString: process.name)
+                let typeIndicator: String
+                if process.user == "root" || process.ppid == 1 {
+                    typeIndicator = "🔧"
+                } else {
+                    typeIndicator = "👤"
+                }
+                let label = NSTextField(labelWithString: "\(typeIndicator) \(process.name)")
                 label.font = .systemFont(ofSize: 10)
                 label.lineBreakMode = .byTruncatingTail
                 label.frame = NSRect(x: 4, y: 2, width: 142, height: 16)

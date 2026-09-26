@@ -3,8 +3,9 @@
 
 import AppKit
 import IOKit
+import SensorReader
 
-/// Sensor monitoring module for Apple Silicon temperature.
+/// Sensor monitoring module for Apple Silicon temperature and power.
 final class SensorModule: NSObject, StatusModule {
     
     var identifier: String { "sensor" }
@@ -14,12 +15,50 @@ final class SensorModule: NSObject, StatusModule {
     private(set) var summaryText: String = "--°C"
     private(set) var summaryValue: String = "--°"
     
-    var refreshInterval: TimeInterval { 10.0 }
+    var refreshInterval: TimeInterval { 2.0 }
     
-    private var cpuTemp: Double = 0
+    private var temperatures: [String: Double] = [:]
+    private let sensorReader = SensorReaderSwift()
+    private var powerReader: SensorReaderSwift?
+    private var powerReadings: PowerReadings?
+    
+    private var cpuTempHistory: [Double] = []
+    private let maxHistoryCount = 60
+    
+    override init() {
+        super.init()
+        powerReader = SensorReaderSwift()
+        powerReader?.setupPowerMonitoring()
+    }
     
     func refreshSummary() {
-        cpuTemp = getCPUTemperature()
+        temperatures = SensorReaderSwift.readTemperatures()
+        
+        // Find CPU temperature
+        var cpuTemp: Double = 0
+        for (name, temp) in temperatures {
+            if name.lowercased().contains("cpu") || name.lowercased().contains("tdie") {
+                cpuTemp = temp
+                break
+            }
+        }
+        
+        // If no specific CPU temp, use first available
+        if cpuTemp == 0, let first = temperatures.values.first {
+            cpuTemp = first
+        }
+        
+        // Update history
+        if cpuTemp > 0 {
+            cpuTempHistory.append(cpuTemp)
+            if cpuTempHistory.count > maxHistoryCount {
+                cpuTempHistory.removeFirst()
+            }
+        }
+        
+        // Read power
+        powerReadings = powerReader?.readPower()
+        
         if cpuTemp > 0 {
             summaryText = String(format: "%.0f°C", cpuTemp)
             summaryValue = String(format: "%.0f°", cpuTemp)
@@ -30,183 +69,149 @@ final class SensorModule: NSObject, StatusModule {
     }
     
     func makeDetailView() -> NSView {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 280, height: 120))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 280, height: 400))
         
         // Header
         let headerView = NSTextField(labelWithString: displayName)
         headerView.font = .systemFont(ofSize: 14, weight: .semibold)
-        headerView.frame = NSRect(x: 16, y: 90, width: 200, height: 20)
+        headerView.frame = NSRect(x: 16, y: 370, width: 200, height: 20)
         container.addSubview(headerView)
         
-        // CPU Temperature
-        let tempLabel = NSTextField(labelWithString: String(format: "CPU: %.1f°C", cpuTemp))
-        tempLabel.font = .systemFont(ofSize: 13)
-        tempLabel.frame = NSRect(x: 16, y: 60, width: 250, height: 20)
-        container.addSubview(tempLabel)
+        // Temperature chart
+        let chartView = createChart(frame: NSRect(x: 16, y: 280, width: 248, height: 80))
+        container.addSubview(chartView)
         
-        // Note
-        let noteLabel = NSTextField(labelWithString: L("status.sensor.note"))
-        noteLabel.font = .systemFont(ofSize: 11)
-        noteLabel.textColor = .secondaryLabelColor
-        noteLabel.frame = NSRect(x: 16, y: 30, width: 250, height: 20)
-        container.addSubview(noteLabel)
+        // Temperature section
+        let tempHeader = NSTextField(labelWithString: "Temperature")
+        tempHeader.font = .systemFont(ofSize: 12, weight: .medium)
+        tempHeader.frame = NSRect(x: 16, y: 260, width: 100, height: 16)
+        container.addSubview(tempHeader)
         
-        return container
-    }
-    
-    // MARK: - Temperature Reading
-    
-    private func getCPUTemperature() -> Double {
-        // Method 1: Try HID sensor (Apple Silicon)
-        if let temp = readHIDSensorTemperature() {
-            return temp
+        // Temperature list
+        var yOffset: CGFloat = 240
+        let tempItems = getTemperatureItems()
+        for item in tempItems {
+            let row = createTempRow(name: item.name, value: item.value, frame: NSRect(x: 16, y: yOffset, width: 248, height: 18))
+            container.addSubview(row)
+            yOffset -= 20
         }
         
-        // Method 2: Try AppleSMC (Intel Mac)
-        if let temp = readSMCTemperature() {
-            return temp
-        }
+        // Power section
+        yOffset -= 10
+        let powerHeader = NSTextField(labelWithString: "Power")
+        powerHeader.font = .systemFont(ofSize: 12, weight: .medium)
+        powerHeader.frame = NSRect(x: 16, y: yOffset, width: 100, height: 16)
+        container.addSubview(powerHeader)
+        yOffset -= 20
         
-        return 0
-    }
-    
-    private func readHIDSensorTemperature() -> Double? {
-        // Apple Silicon uses IOHIDDevice for temperature sensors
-        var iterator: io_iterator_t = 0
-        
-        // Match HID devices with Apple Vendor temperature sensors
-        let matching = IOServiceMatching("IOHIDDevice")
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            return nil
-        }
-        
-        defer {
-            IOObjectRelease(iterator)
-        }
-        
-        var service = IOIteratorNext(iterator)
-        while service != 0 {
-            defer {
-                IOObjectRelease(service)
-                service = IOIteratorNext(iterator)
-            }
+        // Power readings
+        if let power = powerReadings {
+            let powerItems: [(String, Double)] = [
+                ("CPU", power.cpu),
+                ("GPU", power.gpu),
+                ("Memory", power.dram),
+                ("Neural Engine", power.ane),
+                ("PCI", power.pci)
+            ]
             
-            // Get device properties
-            var properties: Unmanaged<CFMutableDictionary>?
-            guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-                  let props = properties?.takeRetainedValue() as? [String: Any] else {
-                continue
-            }
-            
-            // Check if this is a temperature sensor
-            // PrimaryUsagePage: 0xFF00 (Apple Vendor), PrimaryUsage: varies
-            guard let usagePage = props["PrimaryUsagePage"] as? Int,
-                  usagePage == 0xFF00 else { // Apple Vendor page
-                continue
-            }
-            
-            // Try to read temperature value
-            if let inputValues = props["Elements"] as? [[String: Any]] {
-                for element in inputValues {
-                    if let usagePage = element["UsagePage"] as? Int,
-                       usagePage == 0xFF00,
-                       let value = element["Value"] as? Double {
-                        // Value might be in centidegrees or other units
-                        // Typical: temperature * 100
-                        return value / 100.0
-                    }
+            for item in powerItems {
+                if item.1 > 0 {
+                    let row = createPowerRow(name: item.0, value: item.1, frame: NSRect(x: 16, y: yOffset, width: 248, height: 18))
+                    container.addSubview(row)
+                    yOffset -= 20
                 }
             }
         }
         
-        return nil
+        return container
     }
     
-    private func readSMCTemperature() -> Double? {
-        // Intel Mac SMC temperature reading
-        var iterator: io_iterator_t = 0
-        let matching = IOServiceMatching("AppleSMC")
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            return nil
+    // MARK: - Temperature Items
+    
+    private func getTemperatureItems() -> [(name: String, value: Double)] {
+        var items: [(String, Double)] = []
+        
+        // Known sensor names mapping
+        let nameMapping: [String: String] = [
+            "tdie": "CPU Die",
+            "cpu": "CPU",
+            "gpu": "GPU",
+            "dram": "Memory",
+            "pmu": "PMU",
+            "ane": "Neural Engine",
+            "pcie": "PCIe",
+            "battery": "Battery"
+        ]
+        
+        for (sensorName, value) in temperatures.sorted(by: { $0.key < $1.key }) {
+            let lowerName = sensorName.lowercased()
+            
+            // Find matching friendly name
+            var friendlyName = sensorName
+            for (key, friendly) in nameMapping {
+                if lowerName.contains(key) {
+                    friendlyName = friendly
+                    break
+                }
+            }
+            
+            if value > 0 {
+                items.append((friendlyName, value))
+            }
         }
         
-        defer {
-            IOObjectRelease(iterator)
+        // If no items, add placeholder
+        if items.isEmpty {
+            items.append(("No sensors", 0))
         }
         
-        let service = IOIteratorNext(iterator)
-        guard service != 0 else {
-            return nil
-        }
-        
-        defer {
-            IOObjectRelease(service)
-        }
-        
-        // Open connection to SMC
-        var connect: io_connect_t = 0
-        guard IOServiceOpen(service, mach_task_self_, 1, &connect) == KERN_SUCCESS else {
-            return nil
-        }
-        
-        defer {
-            IOServiceClose(connect)
-        }
-        
-        // Read TC0P key (CPU Proximity Temperature)
-        let result = readSMCKey(connect: connect, key: "TC0P")
-        
-        // Fallback: try TC0D (CPU Die Temperature)
-        if result == nil {
-            return readSMCKey(connect: connect, key: "TC0D")
-        }
-        
-        return result
+        return items
     }
     
-    private func readSMCKey(connect: io_connect_t, key: String) -> Double? {
-        let keyBytes = key.utf8.map { UInt8($0) }
-        
-        var input = SMCKeyData()
-        input.key = (UInt32(keyBytes[0]) << 24) | (UInt32(keyBytes[1]) << 16) | (UInt32(keyBytes[2]) << 8) | UInt32(keyBytes[3])
-        input.data8 = UInt8(kSMCReadKey)
-        
-        var output = SMCKeyData()
-        let inputSize: Int = MemoryLayout<SMCKeyData>.size
-        var outputSize: Int = MemoryLayout<SMCKeyData>.size
-        
-        let kr = IOConnectCallStructMethod(
-            connect,
-            kSMCUserClientMethod,
-            &input,
-            inputSize,
-            &output,
-            &outputSize
-        )
-        
-        guard kr == KERN_SUCCESS else { return nil }
-        
-        // Temperature is stored as SP78 (signed 15.8 fixed point)
-        let temp = Double(Int16(bitPattern: UInt16(output.val))) / 256.0
-        return temp > 0 ? temp : nil
-    }
-}
-
-// MARK: - SMC Constants and Structures
-
-private let kSMCUserClientMethod: UInt32 = 2
-private let kSMCReadKey: UInt8 = 5
-
-private struct SMCKeyData {
-    var key: UInt32 = 0
-    var vers: UInt8 = 0
-    var data8: UInt8 = 0
-    var data32: UInt32 = 0
-    var result: UInt8 = 0
-    var status: UInt8 = 0
-    var data8_2: UInt8 = 0
-    var val: UInt32 = 0
-    var bytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    // MARK: - UI Helpers
     
-    init() {}
+    private func createTempRow(name: String, value: Double, frame: NSRect) -> NSView {
+        let row = NSView(frame: frame)
+        
+        let nameLabel = NSTextField(labelWithString: name)
+        nameLabel.font = .systemFont(ofSize: 11)
+        nameLabel.textColor = .secondaryLabelColor
+        nameLabel.frame = NSRect(x: 0, y: 0, width: 120, height: 16)
+        row.addSubview(nameLabel)
+        
+        let valueLabel = NSTextField(labelWithString: String(format: "%.1f°C", value))
+        valueLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        valueLabel.alignment = .right
+        valueLabel.frame = NSRect(x: 180, y: 0, width: 68, height: 16)
+        row.addSubview(valueLabel)
+        
+        return row
+    }
+    
+    private func createPowerRow(name: String, value: Double, frame: NSRect) -> NSView {
+        let row = NSView(frame: frame)
+        
+        let nameLabel = NSTextField(labelWithString: name)
+        nameLabel.font = .systemFont(ofSize: 11)
+        nameLabel.textColor = .secondaryLabelColor
+        nameLabel.frame = NSRect(x: 0, y: 0, width: 120, height: 16)
+        row.addSubview(nameLabel)
+        
+        let valueLabel = NSTextField(labelWithString: String(format: "%.2f W", value))
+        valueLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        valueLabel.alignment = .right
+        valueLabel.frame = NSRect(x: 180, y: 0, width: 68, height: 16)
+        row.addSubview(valueLabel)
+        
+        return row
+    }
+    
+    private func createChart(frame: NSRect) -> NSView {
+        let view = NSView(frame: frame)
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
+        view.layer?.cornerRadius = 4
+        
+        return view
+    }
 }

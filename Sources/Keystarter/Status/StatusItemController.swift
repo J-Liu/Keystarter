@@ -67,7 +67,9 @@ final class StatusItemController: NSObject {
     private func setupStatusItem() {
         // Create separate status item for each module (reverse order so first module appears leftmost)
         for module in modules.reversed() {
-            let item = NSStatusBar.system.statusItem(withLength: 36)
+            // Disk and network modules need wider width for speed display
+            let itemWidth: CGFloat = (module.identifier == "disk" || module.identifier == "network") ? 50 : 36
+            let item = NSStatusBar.system.statusItem(withLength: itemWidth)
 
             // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
@@ -294,19 +296,51 @@ final class StatusItemController: NSObject {
         paraStyle.paragraphSpacing = -3
 
         let attrString = NSMutableAttributedString()
-        let nameAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 7, weight: .medium),
-            .foregroundColor: NSColor.labelColor,
-            .paragraphStyle: paraStyle
-        ]
-        let valueAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-            .foregroundColor: NSColor.labelColor,
-            .paragraphStyle: paraStyle
-        ]
 
-        attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
-        attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+        // Special handling for disk and network - show two-line speed display (default colors)
+        if module.identifier == "disk", let diskModule = module as? DiskModule {
+            let topAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            let bottomAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+
+            attrString.append(NSAttributedString(string: "R " + diskModule.readSpeedText + "\n", attributes: topAttrs))
+            attrString.append(NSAttributedString(string: "W " + diskModule.writeSpeedText, attributes: bottomAttrs))
+        } else if module.identifier == "network", let networkModule = module as? NetworkModule {
+            let topAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            let bottomAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+
+            attrString.append(NSAttributedString(string: "↓ " + networkModule.downloadSpeedText + "\n", attributes: topAttrs))
+            attrString.append(NSAttributedString(string: "↑ " + networkModule.uploadSpeedText, attributes: bottomAttrs))
+        } else {
+            let nameAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 7, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            let valueAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+
+            attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+            attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+        }
 
         button.attributedTitle = attrString
     }
