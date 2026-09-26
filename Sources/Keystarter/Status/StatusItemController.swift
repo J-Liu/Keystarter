@@ -16,6 +16,7 @@ final class StatusItemController: NSObject {
     private var refreshTimer: Timer?
     private var lastRefreshTimes: [String: Date] = [:]
     private let dataQueue = DispatchQueue(label: "com.keystarter.status.data", qos: .utility)
+    private var eventMonitor: Any?
 
     override init() {
         super.init()
@@ -41,6 +42,17 @@ final class StatusItemController: NSObject {
             name: .moduleDataUpdated,
             object: nil
         )
+
+        // Monitor clicks to close popover
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.popover?.close()
+        }
+    }
+
+    deinit {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
     private func log(_ message: String) {
