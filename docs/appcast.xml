@@ -6,6 +6,18 @@
         <language>en</language>
     <item>
     <title>Version 0.1.1</title>
+    <pubDate>Sat, 26 Sep 2026 23:41:08 +0000</pubDate>
+    <sparkle:version>0.1.1</sparkle:version>
+    <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+    <enclosure
+        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.1/Keystarter-0.1.1.zip"
+        sparkle:edSignature="sparkle:edSignature=dEWuAoGh3ldAvlESWFY4ZZBbcri1yzjfhyYeyxSeD7fOyKSLgj348oBg71WJQkAaDKCDPZWxzFyl024tnQKwCw== length=6173180"
+        length="6173180"
+        type="application/octet-stream"/>
+</item>
+    <item>
+    <title>Version 0.1.1</title>
     <pubDate>Sat, 27 Sep 2026 00:00:00 +0000</pubDate>
     <sparkle:version>2</sparkle:version>
     <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
