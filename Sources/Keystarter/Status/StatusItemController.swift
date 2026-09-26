@@ -111,20 +111,22 @@ final class StatusItemController: NSObject {
     }
     
     private func createModuleView(_ module: StatusModule) -> NSView {
-        let view = ModuleClickView(frame: NSRect(x: 0, y: 0, width: 50, height: 22))
-        view.module = module
-        view.onClicked = { [weak self] in
-            self?.showPopover(for: module, from: view)
-            self?.log("Module clicked: \(module.identifier)")
-        }
+        // Use NSButton instead of NSView for proper click handling
+        let button = NSButton(frame: NSRect(x: 0, y: 0, width: 50, height: 22))
+        button.bezelStyle = .accessoryBar
+        button.isBordered = false
+        button.title = ""
+        button.target = self
+        button.action = #selector(moduleButtonClicked(_:))
+        button.identifier = NSUserInterfaceItemIdentifier(module.identifier)
 
         // Vertical stack: name on top, value below
-        let stack = NSStackView(frame: view.bounds)
+        let stack = NSStackView(frame: button.bounds)
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 0
         stack.autoresizingMask = [.width, .height]
-        view.addSubview(stack)
+        button.addSubview(stack)
 
         // Name label (top)
         let nameLabel = NSTextField(labelWithString: module.shortName)
@@ -140,7 +142,17 @@ final class StatusItemController: NSObject {
         valueLabel.identifier = NSUserInterfaceItemIdentifier("valueLabel")
         stack.addArrangedSubview(valueLabel)
 
-        return view
+        return button
+    }
+
+    @objc private func moduleButtonClicked(_ sender: NSButton) {
+        guard let identifier = sender.identifier?.rawValue else { return }
+        log("Button clicked: \(identifier)")
+        guard let module = modules.first(where: { $0.identifier == identifier }) else {
+            log("No module found for: \(identifier)")
+            return
+        }
+        showPopover(for: module, from: sender)
     }
     
     // MARK: - Module Management
@@ -322,16 +334,4 @@ final class StatusItemController: NSObject {
 
 extension Notification.Name {
     static let statusModuleSettingsChanged = Notification.Name("statusModuleSettingsChanged")
-}
-
-// MARK: - ModuleClickView
-
-/// Custom view that stores module reference for click handling.
-private class ModuleClickView: NSView {
-    weak var module: StatusModule?
-    var onClicked: (() -> Void)?
-
-    override func mouseDown(with event: NSEvent) {
-        onClicked?()
-    }
 }
