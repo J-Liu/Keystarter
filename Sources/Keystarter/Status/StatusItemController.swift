@@ -22,11 +22,13 @@ final class StatusItemController: NSObject {
     
     override init() {
         super.init()
+        log("StatusItemController started")
         loadEnabledModules()
+        log("Loaded \(modules.count) modules: \(modules.map { $0.identifier }.joined(separator: ", "))")
         setupStatusItem()
         initialRefresh()
         startRefreshTimer()
-        
+
         // Listen for settings changes
         NotificationCenter.default.addObserver(
             self,
@@ -34,6 +36,11 @@ final class StatusItemController: NSObject {
             name: .statusModuleSettingsChanged,
             object: nil
         )
+    }
+
+    private func log(_ message: String) {
+        guard LogSettings.shared.monitorLogEnabled else { return }
+        LogSettings.write(message, to: LogSettings.shared.monitorLogPath)
     }
 
     /// Perform initial refresh immediately on all modules.
@@ -202,7 +209,8 @@ final class StatusItemController: NSObject {
         
         modules.append(module)
         addModuleView(module)
-        
+        log("Module enabled: \(identifier)")
+
         // Refresh on background queue to avoid UI lag
         dataQueue.async { [weak self] in
             module.refreshSummary()
@@ -211,10 +219,11 @@ final class StatusItemController: NSObject {
             }
         }
     }
-    
+
     func disableModule(_ identifier: String) {
         modules.removeAll { $0.identifier == identifier }
         removeModuleView(identifier)
+        log("Module disabled: \(identifier)")
     }
     
     // MARK: - Refresh

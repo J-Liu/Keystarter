@@ -349,20 +349,6 @@ final class SettingsWindow: NSWindow {
         }
         stack.addArrangedSubview(makeRow(label: L("settings.clipboard.hotkey"), control: clipboardHotkeyRecorder))
 
-        // Row: Enable Clipboard Log
-        let clipboardLogCheckbox = NSButton(checkboxWithTitle: L("settings.clipboard.log.enable"), target: self, action: #selector(clipboardLogChanged(_:)))
-        clipboardLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
-        stack.addArrangedSubview(makeRow(label: "", control: clipboardLogCheckbox))
-
-        // Log path
-        let clipboardLogPath = NSTextField()
-        clipboardLogPath.stringValue = LogSettings.shared.clipboardLogPath
-        clipboardLogPath.isEditable = false
-        clipboardLogPath.isBezeled = true
-        clipboardLogPath.bezelStyle = .roundedBezel
-        clipboardLogPath.widthAnchor.constraint(equalToConstant: 400).isActive = true
-        stack.addArrangedSubview(makeRow(label: L("settings.log.path"), control: clipboardLogPath))
-
         // Row: Max Count
         let maxCountField = NSTextField()
         let currentMaxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500
@@ -384,6 +370,25 @@ final class SettingsWindow: NSWindow {
         let clearButton = NSButton(title: L("settings.clipboard.clear"), target: self, action: #selector(clearClipboardHistory))
         clearButton.bezelStyle = .rounded
         stack.addArrangedSubview(makeRow(label: "", control: clearButton))
+
+        // Section: Log
+        let logLabel = NSTextField(labelWithString: L("settings.log"))
+        logLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        stack.addArrangedSubview(logLabel)
+
+        // Row: Enable Clipboard Log
+        let clipboardLogCheckbox = NSButton(checkboxWithTitle: L("settings.clipboard.log.enable"), target: self, action: #selector(clipboardLogChanged(_:)))
+        clipboardLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: clipboardLogCheckbox))
+
+        // Log path
+        let clipboardLogPath = NSTextField()
+        clipboardLogPath.stringValue = LogSettings.shared.clipboardLogPath
+        clipboardLogPath.isEditable = false
+        clipboardLogPath.isBezeled = true
+        clipboardLogPath.bezelStyle = .roundedBezel
+        clipboardLogPath.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.log.path"), control: clipboardLogPath))
 
         return wrapInTopAlignedContainer(stack)
     }

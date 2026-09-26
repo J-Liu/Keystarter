@@ -23,33 +23,47 @@ final class NetworkModule: NSObject, StatusModule {
     private(set) var summaryValue: String = "--"
     
     var refreshInterval: TimeInterval { 2.0 }
-    
+
     private var previousBytesIn: UInt64 = 0
     private var previousBytesOut: UInt64 = 0
-    private var previousTime: Date = Date()
-    
+    private var previousTime: Date?
+    private var isFirstRefresh: Bool = true
+
     private var processStats: [ProcessNetworkInfo] = []
     private var previousProcessBytes: [Int32: (in: UInt64, out: UInt64)] = [:]
-    
+
     func refreshSummary() {
         let (bytesIn, bytesOut) = getNetworkBytes()
         let now = Date()
-        let elapsed = now.timeIntervalSince(previousTime)
-        
-        if elapsed > 0 && previousTime != now {
+
+        // First refresh: initialize previous values, show 0K
+        if isFirstRefresh {
+            previousBytesIn = bytesIn
+            previousBytesOut = bytesOut
+            previousTime = now
+            isFirstRefresh = false
+            summaryText = "↓0K ↑0K"
+            summaryValue = "↓0K"
+            return
+        }
+
+        guard let prevTime = previousTime else { return }
+        let elapsed = now.timeIntervalSince(prevTime)
+
+        if elapsed > 0 {
             let bytesInDelta = bytesIn > previousBytesIn ? bytesIn - previousBytesIn : 0
             let bytesOutDelta = bytesOut > previousBytesOut ? bytesOut - previousBytesOut : 0
-            
+
             let bytesInPerSec = Double(bytesInDelta) / elapsed
             let bytesOutPerSec = Double(bytesOutDelta) / elapsed
-            
+
             summaryText = "↓\(formatSpeed(bytesInPerSec)) ↑\(formatSpeed(bytesOutPerSec))"
             summaryValue = "↓\(formatSpeedShort(bytesInPerSec))"
-            
+
             // Refresh process stats (expensive, do it less frequently)
             refreshProcessStats(elapsed: elapsed)
         }
-        
+
         previousBytesIn = bytesIn
         previousBytesOut = bytesOut
         previousTime = now
