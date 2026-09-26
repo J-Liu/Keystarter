@@ -18,6 +18,11 @@ final class CPUModule: NSObject, StatusModule {
     private var processes: [AppProcessInfo] = []
     private var coreUsages: [Double] = []
     
+    // Detail view components for real-time update
+    private weak var chartView: NSView?
+    private weak var tableView: NSTableView?
+    private var detailTimer: Timer?
+    
     func refreshSummary() {
         let usage = ProcessInfoProvider.shared.getTotalCPUUsage()
         let value = String(format: "%.0f%%", usage)
@@ -29,13 +34,12 @@ final class CPUModule: NSObject, StatusModule {
     }
     
     func makeDetailView() -> NSView {
-        // Calculate height based on content
-        let coreCount = coreUsages.count
+        // Calculate height
         let headerHeight: CGFloat = 24
         let chartHeight: CGFloat = 80
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
-        let rowCount = min(processes.count, 30)
+        let rowCount = 30
         let totalHeight = headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: totalHeight))
@@ -48,8 +52,9 @@ final class CPUModule: NSObject, StatusModule {
         
         // Per-core bar chart
         let chartY = totalHeight - headerHeight - chartHeight
-        let chartView = createCoreChart(frame: NSRect(x: 12, y: chartY, width: 336, height: chartHeight))
-        container.addSubview(chartView)
+        let chart = createCoreChart(frame: NSRect(x: 12, y: chartY, width: 336, height: chartHeight))
+        chartView = chart
+        container.addSubview(chart)
         
         // Divider line
         let dividerY = chartY - dividerHeight + 4
@@ -62,27 +67,92 @@ final class CPUModule: NSObject, StatusModule {
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
         
-        let tableView = NSTableView(frame: scrollView.bounds)
-        tableView.headerView = nil
-        tableView.backgroundColor = .clear
-        tableView.rowHeight = rowHeight
-        tableView.intercellSpacing = NSSize(width: 0, height: 0)
+        let table = NSTableView(frame: scrollView.bounds)
+        table.headerView = nil
+        table.backgroundColor = .clear
+        table.rowHeight = rowHeight
+        table.intercellSpacing = NSSize(width: 0, height: 0)
         
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        nameColumn.width = 260
-        tableView.addTableColumn(nameColumn)
+        nameColumn.width = 240
+        table.addTableColumn(nameColumn)
         
         let cpuColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("cpu"))
-        cpuColumn.width = 80
-        tableView.addTableColumn(cpuColumn)
+        cpuColumn.width = 100
+        table.addTableColumn(cpuColumn)
         
-        tableView.dataSource = self
-        tableView.delegate = self
+        table.dataSource = self
+        table.delegate = self
         
-        scrollView.documentView = tableView
+        scrollView.documentView = table
+        tableView = table
         container.addSubview(scrollView)
         
+        // Start refresh timer for detail view
+        startDetailTimer()
+        
         return container
+    }
+    
+    private func startDetailTimer() {
+        detailTimer?.invalidate()
+        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.refreshDetail()
+        }
+    }
+    
+    private func refreshDetail() {
+        // Refresh data
+        coreUsages = ProcessInfoProvider.shared.getPerCoreCPUUsage()
+        processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 30)
+        
+        // Update chart
+        updateChart()
+        
+        // Update table
+        tableView?.reloadData()
+    }
+    
+    private func updateChart() {
+        guard let chart = chartView else { return }
+        
+        // Remove old bars
+        chart.subviews.forEach { $0.removeFromSuperview() }
+        
+        let coreCount = coreUsages.count
+        guard coreCount > 0 else { return }
+        
+        let barSpacing: CGFloat = 4
+        let barWidth = (chart.bounds.width - CGFloat(coreCount - 1) * barSpacing) / CGFloat(coreCount)
+        let maxBarHeight = chart.bounds.height - 28
+        
+        for (index, usage) in coreUsages.enumerated() {
+            let x = CGFloat(index) * (barWidth + barSpacing)
+            let barHeight = max(2, min(CGFloat(usage / 100.0) * maxBarHeight, maxBarHeight))
+            
+            // Bar
+            let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
+            bar.wantsLayer = true
+            bar.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.7).cgColor
+            bar.layer?.cornerRadius = 2
+            chart.addSubview(bar)
+            
+            // Core number
+            let coreLabel = NSTextField(labelWithString: "\(index)")
+            coreLabel.font = .systemFont(ofSize: 9)
+            coreLabel.alignment = .center
+            coreLabel.textColor = .secondaryLabelColor
+            coreLabel.frame = NSRect(x: x, y: 2, width: barWidth, height: 12)
+            chart.addSubview(coreLabel)
+            
+            // Percentage
+            let pctLabel = NSTextField(labelWithString: String(format: "%.0f", usage))
+            pctLabel.font = .systemFont(ofSize: 8)
+            pctLabel.alignment = .center
+            pctLabel.textColor = .secondaryLabelColor
+            pctLabel.frame = NSRect(x: x, y: chart.bounds.height - 12, width: barWidth, height: 10)
+            chart.addSubview(pctLabel)
+        }
     }
     
     private func createCoreChart(frame: NSRect) -> NSView {
@@ -93,11 +163,11 @@ final class CPUModule: NSObject, StatusModule {
         
         let barSpacing: CGFloat = 4
         let barWidth = (frame.width - CGFloat(coreCount - 1) * barSpacing) / CGFloat(coreCount)
-        let maxBarHeight = frame.height - 28 // Leave room for labels
+        let maxBarHeight = frame.height - 28
         
         for (index, usage) in coreUsages.enumerated() {
             let x = CGFloat(index) * (barWidth + barSpacing)
-            let barHeight = max(2, CGFloat(usage / 100.0) * maxBarHeight)
+            let barHeight = max(2, min(CGFloat(usage / 100.0) * maxBarHeight, maxBarHeight))
             
             // Bar
             let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
@@ -142,18 +212,24 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
         let cell = NSTableCellView()
         
         if tableColumn?.identifier.rawValue == "name" {
-            let displayName = process.isApp ? process.name : "⚠️ \(process.name) (pid:\(process.pid))"
+            let displayName: String
+            if process.isApp {
+                displayName = process.name
+            } else {
+                displayName = "⚠️ \(process.name) [\(process.pid)]"
+            }
+            
             let label = NSTextField(labelWithString: displayName)
             label.font = .systemFont(ofSize: 11)
             label.lineBreakMode = .byTruncatingTail
-            label.frame = NSRect(x: 4, y: 2, width: 252, height: 16)
+            label.frame = NSRect(x: 4, y: 2, width: 232, height: 16)
             cell.addSubview(label)
         } else {
             let label = NSTextField(labelWithString: String(format: "%.1f%%", process.cpuUsage))
             label.font = .systemFont(ofSize: 11)
             label.textColor = .secondaryLabelColor
             label.alignment = .right
-            label.frame = NSRect(x: 4, y: 2, width: 72, height: 16)
+            label.frame = NSRect(x: 4, y: 2, width: 92, height: 16)
             cell.addSubview(label)
         }
         

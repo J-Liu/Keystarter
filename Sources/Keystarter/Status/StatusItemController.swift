@@ -68,12 +68,12 @@ final class StatusItemController: NSObject {
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 8, weight: .medium),
-                .foregroundColor: NSColor.secondaryLabelColor,
+                .font: NSFont.systemFont(ofSize: 7, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -132,12 +132,12 @@ final class StatusItemController: NSObject {
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 8, weight: .medium),
-                .foregroundColor: NSColor.secondaryLabelColor,
+                .font: NSFont.systemFont(ofSize: 7, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -284,12 +284,12 @@ final class StatusItemController: NSObject {
         
         let attrString = NSMutableAttributedString()
         let nameAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 8, weight: .medium),
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .font: NSFont.systemFont(ofSize: 7, weight: .medium),
+            .foregroundColor: NSColor.labelColor,
             .paragraphStyle: paraStyle
         ]
         let valueAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.labelColor,
             .paragraphStyle: paraStyle
         ]
