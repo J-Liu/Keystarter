@@ -281,29 +281,33 @@ final class StatusItemController: NSObject {
     @objc private func moduleClicked(_ gesture: NSClickGestureRecognizer) {
         guard let view = gesture.view,
               let identifier = view.identifier?.rawValue else {
-            print("DEBUG: No view or identifier found")
+            log("Click event: No view or identifier found")
             return
         }
-        
+
+        log("Click event: view.identifier = \(identifier)")
+        log("Click event: available modules = \(modules.map { $0.identifier })")
+
         guard let module = modules.first(where: { $0.identifier == identifier }) else {
-            print("DEBUG: No module found for identifier: \(identifier), modules: \(modules.map { $0.identifier })")
+            log("Click event: No module found for identifier: \(identifier)")
             return
         }
-        
-        print("DEBUG: Showing popover for module: \(module.identifier)")
+
+        log("Click event: Showing popover for module: \(module.identifier)")
         showPopover(for: module, from: view)
     }
-    
+
     private func showPopover(for module: StatusModule, from view: NSView) {
         popover?.close()
-        
+
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentViewController = NSViewController()
         popover.contentViewController?.view = module.makeDetailView()
-        
+
         popover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         self.popover = popover
+        log("Popover shown for: \(module.identifier)")
     }
     
     @objc private func settingsChanged() {
