@@ -22,13 +22,14 @@ typedef IOHIDEventRef (*IOHIDServiceClientCopyEventFunc)(IOHIDServiceClientRef s
 typedef double (*IOHIDEventGetFloatValueFunc)(IOHIDEventRef event, int32_t field);
 typedef int32_t (*IOHIDEventFieldBaseFunc)(int32_t eventType);
 
-typedef IOReportSubscriptionRef (*IOReportCreateSubscriptionFunc)(CFAllocatorRef allocator, CFArrayRef channels, CFArrayRef *subscribed, uint64_t flags, int32_t *error);
-typedef CFArrayRef (*IOReportCreateChannelsFunc)(CFAllocatorRef allocator, CFStringRef interest);
+typedef IOReportSubscriptionRef (*IOReportCreateSubscriptionFunc)(void *allocator, CFMutableDictionaryRef channels, CFMutableDictionaryRef *subscribed, uint64_t flags, CFTypeRef error);
+typedef CFMutableDictionaryRef (*IOReportCopyChannelsInGroupFunc)(CFStringRef group, CFStringRef subGroup, uint64_t a, uint64_t b, uint64_t c);
+typedef void (*IOReportMergeChannelsFunc)(CFMutableDictionaryRef a, CFDictionaryRef b, CFTypeRef null);
 typedef int64_t (*IOReportSimpleGetIntegerValueFunc)(CFDictionaryRef channel, int sample_idx);
 typedef CFStringRef (*IOReportChannelGetGroupFunc)(CFDictionaryRef channel);
 typedef CFStringRef (*IOReportChannelGetChannelNameFunc)(CFDictionaryRef channel);
 typedef CFStringRef (*IOReportChannelGetUnitLabelFunc)(CFDictionaryRef channel);
-typedef CFDictionaryRef (*IOReportCreateSamplesFunc)(IOReportSubscriptionRef subscription, CFArrayRef channels, CFArrayRef previous);
+typedef CFDictionaryRef (*IOReportCreateSamplesFunc)(IOReportSubscriptionRef subscription, CFMutableDictionaryRef channels, CFDictionaryRef previous);
 
 // Static function pointers
 static IOHIDEventSystemClientCreateFunc _IOHIDEventSystemClientCreate = NULL;
@@ -40,7 +41,8 @@ static IOHIDEventGetFloatValueFunc _IOHIDEventGetFloatValue = NULL;
 static IOHIDEventFieldBaseFunc _IOHIDEventFieldBase = NULL;
 
 static IOReportCreateSubscriptionFunc _IOReportCreateSubscription = NULL;
-static IOReportCreateChannelsFunc _IOReportCreateChannels = NULL;
+static IOReportCopyChannelsInGroupFunc _IOReportCopyChannelsInGroup = NULL;
+static IOReportMergeChannelsFunc _IOReportMergeChannels = NULL;
 static IOReportSimpleGetIntegerValueFunc _IOReportSimpleGetIntegerValue = NULL;
 static IOReportChannelGetGroupFunc _IOReportChannelGetGroup = NULL;
 static IOReportChannelGetChannelNameFunc _IOReportChannelGetChannelName = NULL;
@@ -54,7 +56,10 @@ static void loadPrivateFunctions(void) {
     if (_functionsLoaded) return;
     
     void *handle = dlopen(NULL, RTLD_LAZY);
-    if (!handle) return;
+    if (!handle) {
+        fprintf(stderr, "[SensorReader] dlopen failed\n");
+        return;
+    }
     
     // HID functions
     _IOHIDEventSystemClientCreate = (IOHIDEventSystemClientCreateFunc)dlsym(handle, "IOHIDEventSystemClientCreate");
@@ -67,7 +72,8 @@ static void loadPrivateFunctions(void) {
     
     // IOReport functions
     _IOReportCreateSubscription = (IOReportCreateSubscriptionFunc)dlsym(handle, "IOReportCreateSubscription");
-    _IOReportCreateChannels = (IOReportCreateChannelsFunc)dlsym(handle, "IOReportCreateChannels");
+    _IOReportCopyChannelsInGroup = (IOReportCopyChannelsInGroupFunc)dlsym(handle, "IOReportCopyChannelsInGroup");
+    _IOReportMergeChannels = (IOReportMergeChannelsFunc)dlsym(handle, "IOReportMergeChannels");
     _IOReportSimpleGetIntegerValue = (IOReportSimpleGetIntegerValueFunc)dlsym(handle, "IOReportSimpleGetIntegerValue");
     _IOReportChannelGetGroup = (IOReportChannelGetGroupFunc)dlsym(handle, "IOReportChannelGetGroup");
     _IOReportChannelGetChannelName = (IOReportChannelGetChannelNameFunc)dlsym(handle, "IOReportChannelGetChannelName");
@@ -76,6 +82,11 @@ static void loadPrivateFunctions(void) {
     
     dlclose(handle);
     _functionsLoaded = YES;
+    
+    fprintf(stderr, "[SensorReader] HID: create=%p, copyServices=%p\n",
+            _IOHIDEventSystemClientCreate, _IOHIDEventSystemClientCopyServices);
+    fprintf(stderr, "[SensorReader] IOReport: copyChannels=%p, createSamples=%p\n",
+            _IOReportCopyChannelsInGroup, _IOReportCreateSamples);
 }
 
 // Power readings implementation
@@ -84,8 +95,8 @@ static void loadPrivateFunctions(void) {
 
 @implementation SensorReader {
     IOReportSubscriptionRef _subscription;
-    CFArrayRef _channels;
-    NSDictionary *_prevPowers;
+    CFMutableDictionaryRef _channels;
+    NSMutableDictionary *_prevPowers;
     NSDate *_lastRead;
 }
 
@@ -113,11 +124,33 @@ static void loadPrivateFunctions(void) {
     }
     
     // Set matching criteria
-    // Page 0xFF00 (65280) is the Apple-specific HID page
-    // Usage varies by sensor type
+    // Different sensor types have different usage page/usage
+    // Temperature: page=0xff00, usage=0x0005
+    // Current: page=0xff08, usage=0x0002
+    // Voltage: page=0xff08, usage=0x0003
+    int32_t usagePage, usage;
+    switch (type) {
+        case SensorTypeTemperature:
+            usagePage = 0xff00;
+            usage = 0x0005;
+            break;
+        case SensorTypeCurrent:
+            usagePage = 0xff08;
+            usage = 0x0002;
+            break;
+        case SensorTypeVoltage:
+            usagePage = 0xff08;
+            usage = 0x0003;
+            break;
+        default:
+            usagePage = 0xff00;
+            usage = 0x0005;
+            break;
+    }
+    
     NSDictionary *matching = @{
-        @"PrimaryUsagePage": @(0xFF00),
-        @"PrimaryUsage": @(type)
+        @"PrimaryUsagePage": @(usagePage),
+        @"PrimaryUsage": @(usage)
     };
     _IOHIDEventSystemClientSetMatching(system, (__bridge CFDictionaryRef)matching);
     
@@ -139,14 +172,28 @@ static void loadPrivateFunctions(void) {
         }
         
         // Get event with value
-        IOHIDEventRef event = _IOHIDServiceClientCopyEvent(service, (int32_t)type, 0, 0);
+        int32_t eventType;
+        switch (type) {
+            case SensorTypeTemperature:
+                eventType = 15; // kIOHIDEventTypeTemperature
+                break;
+            case SensorTypeVoltage:
+            case SensorTypeCurrent:
+                eventType = 25; // kIOHIDEventTypePower
+                break;
+            default:
+                eventType = 15;
+                break;
+        }
+        
+        IOHIDEventRef event = _IOHIDServiceClientCopyEvent(service, eventType, 0, 0);
         if (!event) {
             continue;
         }
         
-        // Extract value - field is the usage value directly
-        // IOHIDEventFieldBase(eventType) = eventType, so we use type directly
-        double value = _IOHIDEventGetFloatValue(event, (int32_t)type);
+        // Extract value - field is eventType << 16 (IOHIDEventFieldBase macro)
+        int32_t field = eventType << 16;
+        double value = _IOHIDEventGetFloatValue(event, field);
         result[name] = @(value);
         
         CFRelease(event);
@@ -163,13 +210,13 @@ static void loadPrivateFunctions(void) {
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _prevPowers = @{
+        _prevPowers = [NSMutableDictionary dictionaryWithDictionary:@{
             @"CPU": @0,
             @"GPU": @0,
             @"ANE": @0,
             @"DRAM": @0,
             @"PCI": @0
-        };
+        }];
     }
     return self;
 }
@@ -177,37 +224,69 @@ static void loadPrivateFunctions(void) {
 - (void)setupPowerMonitoring {
     loadPrivateFunctions();
     
-    if (!_IOReportCreateChannels || !_IOReportCreateSubscription) {
+    if (!_IOReportCopyChannelsInGroup || !_IOReportCreateSubscription) {
+        NSLog(@"IOReport functions not found");
         return;
     }
     
-    // Create IOReport subscription for energy monitoring
-    CFStringRef interest = CFSTR("Energy Model");
-    _channels = _IOReportCreateChannels(kCFAllocatorDefault, interest);
-    
-    if (_channels) {
-        CFArrayRef subscribed = nil;
-        _subscription = _IOReportCreateSubscription(kCFAllocatorDefault, _channels, &subscribed, 0, NULL);
-        if (subscribed) CFRelease(subscribed);
+    // Get channels for energy monitoring
+    _channels = _IOReportCopyChannelsInGroup(CFSTR("Energy Model"), NULL, 0, 0, 0);
+    if (!_channels) {
+        NSLog(@"Failed to get Energy Model channels");
+        return;
     }
+    
+    // Check channels count
+    NSDictionary *chanDict = (__bridge NSDictionary *)_channels;
+    NSArray *chanList = chanDict[@"IOReportChannels"];
+    NSLog(@"Found %lu IOReport channels", (unsigned long)[chanList count]);
+    
+    // Create subscription
+    CFMutableDictionaryRef subscribedDict = NULL;
+    _subscription = _IOReportCreateSubscription(NULL, _channels, &subscribedDict, 0, NULL);
+    
+    if (!_subscription) {
+        NSLog(@"Failed to create IOReport subscription");
+        CFRelease(_channels);
+        _channels = NULL;
+        return;
+    }
+    
+    // Update channels with subscribed dict if provided
+    if (subscribedDict) {
+        CFRelease(_channels);
+        _channels = subscribedDict;
+    }
+    
+    // Initialize previous powers
+    _prevPowers = [@{
+        @"CPU": @0,
+        @"GPU": @0,
+        @"ANE": @0,
+        @"DRAM": @0,
+        @"PCI": @0
+    } mutableCopy];
+    
+    NSLog(@"Power monitoring ready");
 }
 
 - (PowerReadings *)readPower {
     PowerReadings *readings = [[PowerReadings alloc] init];
     
-    if (!_subscription || !_IOReportCreateSamples || !_IOReportChannelGetGroup ||
-        !_IOReportChannelGetChannelName || !_IOReportChannelGetUnitLabel || !_IOReportSimpleGetIntegerValue) {
+    if (!_subscription || !_channels || !_IOReportCreateSamples ||
+        !_IOReportChannelGetGroup || !_IOReportChannelGetChannelName ||
+        !_IOReportChannelGetUnitLabel || !_IOReportSimpleGetIntegerValue) {
         return readings;
     }
     
     // Get current samples
-    CFDictionaryRef sampleDict = _IOReportCreateSamples(_subscription, _channels, NULL);
-    if (!sampleDict) {
+    CFDictionaryRef samples = _IOReportCreateSamples(_subscription, _channels, NULL);
+    if (!samples) {
         return readings;
     }
     
-    NSDictionary *dict = CFBridgingRelease(sampleDict);
-    NSArray *channels = dict[@"IOReportChannels"];
+    NSDictionary *sampleDict = (__bridge_transfer NSDictionary *)samples;
+    NSArray *channels = sampleDict[@"IOReportChannels"];
     if (!channels) {
         return readings;
     }
@@ -219,21 +298,30 @@ static void loadPrivateFunctions(void) {
     for (id item in channels) {
         CFDictionaryRef channel = (__bridge CFDictionaryRef)item;
         
-        NSString *group = CFBridgingRelease(_IOReportChannelGetGroup(channel));
-        if (!group || ![group isEqualToString:@"Energy Model"]) {
+        // Use unretained values (like Stats does with takeUnretainedValue)
+        CFStringRef groupCF = _IOReportChannelGetGroup(channel);
+        if (!groupCF) continue;
+        NSString *group = (__bridge NSString *)groupCF;
+        if (![group isEqualToString:@"Energy Model"]) {
             continue;
         }
         
-        NSString *channelName = CFBridgingRelease(_IOReportChannelGetChannelName(channel));
-        NSString *unit = CFBridgingRelease(_IOReportChannelGetUnitLabel(channel));
+        CFStringRef channelNameCF = _IOReportChannelGetChannelName(channel);
+        CFStringRef unitCF = _IOReportChannelGetUnitLabel(channel);
+        if (!channelNameCF || !unitCF) continue;
+        
+        NSString *channelName = (__bridge NSString *)channelNameCF;
+        NSString *unit = (__bridge NSString *)unitCF;
         int64_t value = _IOReportSimpleGetIntegerValue(channel, 0);
         
-        // Convert to Joules based on unit
-        double energy = value;
+        // Convert to Joules (like Stats .power() function)
+        double energy = 0;
         if ([unit isEqualToString:@"mJ"]) {
-            energy = value / 1000.0;
-        } else if ([unit isEqualToString:@"µJ"]) {
-            energy = value / 1000000.0;
+            energy = value / 1e3;
+        } else if ([unit isEqualToString:@"µJ"] || [unit isEqualToString:@"uJ"]) {
+            energy = value / 1e6;
+        } else if ([unit isEqualToString:@"nJ"]) {
+            energy = value / 1e9;
         }
         
         // Categorize by channel name
@@ -250,46 +338,44 @@ static void loadPrivateFunctions(void) {
         }
     }
     
-    // Calculate power (Watts) from energy delta
+    // Calculate power from energy delta (like Stats)
     if (_lastRead) {
         NSTimeInterval elapsed = [now timeIntervalSinceDate:_lastRead];
         if (elapsed > 0) {
-            for (NSString *key in @[@"CPU", @"GPU", @"ANE", @"DRAM", @"PCI"]) {
+            double cpuCurrent = [currentPowers[@"CPU"] doubleValue];
+            double cpuPrevious = [_prevPowers[@"CPU"] doubleValue];
+            double gpuCurrent = [currentPowers[@"GPU"] doubleValue];
+            double gpuPrevious = [_prevPowers[@"GPU"] doubleValue];
+            
+            // Only calculate if we have valid previous values (like Stats guard prevCPU != 0)
+            if (cpuCurrent > cpuPrevious && cpuPrevious > 0) {
+                readings.CPU = (cpuCurrent - cpuPrevious) / elapsed;
+            }
+            if (gpuCurrent > gpuPrevious && gpuPrevious > 0) {
+                readings.GPU = (gpuCurrent - gpuPrevious) / elapsed;
+            }
+            // Same for other components
+            for (NSString *key in @[@"ANE", @"DRAM", @"PCI"]) {
                 double current = [currentPowers[key] doubleValue];
                 double previous = [_prevPowers[key] doubleValue];
-                
                 if (current > previous && previous > 0) {
-                    double power = (current - previous) / elapsed; // Watts
-                    
-                    if ([key isEqualToString:@"CPU"]) {
-                        readings.CPU = power;
-                    } else if ([key isEqualToString:@"GPU"]) {
-                        readings.GPU = power;
-                    } else if ([key isEqualToString:@"ANE"]) {
-                        readings.ANE = power;
-                    } else if ([key isEqualToString:@"DRAM"]) {
-                        readings.DRAM = power;
-                    } else if ([key isEqualToString:@"PCI"]) {
-                        readings.PCI = power;
-                    }
+                    double power = (current - previous) / elapsed;
+                    if ([key isEqualToString:@"ANE"]) readings.ANE = power;
+                    else if ([key isEqualToString:@"DRAM"]) readings.DRAM = power;
+                    else if ([key isEqualToString:@"PCI"]) readings.PCI = power;
                 }
             }
         }
     }
     
-    _prevPowers = [currentPowers copy];
+    // Update previous values
+    [_prevPowers setDictionary:currentPowers];
     _lastRead = now;
     
     return readings;
 }
 
 - (void)dealloc {
-    if (_subscription) {
-        CFRelease(_subscription);
-    }
-    if (_channels) {
-        CFRelease(_channels);
-    }
 }
 
 @end
