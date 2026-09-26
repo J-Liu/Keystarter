@@ -45,6 +45,11 @@ final class LauncherWindow: NSWindow {
     private var cachedRunningAppPaths: Set<String> = []
     private var runningAppsCacheTimer: Timer?
 
+    private func log(_ message: String) {
+        guard LogSettings.shared.launcherLogEnabled else { return }
+        LogSettings.write(message, to: LogSettings.shared.launcherLogPath)
+    }
+
     init() {
         // Initial frame: centered, fixed size
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
@@ -470,6 +475,7 @@ final class LauncherWindow: NSWindow {
     func show() {
         // Don't switch input source here - wait until window has focus
         isHandlingDockClick = true
+        log("LauncherWindow shown")
 
         // Reset search
         searchField.stringValue = ""
@@ -512,7 +518,7 @@ final class LauncherWindow: NSWindow {
 
     func hide() {
         guard isVisible else { return }
-        print("[Window] hide() called")
+        log("LauncherWindow hidden")
         isHandlingDockClick = true
         orderOut(nil)
         // Restore input source immediately after hiding
