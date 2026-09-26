@@ -165,98 +165,108 @@ final class GPUModule: NSObject, StatusModule {
     
     private func updateChart() {
         guard let chart = chartView else { return }
-        
+
         chart.subviews.forEach { $0.removeFromSuperview() }
-        
-        let maxBarHeight = chart.bounds.height - 28
-        let barSpacing: CGFloat = 4
-        let barAreaWidth = chart.bounds.width - 16
-        let barWidth = (barAreaWidth - CGFloat(2) * barSpacing) / 3.0
-        
-        let utils: [(Double, NSColor)] = [
-            (gpuUsage, NSColor.systemPurple),
-            (rendererUtil, NSColor.systemBlue),
-            (tilerUtil, NSColor.systemOrange)
-        ]
-        
-        for (idx, (util, color)) in utils.enumerated() {
-            let x = 8 + CGFloat(idx) * (barWidth + barSpacing)
-            let barHeight = max(4, min(CGFloat(util / 100.0) * maxBarHeight, maxBarHeight))
-            
-            // Bar
-            let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
-            bar.wantsLayer = true
-            bar.layer?.backgroundColor = color.withAlphaComponent(0.7).cgColor
-            bar.layer?.cornerRadius = 2
-            chart.addSubview(bar)
-            
-            // Percentage label
-            let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", util))
-            pctLabel.font = .systemFont(ofSize: 9)
-            pctLabel.textColor = .secondaryLabelColor
-            pctLabel.alignment = .center
-            pctLabel.frame = NSRect(x: x, y: 2, width: barWidth, height: 12)
-            chart.addSubview(pctLabel)
-        }
-        
-        // VRAM info
-        let vramUsedGB = Double(vramUsed) / 1_073_741_824.0
-        let vramTotalGB = Double(vramTotal) / 1_073_741_824.0
-        let vramText = vramTotal > 0 ? String(format: "VRAM: %.1f/%.1f GB", vramUsedGB, vramTotalGB) : ""
-        let vramLabel = NSTextField(labelWithString: vramText)
-        vramLabel.font = .systemFont(ofSize: 10)
-        vramLabel.textColor = .secondaryLabelColor
-        vramLabel.alignment = .right
-        vramLabel.frame = NSRect(x: chart.bounds.width - 120, y: chart.bounds.height - 12, width: 110, height: 10)
-        chart.addSubview(vramLabel)
+
+        let chartWidth = chart.bounds.width
+        let chartHeight = chart.bounds.height
+
+        // Layout: left small, center large, right small
+        let bigRadius: CGFloat = 28
+        let smallRadius: CGFloat = 20
+
+        // Center pie (Device) - larger
+        let centerX = chartWidth / 2
+        let centerY = chartHeight / 2 - 4
+        createPieChart(in: chart, center: NSPoint(x: centerX, y: centerY), radius: bigRadius,
+                       value: gpuUsage, color: NSColor.systemPurple, label: "Device")
+
+        // Left pie (Renderer) - smaller
+        let leftX = centerX - bigRadius - smallRadius - 20
+        createPieChart(in: chart, center: NSPoint(x: leftX, y: centerY), radius: smallRadius,
+                       value: rendererUtil, color: NSColor.systemBlue, label: "Renderer")
+
+        // Right pie (Tiler) - smaller
+        let rightX = centerX + bigRadius + smallRadius + 20
+        createPieChart(in: chart, center: NSPoint(x: rightX, y: centerY), radius: smallRadius,
+                       value: tilerUtil, color: NSColor.systemOrange, label: "Tiler")
     }
-    
+
+    private func createPieChart(in parent: NSView, center: NSPoint, radius: CGFloat,
+                                value: Double, color: NSColor, label: String) {
+        // Background circle (gray track)
+        let bgCircle = NSView(frame: NSRect(x: center.x - radius, y: center.y - radius,
+                                            width: radius * 2, height: radius * 2))
+        bgCircle.wantsLayer = true
+        bgCircle.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.3).cgColor
+        bgCircle.layer?.cornerRadius = radius
+        parent.addSubview(bgCircle)
+
+        // Foreground pie (colored arc) using CAShapeLayer
+        let pieLayer = CAShapeLayer()
+        pieLayer.fillColor = nil
+        pieLayer.strokeColor = color.cgColor
+        pieLayer.lineWidth = radius * 0.4
+        pieLayer.strokeStart = 0
+        pieLayer.strokeEnd = min(CGFloat(value / 100.0), 1.0)
+
+        // Create circular path using CGPath
+        let arcRadius = radius - radius * 0.2
+        let cgPath = CGMutablePath()
+        cgPath.addArc(center: CGPoint(x: radius, y: radius), radius: arcRadius,
+                      startAngle: -CGFloat.pi / 2, endAngle: CGFloat.pi * 1.5, clockwise: false)
+        pieLayer.path = cgPath
+
+        bgCircle.layer?.addSublayer(pieLayer)
+
+        // Center percentage label
+        let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", value))
+        pctLabel.font = .systemFont(ofSize: radius > 24 ? 12 : 9, weight: .medium)
+        pctLabel.textColor = color
+        pctLabel.alignment = .center
+        let labelWidth = radius > 24 ? 40.0 : 30.0
+        pctLabel.frame = NSRect(x: center.x - labelWidth / 2, y: center.y - 6,
+                                width: labelWidth, height: 12)
+        parent.addSubview(pctLabel)
+
+        // Name label below
+        let nameLabel = NSTextField(labelWithString: label)
+        nameLabel.font = .systemFont(ofSize: 9)
+        nameLabel.textColor = .secondaryLabelColor
+        nameLabel.alignment = .center
+        nameLabel.frame = NSRect(x: center.x - 40, y: center.y - radius - 16, width: 80, height: 12)
+        parent.addSubview(nameLabel)
+    }
+
     private func createUsageChart(frame: NSRect) -> NSView {
         let view = NSView(frame: frame)
-        
+
         view.wantsLayer = true
         view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         view.layer?.cornerRadius = 4
-        
-        let maxBarHeight = frame.height - 28
-        let barSpacing: CGFloat = 4
-        let barAreaWidth = frame.width - 16
-        let barWidth = (barAreaWidth - CGFloat(2) * barSpacing) / 3.0
-        
-        let utils: [(Double, NSColor)] = [
-            (gpuUsage, NSColor.systemPurple),
-            (rendererUtil, NSColor.systemBlue),
-            (tilerUtil, NSColor.systemOrange)
-        ]
-        
-        for (idx, (util, color)) in utils.enumerated() {
-            let x = 8 + CGFloat(idx) * (barWidth + barSpacing)
-            let barHeight = max(4, min(CGFloat(util / 100.0) * maxBarHeight, maxBarHeight))
-            
-            let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
-            bar.wantsLayer = true
-            bar.layer?.backgroundColor = color.withAlphaComponent(0.7).cgColor
-            bar.layer?.cornerRadius = 2
-            view.addSubview(bar)
-            
-            let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", util))
-            pctLabel.font = .systemFont(ofSize: 9)
-            pctLabel.textColor = .secondaryLabelColor
-            pctLabel.alignment = .center
-            pctLabel.frame = NSRect(x: x, y: 2, width: barWidth, height: 12)
-            view.addSubview(pctLabel)
-        }
-        
-        let vramUsedGB = Double(vramUsed) / 1_073_741_824.0
-        let vramTotalGB = Double(vramTotal) / 1_073_741_824.0
-        let vramText = vramTotal > 0 ? String(format: "VRAM: %.1f/%.1f GB", vramUsedGB, vramTotalGB) : ""
-        let vramLabel = NSTextField(labelWithString: vramText)
-        vramLabel.font = .systemFont(ofSize: 10)
-        vramLabel.textColor = .secondaryLabelColor
-        vramLabel.alignment = .right
-        vramLabel.frame = NSRect(x: frame.width - 120, y: frame.height - 12, width: 110, height: 10)
-        view.addSubview(vramLabel)
-        
+
+        let chartWidth = frame.width
+        let chartHeight = frame.height
+
+        let bigRadius: CGFloat = 28
+        let smallRadius: CGFloat = 20
+
+        // Center pie (Device)
+        let centerX = chartWidth / 2
+        let centerY = chartHeight / 2 - 4
+        createPieChart(in: view, center: NSPoint(x: centerX, y: centerY), radius: bigRadius,
+                       value: gpuUsage, color: NSColor.systemPurple, label: "Device")
+
+        // Left pie (Renderer)
+        let leftX = centerX - bigRadius - smallRadius - 20
+        createPieChart(in: view, center: NSPoint(x: leftX, y: centerY), radius: smallRadius,
+                       value: rendererUtil, color: NSColor.systemBlue, label: "Renderer")
+
+        // Right pie (Tiler)
+        let rightX = centerX + bigRadius + smallRadius + 20
+        createPieChart(in: view, center: NSPoint(x: rightX, y: centerY), radius: smallRadius,
+                       value: tilerUtil, color: NSColor.systemOrange, label: "Tiler")
+
         return view
     }
     
