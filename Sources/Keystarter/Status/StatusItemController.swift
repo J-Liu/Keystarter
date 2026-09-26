@@ -10,7 +10,6 @@ final class StatusItemController: NSObject {
     
     private var statusItem: NSStatusItem?
     private var containerView: NSView?
-    private var stackView: NSStackView?
     private var popover: NSPopover?
     
     private var modules: [StatusModule] = []
@@ -58,75 +57,89 @@ final class StatusItemController: NSObject {
     }
     
     // MARK: - Setup
-    
+
     private func setupStatusItem() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        
+        // Calculate total width based on number of modules
+        let moduleWidth: CGFloat = 50
+        let spacing: CGFloat = 1
+        let totalWidth = CGFloat(modules.count) * moduleWidth + CGFloat(max(0, modules.count - 1)) * spacing
+
+        statusItem = NSStatusBar.system.statusItem(withLength: totalWidth)
+
         guard let statusItem = statusItem else { return }
-        
-        // Create container view
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 24))
-        container.wantsLayer = true
-        
-        // Create stack view
-        let stack = NSStackView(frame: container.bounds)
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 8
-        stack.autoresizingMask = [.width, .height]
-        container.addSubview(stack)
-        
+
+        // Disable button's default action
+        statusItem.button?.target = nil
+        statusItem.button?.action = nil
+
+        // Create container
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: totalWidth, height: 22))
         containerView = container
-        stackView = stack
-        
-        // Add module views
+
+        // Add module views with fixed positions
+        var x: CGFloat = 0
         for module in modules {
-            addModuleView(module)
+            let view = createModuleView(module, frame: NSRect(x: x, y: 0, width: moduleWidth, height: 22))
+            container.addSubview(view)
+            moduleViews[module.identifier] = view
+            x += moduleWidth + spacing
         }
-        
-        // Update status item button with custom view
-        if let button = statusItem.button {
-            button.addSubview(container)
-            container.translatesAutoresizingMaskIntoConstraints = false
-            NSLayoutConstraint.activate([
-                container.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-                container.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-                container.topAnchor.constraint(equalTo: button.topAnchor),
-                container.bottomAnchor.constraint(equalTo: button.bottomAnchor)
-            ])
-        }
+
+        statusItem.button?.addSubview(container)
     }
-    
+
     private func addModuleView(_ module: StatusModule) {
-        let view = createModuleView(module)
-        stackView?.addArrangedSubview(view)
-        moduleViews[module.identifier] = view
+        // Recalculate layout
+        relayoutModuleViews()
     }
-    
+
     private func removeModuleView(_ identifier: String) {
-        guard let view = moduleViews[identifier] else { return }
-        stackView?.removeArrangedSubview(view)
-        view.removeFromSuperview()
         moduleViews.removeValue(forKey: identifier)
+        relayoutModuleViews()
     }
-    
-    private func createModuleView(_ module: StatusModule) -> NSView {
-        // Use NSButton instead of NSView for proper click handling
-        let button = NSButton(frame: NSRect(x: 0, y: 0, width: 50, height: 22))
-        button.bezelStyle = .accessoryBar
-        button.isBordered = false
-        button.title = ""
-        button.target = self
-        button.action = #selector(moduleButtonClicked(_:))
-        button.identifier = NSUserInterfaceItemIdentifier(module.identifier)
+
+    private func relayoutModuleViews() {
+        guard let container = containerView else { return }
+
+        // Remove all subviews
+        for subview in container.subviews {
+            subview.removeFromSuperview()
+        }
+
+        // Recalculate total width
+        let moduleWidth: CGFloat = 50
+        let spacing: CGFloat = 1
+        let totalWidth = CGFloat(modules.count) * moduleWidth + CGFloat(max(0, modules.count - 1)) * spacing
+
+        // Update status item length
+        statusItem?.length = totalWidth
+        container.frame = NSRect(x: 0, y: 0, width: totalWidth, height: 22)
+
+        // Add module views
+        var x: CGFloat = 0
+        for module in modules {
+            let view = createModuleView(module, frame: NSRect(x: x, y: 0, width: moduleWidth, height: 22))
+            container.addSubview(view)
+            moduleViews[module.identifier] = view
+            x += moduleWidth + spacing
+        }
+    }
+
+    private func createModuleView(_ module: StatusModule, frame: NSRect) -> NSView {
+        let view = NSView(frame: frame)
+        view.identifier = NSUserInterfaceItemIdentifier(module.identifier)
+
+        // Add click gesture
+        let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(moduleClicked(_:)))
+        view.addGestureRecognizer(clickGesture)
 
         // Vertical stack: name on top, value below
-        let stack = NSStackView(frame: button.bounds)
+        let stack = NSStackView(frame: view.bounds)
         stack.orientation = .vertical
         stack.alignment = .centerX
         stack.spacing = 0
         stack.autoresizingMask = [.width, .height]
-        button.addSubview(stack)
+        view.addSubview(stack)
 
         // Name label (top)
         let nameLabel = NSTextField(labelWithString: module.shortName)
@@ -142,17 +155,22 @@ final class StatusItemController: NSObject {
         valueLabel.identifier = NSUserInterfaceItemIdentifier("valueLabel")
         stack.addArrangedSubview(valueLabel)
 
-        return button
+        return view
     }
 
-    @objc private func moduleButtonClicked(_ sender: NSButton) {
-        guard let identifier = sender.identifier?.rawValue else { return }
-        log("Button clicked: \(identifier)")
-        guard let module = modules.first(where: { $0.identifier == identifier }) else {
-            log("No module found for: \(identifier)")
+    @objc private func moduleClicked(_ gesture: NSClickGestureRecognizer) {
+        guard let view = gesture.view,
+              let identifier = view.identifier?.rawValue else {
+            log("Click: no identifier")
             return
         }
-        showPopover(for: module, from: sender)
+
+        log("Module clicked: \(identifier)")
+        guard let module = modules.first(where: { $0.identifier == identifier }) else {
+            log("No module found: \(identifier)")
+            return
+        }
+        showPopover(for: module, from: view)
     }
     
     // MARK: - Module Management
