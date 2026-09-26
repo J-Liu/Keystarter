@@ -234,6 +234,16 @@ final class SettingsWindow: NSWindow {
         diskCheckbox.state = UserDefaults.standard.bool(forKey: "status.disk.enabled") ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: diskCheckbox))
 
+        // Row: GPU Module
+        let gpuCheckbox = NSButton(checkboxWithTitle: L("status.gpu.displayName"), target: self, action: #selector(gpuModuleChanged(_:)))
+        gpuCheckbox.state = UserDefaults.standard.bool(forKey: "status.gpu.enabled") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: gpuCheckbox))
+
+        // Row: Sensor Module
+        let sensorCheckbox = NSButton(checkboxWithTitle: L("status.sensor.displayName"), target: self, action: #selector(sensorModuleChanged(_:)))
+        sensorCheckbox.state = UserDefaults.standard.bool(forKey: "status.sensor.enabled") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: sensorCheckbox))
+
         // Row: File Content Index
         let contentIndexCheckbox = NSButton(checkboxWithTitle: L("settings.contentIndex.checkbox"), target: self, action: #selector(contentIndexChanged(_:)))
         contentIndexCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
@@ -620,6 +630,26 @@ final class SettingsWindow: NSWindow {
             StatusItemController.shared.enableModule("disk")
         } else {
             StatusItemController.shared.disableModule("disk")
+        }
+    }
+
+    @objc private func gpuModuleChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "status.gpu.enabled")
+        if enabled {
+            StatusItemController.shared.enableModule("gpu")
+        } else {
+            StatusItemController.shared.disableModule("gpu")
+        }
+    }
+
+    @objc private func sensorModuleChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "status.sensor.enabled")
+        if enabled {
+            StatusItemController.shared.enableModule("sensor")
+        } else {
+            StatusItemController.shared.disableModule("sensor")
         }
     }
 

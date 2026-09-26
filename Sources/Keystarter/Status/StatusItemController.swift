@@ -147,6 +147,16 @@ final class StatusItemController: NSObject {
         if defaults.bool(forKey: "status.disk.enabled") {
             modules.append(DiskModule())
         }
+        
+        // GPU module
+        if defaults.bool(forKey: "status.gpu.enabled") {
+            modules.append(GPUModule())
+        }
+        
+        // Sensor module
+        if defaults.bool(forKey: "status.sensor.enabled") {
+            modules.append(SensorModule())
+        }
     }
     
     func enableModule(_ identifier: String) {
@@ -162,6 +172,10 @@ final class StatusItemController: NSObject {
             module = NetworkModule()
         case "disk":
             module = DiskModule()
+        case "gpu":
+            module = GPUModule()
+        case "sensor":
+            module = SensorModule()
         default:
             return
         }
