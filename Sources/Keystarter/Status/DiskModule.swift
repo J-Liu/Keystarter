@@ -178,11 +178,9 @@ final class DiskModule: NSObject, StatusModule {
         tableView = table
         container.addSubview(scrollView)
         
-        // Refresh on open
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.refreshDetail()
-            self?.startDetailTimer()
-        }
+        // Refresh immediately on open
+        refreshDetail()
+        startDetailTimer()
         
         return container
     }
