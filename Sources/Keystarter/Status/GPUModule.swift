@@ -269,34 +269,50 @@ final class GPUModule: NSObject, StatusModule {
         var tilerUtil: Double = 0
         var vramUsed: UInt64 = 0
         var vramTotal: UInt64 = 0
-        
+
+        // Try IOAccelerator first, then AGXAccelerator
         var iterator: io_iterator_t = 0
-        let matching = IOServiceMatching("IOAccelerator")
-        let result = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator)
-        
+        var matching = IOServiceMatching("IOAccelerator")
+        var result = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator)
+
+        if result != KERN_SUCCESS || iterator == 0 {
+            // Try AGXAccelerator for Apple Silicon
+            matching = IOServiceMatching("AGXAccelerator")
+            result = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator)
+        }
+
         guard result == KERN_SUCCESS, iterator != 0 else {
             return (0, 0, 0, 0, 0)
         }
-        
+
         defer { IOObjectRelease(iterator) }
-        
+
         var service = IOIteratorNext(iterator)
         while service != 0 {
             defer {
                 IOObjectRelease(service)
                 service = IOIteratorNext(iterator)
             }
-            
+
             var properties: Unmanaged<CFMutableDictionary>?
             guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
                   let props = properties?.takeRetainedValue() as? [String: Any],
                   let statistics = props["PerformanceStatistics"] as? [String: Any] else {
                 continue
             }
-            
+
+            // Debug: log available keys
+            if LogSettings.shared.monitorLogEnabled {
+                let keys = statistics.keys.sorted().joined(separator: ", ")
+                LogSettings.write("GPU PerformanceStatistics keys: \(keys)", to: LogSettings.shared.monitorLogPath)
+            }
+
             // Get Device Utilization %
             if let num = statistics["Device Utilization %"] as? NSNumber {
                 deviceUtil = num.doubleValue
+                if LogSettings.shared.monitorLogEnabled {
+                    LogSettings.write("GPU Device Utilization: \(deviceUtil)", to: LogSettings.shared.monitorLogPath)
+                }
             } else if let val = statistics["Device Utilization %"] as? Double {
                 deviceUtil = val
             } else if let val = statistics["Device Utilization %"] as? Int {
