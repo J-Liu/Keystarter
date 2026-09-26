@@ -89,8 +89,11 @@ final class CPUModule: NSObject, StatusModule {
         tableView = table
         container.addSubview(scrollView)
         
-        // Start refresh timer for detail view
-        startDetailTimer()
+        // Refresh immediately on open, then start timer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.refreshDetail()
+            self?.startDetailTimer()
+        }
         
         return container
     }
