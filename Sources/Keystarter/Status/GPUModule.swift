@@ -156,11 +156,19 @@ final class GPUModule: NSObject, StatusModule {
         self.tilerUtil = info.tiler
         self.vramUsed = info.vramUsed
         self.vramTotal = info.vramTotal
-        
+
+        // Update summary to keep in sync
+        let value = String(format: "%.0f%%", info.device)
+        summaryText = value
+        summaryValue = value
+
         processes = getGPUProcesses(limit: 100)
-        
+
         updateChart()
         tableView?.reloadData()
+
+        // Notify controller to update status bar
+        NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "gpu"])
     }
     
     private func updateChart() {

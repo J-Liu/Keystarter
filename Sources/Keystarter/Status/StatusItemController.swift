@@ -33,6 +33,14 @@ final class StatusItemController: NSObject {
             name: .statusModuleSettingsChanged,
             object: nil
         )
+
+        // Listen for module data updates
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(moduleDataUpdated),
+            name: .moduleDataUpdated,
+            object: nil
+        )
     }
 
     private func log(_ message: String) {
@@ -345,10 +353,20 @@ final class StatusItemController: NSObject {
         }
         lastRefreshTimes.removeAll()
     }
+
+    @objc private func moduleDataUpdated(_ notification: Notification) {
+        guard let moduleId = notification.userInfo?["module"] as? String else { return }
+        if let module = modules.first(where: { $0.identifier == moduleId }) {
+            DispatchQueue.main.async {
+                self.updateModuleLabel(module)
+            }
+        }
+    }
 }
 
 // MARK: - Notification
 
 extension Notification.Name {
     static let statusModuleSettingsChanged = Notification.Name("statusModuleSettingsChanged")
+    static let moduleDataUpdated = Notification.Name("moduleDataUpdated")
 }
