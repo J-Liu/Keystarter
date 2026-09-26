@@ -350,6 +350,11 @@ final class LauncherWindow: NSWindow {
         previewTextView.drawsBackground = false
         previewTextView.font = .systemFont(ofSize: 14)
         previewTextView.textContainerInset = NSSize(width: 8, height: 8)
+        
+        // Add double-click gesture for executing action
+        let doubleClickGesture = NSClickGestureRecognizer(target: self, action: #selector(previewDoubleClicked))
+        doubleClickGesture.numberOfClicksRequired = 2
+        previewTextView.addGestureRecognizer(doubleClickGesture)
 
         previewScrollView.documentView = previewTextView
         container.addSubview(previewScrollView)
@@ -394,6 +399,7 @@ final class LauncherWindow: NSWindow {
         tableView.dataSource = self
         tableView.target = self
         tableView.action = #selector(tableClicked)
+        tableView.doubleAction = #selector(tableDoubleClicked)
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
         column.width = scrollView.bounds.width
@@ -777,6 +783,26 @@ final class LauncherWindow: NSWindow {
     @objc private func tableClicked() {
         // In list mode, just update preview, don't execute
         updatePreview()
+    }
+
+    @objc private func tableDoubleClicked() {
+        // Double-click executes the action directly
+        let row = tableView.clickedRow
+        guard row >= 0 && row < filteredResults.count else { return }
+        let item = filteredResults[row]
+        LaunchHistory.shared.record(identifier: item.path)
+        hide()
+        item.execute()
+    }
+
+    @objc private func previewDoubleClicked() {
+        // Double-click on preview executes the selected item's action
+        let row = tableView.selectedRow
+        guard row >= 0 && row < filteredResults.count else { return }
+        let item = filteredResults[row]
+        LaunchHistory.shared.record(identifier: item.path)
+        hide()
+        item.execute()
     }
 
     /// Execute the currently selected result.
