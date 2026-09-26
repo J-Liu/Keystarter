@@ -64,15 +64,25 @@ final class TranslatePlugin: Plugin {
     }
 
     private func makeResult(text: String, translation: String, target: String) -> [PluginResult] {
+        // Build URL for MyMemory website
+        let source = detectSource(text)
+        let webURL = "https://mymemory.translated.net/en/\(source)/\(target)/\(text.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? text)"
+        
         return [PluginResult(
             title: translation,
             subtitle: "\(text) → \(target)",
             icon: NSImage(systemSymbolName: "character.book.closed", accessibilityDescription: nil),
-            detailText: "\(text)\n\n\(translation)",
+            detailText: "\(text)\n\n\(translation)\n\n────────────────────────\nDouble-click to open in browser",
             action: {
+                // Copy to clipboard
                 let pasteboard = NSPasteboard.general
                 pasteboard.clearContents()
                 pasteboard.setString(translation, forType: .string)
+                
+                // Open in browser
+                if let url = URL(string: webURL) {
+                    NSWorkspace.shared.open(url)
+                }
             }
         )]
     }

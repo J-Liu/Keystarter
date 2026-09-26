@@ -51,6 +51,12 @@ final class CalculatorPlugin: Plugin {
         guard trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
             return [PluginResult(title: "Invalid expression")]
         }
+        
+        // Check if expression is complete (not ending with operator)
+        let operators: Set<Character> = ["+", "-", "*", "/", "^", "("]
+        if let lastChar = trimmed.last, operators.contains(lastChar) {
+            return [PluginResult(title: "...")]
+        }
 
         // Replace ^ with ** for NSExpression power operator
         let normalized = trimmed.replacingOccurrences(of: "^", with: "**")

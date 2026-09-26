@@ -128,34 +128,39 @@ final class StatusItemController: NSObject {
     private func loadEnabledModules() {
         let defaults = UserDefaults.standard
         
-        // CPU module
+        // Register default values (enabled by default)
+        defaults.register(defaults: [
+            "status.cpu.enabled": true,
+            "status.gpu.enabled": true,
+            "status.sensor.enabled": true,
+            "status.memory.enabled": true,
+            "status.disk.enabled": true,
+            "status.network.enabled": true
+        ])
+        
+        // Load modules in specified order: CPU, GPU, TMP, Memory, Disk, Network
         if defaults.bool(forKey: "status.cpu.enabled") {
             modules.append(CPUModule())
         }
         
-        // Memory module
-        if defaults.bool(forKey: "status.memory.enabled") {
-            modules.append(MemoryModule())
-        }
-        
-        // Network module
-        if defaults.bool(forKey: "status.network.enabled") {
-            modules.append(NetworkModule())
-        }
-        
-        // Disk module
-        if defaults.bool(forKey: "status.disk.enabled") {
-            modules.append(DiskModule())
-        }
-        
-        // GPU module
         if defaults.bool(forKey: "status.gpu.enabled") {
             modules.append(GPUModule())
         }
         
-        // Sensor module
         if defaults.bool(forKey: "status.sensor.enabled") {
             modules.append(SensorModule())
+        }
+        
+        if defaults.bool(forKey: "status.memory.enabled") {
+            modules.append(MemoryModule())
+        }
+        
+        if defaults.bool(forKey: "status.disk.enabled") {
+            modules.append(DiskModule())
+        }
+        
+        if defaults.bool(forKey: "status.network.enabled") {
+            modules.append(NetworkModule())
         }
     }
     
@@ -182,8 +187,14 @@ final class StatusItemController: NSObject {
         
         modules.append(module)
         addModuleView(module)
-        module.refreshSummary()
-        updateModuleLabel(module)
+        
+        // Refresh on background queue to avoid UI lag
+        dataQueue.async { [weak self] in
+            module.refreshSummary()
+            DispatchQueue.main.async {
+                self?.updateModuleLabel(module)
+            }
+        }
     }
     
     func disableModule(_ identifier: String) {
@@ -245,9 +256,17 @@ final class StatusItemController: NSObject {
     
     @objc private func moduleClicked(_ gesture: NSClickGestureRecognizer) {
         guard let view = gesture.view,
-              let identifier = view.identifier?.rawValue,
-              let module = modules.first(where: { $0.identifier == identifier }) else { return }
+              let identifier = view.identifier?.rawValue else {
+            print("DEBUG: No view or identifier found")
+            return
+        }
         
+        guard let module = modules.first(where: { $0.identifier == identifier }) else {
+            print("DEBUG: No module found for identifier: \(identifier), modules: \(modules.map { $0.identifier })")
+            return
+        }
+        
+        print("DEBUG: Showing popover for module: \(module.identifier)")
         showPopover(for: module, from: view)
     }
     
