@@ -393,9 +393,14 @@ final class SettingsWindow: NSWindow {
         logLabel.font = .systemFont(ofSize: 13, weight: .semibold)
         stack.addArrangedSubview(logLabel)
 
+        // Row: Enable Log
+        let enableLogCheckbox = NSButton(checkboxWithTitle: L("settings.advanced.log.enable"), target: self, action: #selector(enableLogChanged(_:)))
+        enableLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: enableLogCheckbox))
+
         // Log path display (read-only text field)
         logPathField = NSTextField()
-        logPathField.stringValue = LogSettings.shared.generalLogPath
+        logPathField.stringValue = LogSettings.shared.clipboardLogPath
         logPathField.isEditable = false
         logPathField.isBezeled = true
         logPathField.bezelStyle = .roundedBezel
@@ -424,9 +429,14 @@ final class SettingsWindow: NSWindow {
         savePanel.directoryURL = defaultDir
 
         if savePanel.runModal() == .OK, let url = savePanel.url {
-            LogSettings.shared.generalLogPath = url.path
+            LogSettings.shared.clipboardLogPath = url.path
             logPathField?.stringValue = url.path
         }
+    }
+
+    @objc private func enableLogChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        LogSettings.shared.clipboardLogEnabled = enabled
     }
 
     @objc private func addIgnoredApp() {

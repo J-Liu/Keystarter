@@ -3,27 +3,12 @@
 
 import Foundation
 
-/// Manages log settings for different modules.
+/// Manages log settings for clipboard logging.
 final class LogSettings {
 
     static let shared = LogSettings()
 
     private init() {}
-
-    // MARK: - General Log
-
-    var generalLogEnabled: Bool {
-        get { UserDefaults.standard.bool(forKey: "general.log.enabled") }
-        set { UserDefaults.standard.set(newValue, forKey: "general.log.enabled") }
-    }
-
-    var generalLogPath: String {
-        get {
-            let defaultPath = NSHomeDirectory() + "/Library/Application Support/Keystarter/general.log"
-            return UserDefaults.standard.string(forKey: "general.log.path") ?? defaultPath
-        }
-        set { UserDefaults.standard.set(newValue, forKey: "general.log.path") }
-    }
 
     // MARK: - Clipboard Log
 
@@ -34,7 +19,7 @@ final class LogSettings {
 
     var clipboardLogPath: String {
         get {
-            let defaultPath = NSHomeDirectory() + "/Library/Application Support/Keystarter/clipboard.log"
+            let defaultPath = NSHomeDirectory() + "/Library/Application Support/Keystarter/keystarter.log"
             return UserDefaults.standard.string(forKey: "clipboard.log.path") ?? defaultPath
         }
         set { UserDefaults.standard.set(newValue, forKey: "clipboard.log.path") }
