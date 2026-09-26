@@ -61,7 +61,7 @@ final class StatusItemController: NSObject {
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             item.button?.title = module.summaryValue
-            item.button?.font = .systemFont(ofSize: 12, weight: .medium)
+            item.button?.font = .systemFont(ofSize: 11, weight: .medium)
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked(_:))
             item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
@@ -105,7 +105,7 @@ final class StatusItemController: NSObject {
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             item.button?.title = module.summaryValue
-            item.button?.font = .systemFont(ofSize: 12, weight: .medium)
+            item.button?.font = .systemFont(ofSize: 11, weight: .medium)
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked(_:))
             item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
