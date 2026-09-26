@@ -26,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupIndex()
         updateDockIconVisibility()
         
+        // Initialize status bar modules (must be done before settings window)
+        _ = StatusItemController.shared
+        
         // Start running app monitoring (every hour)
         startRunningAppMonitoring()
 

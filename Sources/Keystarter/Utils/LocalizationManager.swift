@@ -83,6 +83,9 @@ final class LocalizationManager {
             "settings.startAtLogin.checkbox": "Automatically start at login",
             "settings.dockIcon": "Dock Icon:",
             "settings.dockIcon.checkbox": "Show Dock icon",
+            "settings.statusModules": "Status Bar Modules",
+            "settings.cpu.enabled": "CPU Usage",
+            "settings.memory.enabled": "Memory Usage",
             "settings.contentIndex": "File Content Index:",
             "settings.contentIndex.checkbox": "Index file contents for search",
             "settings.log": "Log:",
@@ -166,6 +169,13 @@ final class LocalizationManager {
             "command.logout": "Log Out",
             "command.pressEnter": "Press Enter to %@",
 
+            // Status Modules
+            "status.cpu.displayName": "CPU Usage",
+            "status.memory.displayName": "Memory Usage",
+            "status.process.name": "Process",
+            "status.process.cpu": "CPU",
+            "status.process.memory": "Memory",
+
             // Stock Plugin
             "stock.enterNameOrCode": "Enter stock name or code",
             "stock.example": "Example: AAPL or TSLA",
@@ -223,6 +233,9 @@ final class LocalizationManager {
             "settings.startAtLogin.checkbox": "开机时自动启动",
             "settings.dockIcon": "Dock 图标：",
             "settings.dockIcon.checkbox": "显示 Dock 图标",
+            "settings.statusModules": "状态栏模块",
+            "settings.cpu.enabled": "CPU 使用率",
+            "settings.memory.enabled": "内存使用",
             "settings.contentIndex": "文件内容索引：",
             "settings.contentIndex.checkbox": "索引文件内容以便搜索",
             "settings.log": "日志：",
@@ -306,6 +319,13 @@ final class LocalizationManager {
             "command.logout": "注销",
             "command.pressEnter": "按回车执行%@",
 
+            // Status Modules
+            "status.cpu.displayName": "CPU 使用率",
+            "status.memory.displayName": "内存使用",
+            "status.process.name": "进程",
+            "status.process.cpu": "CPU",
+            "status.process.memory": "内存",
+
             // Stock Plugin
             "stock.enterNameOrCode": "请输入股票名称或代码",
             "stock.example": "例如：AAPL 或 TSLA",
@@ -363,6 +383,9 @@ final class LocalizationManager {
             "settings.startAtLogin.checkbox": "開機時自動啟動",
             "settings.dockIcon": "Dock 圖示：",
             "settings.dockIcon.checkbox": "顯示 Dock 圖示",
+            "settings.statusModules": "狀態列模組",
+            "settings.cpu.enabled": "CPU 使用率",
+            "settings.memory.enabled": "記憶體使用",
             "settings.contentIndex": "檔案內容索引：",
             "settings.contentIndex.checkbox": "索引檔案內容以便搜尋",
             "settings.log": "日誌：",
@@ -445,6 +468,13 @@ final class LocalizationManager {
             "command.shutdown": "關機",
             "command.logout": "登出",
             "command.pressEnter": "按 Enter 執行%@",
+
+            // Status Modules
+            "status.cpu.displayName": "CPU 使用率",
+            "status.memory.displayName": "記憶體使用",
+            "status.process.name": "程序",
+            "status.process.cpu": "CPU",
+            "status.process.memory": "記憶體",
 
             // Stock Plugin
             "stock.enterNameOrCode": "請輸入股票名稱或代碼",

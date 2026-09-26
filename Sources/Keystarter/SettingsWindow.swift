@@ -209,6 +209,21 @@ final class SettingsWindow: NSWindow {
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
         stack.addArrangedSubview(makeRow(label: L("settings.dockIcon"), control: dockIconCheckbox))
 
+        // Section: Status Bar Modules
+        let modulesLabel = NSTextField(labelWithString: L("settings.statusModules"))
+        modulesLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        stack.addArrangedSubview(modulesLabel)
+
+        // Row: CPU Module
+        let cpuCheckbox = NSButton(checkboxWithTitle: L("status.cpu.displayName"), target: self, action: #selector(cpuModuleChanged(_:)))
+        cpuCheckbox.state = UserDefaults.standard.bool(forKey: "status.cpu.enabled") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: cpuCheckbox))
+
+        // Row: Memory Module
+        let memoryCheckbox = NSButton(checkboxWithTitle: L("status.memory.displayName"), target: self, action: #selector(memoryModuleChanged(_:)))
+        memoryCheckbox.state = UserDefaults.standard.bool(forKey: "status.memory.enabled") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: memoryCheckbox))
+
         // Row: File Content Index
         let contentIndexCheckbox = NSButton(checkboxWithTitle: L("settings.contentIndex.checkbox"), target: self, action: #selector(contentIndexChanged(_:)))
         contentIndexCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
@@ -556,6 +571,26 @@ final class SettingsWindow: NSWindow {
         let showDock = sender.state == .on
         UserDefaults.standard.set(showDock, forKey: "showDockIcon")
         (NSApp.delegate as? AppDelegate)?.updateDockIconVisibility()
+    }
+
+    @objc private func cpuModuleChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "status.cpu.enabled")
+        if enabled {
+            StatusItemController.shared.enableModule("cpu")
+        } else {
+            StatusItemController.shared.disableModule("cpu")
+        }
+    }
+
+    @objc private func memoryModuleChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "status.memory.enabled")
+        if enabled {
+            StatusItemController.shared.enableModule("memory")
+        } else {
+            StatusItemController.shared.disableModule("memory")
+        }
     }
 
     @objc private func contentIndexChanged(_ sender: NSButton) {
