@@ -16,7 +16,7 @@ final class CPUModule: NSObject, StatusModule {
     var refreshInterval: TimeInterval { 2.0 }
     
     private var processes: [AppProcessInfo] = []
-    private var coreUsages: [Double] = []
+    private var coreUsages: [CoreUsage] = []
     
     // Detail view components for real-time update
     private weak var chartView: NSView?
@@ -30,7 +30,7 @@ final class CPUModule: NSObject, StatusModule {
         summaryValue = value
         
         coreUsages = ProcessInfoProvider.shared.getPerCoreCPUUsage()
-        processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 30)
+        processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 100)
     }
     
     func makeDetailView() -> NSView {
@@ -41,8 +41,9 @@ final class CPUModule: NSObject, StatusModule {
         let rowHeight: CGFloat = 20
         let rowCount = 30
         let totalHeight = headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let viewWidth: CGFloat = 400
         
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: totalHeight))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
         
         // Header
         let headerView = NSTextField(labelWithString: displayName)
@@ -52,34 +53,53 @@ final class CPUModule: NSObject, StatusModule {
         
         // Per-core bar chart
         let chartY = totalHeight - headerHeight - chartHeight
-        let chart = createCoreChart(frame: NSRect(x: 12, y: chartY, width: 336, height: chartHeight))
+        let chart = createCoreChart(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chartView = chart
         container.addSubview(chart)
         
         // Divider line
         let dividerY = chartY - dividerHeight + 4
-        let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: 336, height: 1))
+        let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: viewWidth - 24, height: 1))
         divider.boxType = .separator
         container.addSubview(divider)
         
-        // Process list
-        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 340, height: dividerY))
+        // Process list: Name(150), PID(60), User(50), Threads(30), CPU(50)
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: dividerY))
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
         scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
         
-        let table = NSTableView(frame: NSRect(x: 0, y: 0, width: 320, height: dividerY))
-        table.headerView = nil
+        // Table with header
+        let table = NSTableView(frame: NSRect(x: 0, y: 0, width: viewWidth - 16, height: CGFloat(rowCount) * rowHeight * 2))
         table.backgroundColor = .clear
         table.rowHeight = rowHeight
         table.intercellSpacing = NSSize(width: 0, height: 0)
         
+        // Setup columns with header titles
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        nameColumn.width = 220
+        nameColumn.width = 150
+        nameColumn.headerCell.title = "Name"
         table.addTableColumn(nameColumn)
         
+        let pidColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("pid"))
+        pidColumn.width = 55
+        pidColumn.headerCell.title = "PID"
+        table.addTableColumn(pidColumn)
+        
+        let userColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("user"))
+        userColumn.width = 48
+        userColumn.headerCell.title = "User"
+        table.addTableColumn(userColumn)
+        
+        let threadsColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("threads"))
+        threadsColumn.width = 35
+        threadsColumn.headerCell.title = "Thr"
+        table.addTableColumn(threadsColumn)
+        
         let cpuColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("cpu"))
-        cpuColumn.width = 80
+        cpuColumn.width = 50
+        cpuColumn.headerCell.title = "CPU"
         table.addTableColumn(cpuColumn)
         
         table.dataSource = self
@@ -108,7 +128,7 @@ final class CPUModule: NSObject, StatusModule {
     private func refreshDetail() {
         // Refresh data
         coreUsages = ProcessInfoProvider.shared.getPerCoreCPUUsage()
-        processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 30)
+        processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 100)
         
         // Update chart
         updateChart()
@@ -132,14 +152,29 @@ final class CPUModule: NSObject, StatusModule {
         
         for (index, usage) in coreUsages.enumerated() {
             let x = CGFloat(index) * (barWidth + barSpacing)
-            let barHeight = max(2, min(CGFloat(usage / 100.0) * maxBarHeight, maxBarHeight))
             
-            // Bar
-            let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
-            bar.wantsLayer = true
-            bar.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.7).cgColor
-            bar.layer?.cornerRadius = 2
-            chart.addSubview(bar)
+            // Calculate bar heights
+            let totalHeight = max(2, min(CGFloat(usage.total / 100.0) * maxBarHeight, maxBarHeight))
+            let systemHeight = min(CGFloat(usage.system / 100.0) * maxBarHeight, totalHeight - 2)
+            let userHeight = totalHeight - systemHeight
+            
+            // System bar (red, bottom)
+            if systemHeight > 0 {
+                let systemBar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: systemHeight))
+                systemBar.wantsLayer = true
+                systemBar.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.8).cgColor
+                systemBar.layer?.cornerRadius = 2
+                chart.addSubview(systemBar)
+            }
+            
+            // User bar (blue, top)
+            if userHeight > 0 {
+                let userBar = NSView(frame: NSRect(x: x, y: 16 + systemHeight, width: barWidth, height: userHeight))
+                userBar.wantsLayer = true
+                userBar.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.7).cgColor
+                userBar.layer?.cornerRadius = 2
+                chart.addSubview(userBar)
+            }
             
             // Core number
             let coreLabel = NSTextField(labelWithString: "\(index)")
@@ -150,7 +185,7 @@ final class CPUModule: NSObject, StatusModule {
             chart.addSubview(coreLabel)
             
             // Percentage
-            let pctLabel = NSTextField(labelWithString: String(format: "%.0f", usage))
+            let pctLabel = NSTextField(labelWithString: String(format: "%.0f", usage.total))
             pctLabel.font = .systemFont(ofSize: 8)
             pctLabel.alignment = .center
             pctLabel.textColor = .secondaryLabelColor
@@ -171,14 +206,29 @@ final class CPUModule: NSObject, StatusModule {
         
         for (index, usage) in coreUsages.enumerated() {
             let x = CGFloat(index) * (barWidth + barSpacing)
-            let barHeight = max(2, min(CGFloat(usage / 100.0) * maxBarHeight, maxBarHeight))
             
-            // Bar
-            let bar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: barHeight))
-            bar.wantsLayer = true
-            bar.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.7).cgColor
-            bar.layer?.cornerRadius = 2
-            view.addSubview(bar)
+            // Calculate bar heights
+            let totalHeight = max(2, min(CGFloat(usage.total / 100.0) * maxBarHeight, maxBarHeight))
+            let systemHeight = min(CGFloat(usage.system / 100.0) * maxBarHeight, totalHeight - 2)
+            let userHeight = totalHeight - systemHeight
+            
+            // System bar (red, bottom)
+            if systemHeight > 0 {
+                let systemBar = NSView(frame: NSRect(x: x, y: 16, width: barWidth, height: systemHeight))
+                systemBar.wantsLayer = true
+                systemBar.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.8).cgColor
+                systemBar.layer?.cornerRadius = 2
+                view.addSubview(systemBar)
+            }
+            
+            // User bar (blue, top)
+            if userHeight > 0 {
+                let userBar = NSView(frame: NSRect(x: x, y: 16 + systemHeight, width: barWidth, height: userHeight))
+                userBar.wantsLayer = true
+                userBar.layer?.backgroundColor = NSColor.systemBlue.withAlphaComponent(0.7).cgColor
+                userBar.layer?.cornerRadius = 2
+                view.addSubview(userBar)
+            }
             
             // Core number
             let coreLabel = NSTextField(labelWithString: "\(index)")
@@ -189,7 +239,7 @@ final class CPUModule: NSObject, StatusModule {
             view.addSubview(coreLabel)
             
             // Percentage
-            let pctLabel = NSTextField(labelWithString: String(format: "%.0f", usage))
+            let pctLabel = NSTextField(labelWithString: String(format: "%.0f", usage.total))
             pctLabel.font = .systemFont(ofSize: 8)
             pctLabel.alignment = .center
             pctLabel.textColor = .secondaryLabelColor
@@ -214,28 +264,75 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
         let process = processes[row]
         
         let cell = NSTableCellView()
+        let colId = tableColumn?.identifier.rawValue ?? ""
         
-        if tableColumn?.identifier.rawValue == "name" {
-            let displayName: String
-            if process.isApp {
-                displayName = process.name
+        switch colId {
+        case "name":
+            if let icon = process.icon {
+                // App with icon
+                let iconView = NSImageView(frame: NSRect(x: 4, y: 2, width: 16, height: 16))
+                iconView.image = icon
+                iconView.imageScaling = .scaleProportionallyDown
+                cell.addSubview(iconView)
+                
+                let label = NSTextField(labelWithString: process.name)
+                label.font = .systemFont(ofSize: 10)
+                label.lineBreakMode = .byTruncatingTail
+                label.frame = NSRect(x: 24, y: 2, width: 122, height: 16)
+                cell.addSubview(label)
             } else {
-                displayName = "⚠️ \(process.name) [\(process.pid)]"
+                // Non-app process with type indicator
+                let typeIndicator: String
+                switch process.processType {
+                case .systemService:
+                    typeIndicator = "🔧"
+                case .userService:
+                    typeIndicator = "👤"
+                case .app, .unknown:
+                    typeIndicator = "⚠️"
+                }
+                let label = NSTextField(labelWithString: "\(typeIndicator) \(process.name)")
+                label.font = .systemFont(ofSize: 10)
+                label.lineBreakMode = .byTruncatingTail
+                label.frame = NSRect(x: 4, y: 2, width: 142, height: 16)
+                cell.addSubview(label)
             }
             
-            let label = NSTextField(labelWithString: displayName)
-            label.font = .systemFont(ofSize: 10)
-            label.lineBreakMode = .byTruncatingTail
-            label.frame = NSRect(x: 4, y: 2, width: 212, height: 16)
+        case "pid":
+            let label = NSTextField(labelWithString: "\(process.pid)")
+            label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+            label.textColor = .secondaryLabelColor
+            label.alignment = .right
+            label.frame = NSRect(x: 4, y: 2, width: 47, height: 16)
             cell.addSubview(label)
-        } else {
-            let pctText = String(format: "%.2f%%", process.cpuUsage)
+            
+        case "user":
+            let label = NSTextField(labelWithString: process.user)
+            label.font = .systemFont(ofSize: 10)
+            label.textColor = process.user == "root" ? NSColor.systemRed : .secondaryLabelColor
+            label.lineBreakMode = .byTruncatingTail
+            label.frame = NSRect(x: 4, y: 2, width: 40, height: 16)
+            cell.addSubview(label)
+            
+        case "threads":
+            let label = NSTextField(labelWithString: "\(process.threads)")
+            label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
+            label.textColor = .secondaryLabelColor
+            label.alignment = .right
+            label.frame = NSRect(x: 4, y: 2, width: 27, height: 16)
+            cell.addSubview(label)
+            
+        case "cpu":
+            let pctText = String(format: "%.1f%%", process.cpuUsage)
             let label = NSTextField(labelWithString: pctText)
             label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
             label.textColor = .secondaryLabelColor
             label.alignment = .right
-            label.frame = NSRect(x: 4, y: 2, width: 72, height: 16)
+            label.frame = NSRect(x: 4, y: 2, width: 42, height: 16)
             cell.addSubview(label)
+            
+        default:
+            break
         }
         
         return cell
