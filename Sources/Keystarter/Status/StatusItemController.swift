@@ -8,8 +8,7 @@ final class StatusItemController: NSObject {
     
     static let shared = StatusItemController()
     
-    private var statusItem: NSStatusItem?
-    private var containerView: NSView?
+    private var statusItems: [String: NSStatusItem] = [:]
     private var popover: NSPopover?
     private var moduleFrames: [String: NSRect] = [:]
     
@@ -60,39 +59,36 @@ final class StatusItemController: NSObject {
     // MARK: - Setup
 
     private func setupStatusItem() {
-        // Calculate total width based on number of modules
-        let moduleWidth: CGFloat = 40
-        let spacing: CGFloat = 0
-        let totalWidth = CGFloat(modules.count) * moduleWidth + CGFloat(max(0, modules.count - 1)) * spacing
-
-        statusItem = NSStatusBar.system.statusItem(withLength: totalWidth)
-
-        guard let statusItem = statusItem else { return }
-
-        // Disable button's default action
-        statusItem.button?.target = nil
-        statusItem.button?.action = nil
-
-        // Create container that handles clicks
-        let container = ModuleContainerView(frame: NSRect(x: 0, y: 0, width: totalWidth, height: 22))
-        container.onClicked = { [weak self] location in
-            self?.handleContainerClick(at: location)
-        }
-        containerView = container
-
-        // Add module views with fixed positions
-        var x: CGFloat = 0
+        // Create separate status item for each module
         for module in modules {
-            let frame = NSRect(x: x, y: 0, width: moduleWidth, height: 22)
-            moduleFrames[module.identifier] = frame
+            let item = NSStatusBar.system.statusItem(withLength: 40)
+            item.button?.title = ""
+            item.button?.target = self
+            item.button?.action = #selector(statusItemClicked(_:))
+            item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
 
-            let view = createModuleView(module, frame: frame)
-            container.addSubview(view)
+            // Create view inside button
+            let view = createModuleView(module, frame: NSRect(x: 0, y: 0, width: 40, height: 22))
+            item.button?.addSubview(view)
+            item.button?.isBordered = false
+
+            statusItems[module.identifier] = item
             moduleViews[module.identifier] = view
-            x += moduleWidth + spacing
+        }
+    }
+
+    @objc private func statusItemClicked(_ sender: NSStatusBarButton) {
+        guard let identifier = sender.identifier?.rawValue else {
+            log("Click: no identifier")
+            return
         }
 
-        statusItem.button?.addSubview(container)
+        log("Status item clicked: \(identifier)")
+        guard let module = modules.first(where: { $0.identifier == identifier }) else {
+            log("No module found: \(identifier)")
+            return
+        }
+        showPopover(for: module, from: sender)
     }
 
     private func handleContainerClick(at location: NSPoint) {
@@ -121,35 +117,26 @@ final class StatusItemController: NSObject {
     }
 
     private func relayoutModuleViews() {
-        guard let container = containerView else { return }
-
-        // Remove all subviews
-        for subview in container.subviews {
-            subview.removeFromSuperview()
+        // Remove old status items
+        for (_, item) in statusItems {
+            NSStatusBar.system.removeStatusItem(item)
         }
+        statusItems.removeAll()
 
-        // Recalculate total width
-        let moduleWidth: CGFloat = 40
-        let spacing: CGFloat = 0
-        let totalWidth = CGFloat(modules.count) * moduleWidth + CGFloat(max(0, modules.count - 1)) * spacing
-
-        // Update status item length
-        statusItem?.length = totalWidth
-        containerView?.frame = NSRect(x: 0, y: 0, width: totalWidth, height: 22)
-
-        // Clear module frames
-        moduleFrames.removeAll()
-
-        // Add module views
-        var x: CGFloat = 0
+        // Recreate status items for current modules
         for module in modules {
-            let frame = NSRect(x: x, y: 0, width: moduleWidth, height: 22)
-            moduleFrames[module.identifier] = frame
+            let item = NSStatusBar.system.statusItem(withLength: 40)
+            item.button?.title = ""
+            item.button?.target = self
+            item.button?.action = #selector(statusItemClicked(_:))
+            item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
 
-            let view = createModuleView(module, frame: frame)
-            containerView?.addSubview(view)
+            let view = createModuleView(module, frame: NSRect(x: 0, y: 0, width: 40, height: 22))
+            item.button?.addSubview(view)
+            item.button?.isBordered = false
+
+            statusItems[module.identifier] = item
             moduleViews[module.identifier] = view
-            x += moduleWidth + spacing
         }
     }
 
@@ -318,16 +305,13 @@ final class StatusItemController: NSObject {
         popover?.close()
 
         let newPopover = NSPopover()
-        newPopover.behavior = .semitransient
+        newPopover.behavior = .transient
         newPopover.contentViewController = NSViewController()
         newPopover.contentViewController?.view = module.makeDetailView()
 
-        // Delay slightly to avoid immediate close
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-            newPopover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
-            self?.popover = newPopover
-            self?.log("Popover shown for: \(module.identifier)")
-        }
+        newPopover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
+        self.popover = newPopover
+        log("Popover shown for: \(module.identifier)")
     }
     
     @objc private func settingsChanged() {
@@ -363,20 +347,4 @@ final class StatusItemController: NSObject {
 
 extension Notification.Name {
     static let statusModuleSettingsChanged = Notification.Name("statusModuleSettingsChanged")
-}
-
-// MARK: - ModuleContainerView
-
-/// Container view that handles all clicks and reports location.
-private class ModuleContainerView: NSView {
-    var onClicked: ((NSPoint) -> Void)?
-
-    override func mouseDown(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-        onClicked?(location)
-    }
-
-    override func mouseUp(with event: NSEvent) {
-        // Don't forward to superview
-    }
 }
