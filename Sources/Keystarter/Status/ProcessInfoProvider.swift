@@ -22,6 +22,10 @@ final class ProcessInfoProvider {
     
     // MARK: - CPU Usage
     
+    private var prevTotalTicks: UInt64 = 0
+    private var prevIdleTicks: UInt64 = 0
+    private var prevCoreTicks: [UInt64] = []
+    
     /// Get total CPU usage percentage.
     func getTotalCPUUsage() -> Double {
         var cpuLoad = host_cpu_load_info()
@@ -35,11 +39,21 @@ final class ProcessInfoProvider {
         
         guard result == KERN_SUCCESS else { return 0 }
         
-        let totalTicks = cpuLoad.cpu_ticks.0 + cpuLoad.cpu_ticks.1 + cpuLoad.cpu_ticks.2 + cpuLoad.cpu_ticks.3
-        let idleTicks = cpuLoad.cpu_ticks.2
+        let user = UInt64(cpuLoad.cpu_ticks.0)
+        let system = UInt64(cpuLoad.cpu_ticks.1)
+        let idle = UInt64(cpuLoad.cpu_ticks.2)
+        let nice = UInt64(cpuLoad.cpu_ticks.3)
+        let totalTicks = user + system + idle + nice
         
-        if totalTicks == 0 { return 0 }
-        return Double(totalTicks - idleTicks) / Double(totalTicks) * 100.0
+        // Calculate delta from previous measurement
+        let totalDelta = totalTicks > prevTotalTicks ? totalTicks - prevTotalTicks : 0
+        let idleDelta = idle > prevIdleTicks ? idle - prevIdleTicks : 0
+        
+        prevTotalTicks = totalTicks
+        prevIdleTicks = idle
+        
+        if totalDelta == 0 { return 0 }
+        return Double(totalDelta - idleDelta) / Double(totalDelta) * 100.0
     }
     
     /// Get per-core CPU usage percentages.
@@ -63,6 +77,7 @@ final class ProcessInfoProvider {
         var usages: [Double] = []
         let numCores = Int(numCPUs)
         let ticksPerCore = Int(CPU_STATE_MAX)
+        var currentTicks: [UInt64] = []
         
         for i in 0..<numCores {
             let offset = i * ticksPerCore
@@ -71,14 +86,23 @@ final class ProcessInfoProvider {
             let idle = UInt64(info[offset + Int(CPU_STATE_IDLE)])
             let nice = UInt64(info[offset + Int(CPU_STATE_NICE)])
             let total = user + system + idle + nice
+            currentTicks.append(total)
             
-            if total > 0 {
-                let usage = Double(user + system + nice) / Double(total) * 100.0
-                usages.append(usage)
+            // Calculate delta from previous
+            let prev = i < prevCoreTicks.count ? prevCoreTicks[i] : 0
+            let delta = total > prev ? total - prev : 0
+            let active = user + system + nice
+            let prevActive = i < prevCoreTicks.count ? (prev > 0 ? prev - (total - active) : 0) : 0
+            let activeDelta = active > prevActive ? active - prevActive : 0
+            
+            if delta > 0 {
+                usages.append(Double(activeDelta) / Double(delta) * 100.0)
             } else {
                 usages.append(0.0)
             }
         }
+        
+        prevCoreTicks = currentTicks
         
         // Free memory
         let size = vm_size_t(numCPUInfo) * vm_size_t(MemoryLayout<integer_t>.size)

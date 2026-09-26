@@ -60,8 +60,28 @@ final class StatusItemController: NSObject {
         // Create separate status item for each module (reverse order so first module appears leftmost)
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            item.button?.title = module.summaryValue
-            item.button?.font = .systemFont(ofSize: 11, weight: .medium)
+            
+            // Create two-line title
+            let paraStyle = NSMutableParagraphStyle()
+            paraStyle.alignment = .center
+            paraStyle.lineSpacing = -2
+            
+            let attrString = NSMutableAttributedString()
+            let nameAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 8, weight: .medium),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: paraStyle
+            ]
+            let valueAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            
+            attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+            attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            
+            item.button?.attributedTitle = attrString
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked(_:))
             item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
@@ -104,8 +124,28 @@ final class StatusItemController: NSObject {
         // Recreate status items for current modules (reverse order so first module appears leftmost)
         for module in modules.reversed() {
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            item.button?.title = module.summaryValue
-            item.button?.font = .systemFont(ofSize: 11, weight: .medium)
+            
+            // Create two-line title
+            let paraStyle = NSMutableParagraphStyle()
+            paraStyle.alignment = .center
+            paraStyle.lineSpacing = -2
+            
+            let attrString = NSMutableAttributedString()
+            let nameAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 8, weight: .medium),
+                .foregroundColor: NSColor.secondaryLabelColor,
+                .paragraphStyle: paraStyle
+            ]
+            let valueAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            
+            attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+            attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            
+            item.button?.attributedTitle = attrString
             item.button?.target = self
             item.button?.action = #selector(statusItemClicked(_:))
             item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
@@ -237,7 +277,27 @@ final class StatusItemController: NSObject {
     private func updateModuleLabel(_ module: StatusModule) {
         guard let item = statusItems[module.identifier],
               let button = item.button else { return }
-        button.title = module.summaryValue
+        
+        let paraStyle = NSMutableParagraphStyle()
+        paraStyle.alignment = .center
+        paraStyle.lineSpacing = -2
+        
+        let attrString = NSMutableAttributedString()
+        let nameAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 8, weight: .medium),
+            .foregroundColor: NSColor.secondaryLabelColor,
+            .paragraphStyle: paraStyle
+        ]
+        let valueAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+            .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: paraStyle
+        ]
+        
+        attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+        attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+        
+        button.attributedTitle = attrString
     }
 
     // MARK: - Actions

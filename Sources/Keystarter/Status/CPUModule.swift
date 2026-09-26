@@ -142,18 +142,18 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
         let cell = NSTableCellView()
         
         if tableColumn?.identifier.rawValue == "name" {
-            let displayName = process.isApp ? process.name : "⚠️ \(process.name) (\(process.pid))"
+            let displayName = process.isApp ? process.name : "⚠️ \(process.name) (pid:\(process.pid))"
             let label = NSTextField(labelWithString: displayName)
             label.font = .systemFont(ofSize: 11)
             label.lineBreakMode = .byTruncatingTail
-            label.frame = NSRect(x: 8, y: 2, width: 240, height: 16)
+            label.frame = NSRect(x: 4, y: 2, width: 252, height: 16)
             cell.addSubview(label)
         } else {
             let label = NSTextField(labelWithString: String(format: "%.1f%%", process.cpuUsage))
             label.font = .systemFont(ofSize: 11)
             label.textColor = .secondaryLabelColor
             label.alignment = .right
-            label.frame = NSRect(x: 0, y: 2, width: 64, height: 16)
+            label.frame = NSRect(x: 4, y: 2, width: 72, height: 16)
             cell.addSubview(label)
         }
         
