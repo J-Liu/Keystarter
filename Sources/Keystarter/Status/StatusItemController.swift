@@ -11,6 +11,7 @@ final class StatusItemController: NSObject {
     private var statusItem: NSStatusItem?
     private var containerView: NSView?
     private var popover: NSPopover?
+    private var moduleFrames: [String: NSRect] = [:]
     
     private var modules: [StatusModule] = []
     private var moduleViews: [String: NSView] = [:]
@@ -72,20 +73,41 @@ final class StatusItemController: NSObject {
         statusItem.button?.target = nil
         statusItem.button?.action = nil
 
-        // Create container
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: totalWidth, height: 22))
+        // Create container that handles clicks
+        let container = ModuleContainerView(frame: NSRect(x: 0, y: 0, width: totalWidth, height: 22))
+        container.onClicked = { [weak self] location in
+            self?.handleContainerClick(at: location)
+        }
         containerView = container
 
         // Add module views with fixed positions
         var x: CGFloat = 0
         for module in modules {
-            let view = createModuleView(module, frame: NSRect(x: x, y: 0, width: moduleWidth, height: 22))
+            let frame = NSRect(x: x, y: 0, width: moduleWidth, height: 22)
+            moduleFrames[module.identifier] = frame
+
+            let view = createModuleView(module, frame: frame)
             container.addSubview(view)
             moduleViews[module.identifier] = view
             x += moduleWidth + spacing
         }
 
         statusItem.button?.addSubview(container)
+    }
+
+    private func handleContainerClick(at location: NSPoint) {
+        // Find which module was clicked based on position
+        for (identifier, frame) in moduleFrames {
+            if frame.contains(location) {
+                log("Click at \(location) -> module: \(identifier)")
+                if let module = modules.first(where: { $0.identifier == identifier }),
+                   let view = moduleViews[identifier] {
+                    showPopover(for: module, from: view)
+                }
+                return
+            }
+        }
+        log("Click at \(location) -> no module found")
     }
 
     private func addModuleView(_ module: StatusModule) {
@@ -113,24 +135,26 @@ final class StatusItemController: NSObject {
 
         // Update status item length
         statusItem?.length = totalWidth
-        container.frame = NSRect(x: 0, y: 0, width: totalWidth, height: 22)
+        containerView?.frame = NSRect(x: 0, y: 0, width: totalWidth, height: 22)
+
+        // Clear module frames
+        moduleFrames.removeAll()
 
         // Add module views
         var x: CGFloat = 0
         for module in modules {
-            let view = createModuleView(module, frame: NSRect(x: x, y: 0, width: moduleWidth, height: 22))
-            container.addSubview(view)
+            let frame = NSRect(x: x, y: 0, width: moduleWidth, height: 22)
+            moduleFrames[module.identifier] = frame
+
+            let view = createModuleView(module, frame: frame)
+            containerView?.addSubview(view)
             moduleViews[module.identifier] = view
             x += moduleWidth + spacing
         }
     }
 
     private func createModuleView(_ module: StatusModule, frame: NSRect) -> NSView {
-        let view = ModuleClickView(frame: frame)
-        view.moduleIdentifier = module.identifier
-        view.onClicked = { [weak self] in
-            self?.handleModuleClick(identifier: module.identifier, view: view)
-        }
+        let view = NSView(frame: frame)
 
         // Vertical stack: name on top, value below
         let stack = NSStackView(frame: view.bounds)
@@ -155,15 +179,6 @@ final class StatusItemController: NSObject {
         stack.addArrangedSubview(valueLabel)
 
         return view
-    }
-
-    private func handleModuleClick(identifier: String, view: NSView) {
-        log("Module clicked: \(identifier)")
-        guard let module = modules.first(where: { $0.identifier == identifier }) else {
-            log("No module found: \(identifier)")
-            return
-        }
-        showPopover(for: module, from: view)
     }
     
     // MARK: - Module Management
@@ -350,15 +365,15 @@ extension Notification.Name {
     static let statusModuleSettingsChanged = Notification.Name("statusModuleSettingsChanged")
 }
 
-// MARK: - ModuleClickView
+// MARK: - ModuleContainerView
 
-/// Custom view that handles mouse clicks directly.
-private class ModuleClickView: NSView {
-    var moduleIdentifier: String?
-    var onClicked: (() -> Void)?
+/// Container view that handles all clicks and reports location.
+private class ModuleContainerView: NSView {
+    var onClicked: ((NSPoint) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
-        onClicked?()
+        let location = convert(event.locationInWindow, from: nil)
+        onClicked?(location)
     }
 
     override func mouseUp(with event: NSEvent) {
