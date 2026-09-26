@@ -137,6 +137,16 @@ final class StatusItemController: NSObject {
         if defaults.bool(forKey: "status.memory.enabled") {
             modules.append(MemoryModule())
         }
+        
+        // Network module
+        if defaults.bool(forKey: "status.network.enabled") {
+            modules.append(NetworkModule())
+        }
+        
+        // Disk module
+        if defaults.bool(forKey: "status.disk.enabled") {
+            modules.append(DiskModule())
+        }
     }
     
     func enableModule(_ identifier: String) {
@@ -148,6 +158,10 @@ final class StatusItemController: NSObject {
             module = CPUModule()
         case "memory":
             module = MemoryModule()
+        case "network":
+            module = NetworkModule()
+        case "disk":
+            module = DiskModule()
         default:
             return
         }

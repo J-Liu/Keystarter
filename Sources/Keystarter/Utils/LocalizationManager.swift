@@ -172,6 +172,8 @@ final class LocalizationManager {
             // Status Modules
             "status.cpu.displayName": "CPU Usage",
             "status.memory.displayName": "Memory Usage",
+            "status.network.displayName": "Network",
+            "status.disk.displayName": "Disk",
             "status.process.name": "Process",
             "status.process.cpu": "CPU",
             "status.process.memory": "Memory",
@@ -322,6 +324,8 @@ final class LocalizationManager {
             // Status Modules
             "status.cpu.displayName": "CPU 使用率",
             "status.memory.displayName": "内存使用",
+            "status.network.displayName": "网络",
+            "status.disk.displayName": "硬盘",
             "status.process.name": "进程",
             "status.process.cpu": "CPU",
             "status.process.memory": "内存",
@@ -472,6 +476,8 @@ final class LocalizationManager {
             // Status Modules
             "status.cpu.displayName": "CPU 使用率",
             "status.memory.displayName": "記憶體使用",
+            "status.network.displayName": "網路",
+            "status.disk.displayName": "硬碟",
             "status.process.name": "程序",
             "status.process.cpu": "CPU",
             "status.process.memory": "記憶體",

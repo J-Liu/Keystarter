@@ -224,6 +224,16 @@ final class SettingsWindow: NSWindow {
         memoryCheckbox.state = UserDefaults.standard.bool(forKey: "status.memory.enabled") ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: memoryCheckbox))
 
+        // Row: Network Module
+        let networkCheckbox = NSButton(checkboxWithTitle: L("status.network.displayName"), target: self, action: #selector(networkModuleChanged(_:)))
+        networkCheckbox.state = UserDefaults.standard.bool(forKey: "status.network.enabled") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: networkCheckbox))
+
+        // Row: Disk Module
+        let diskCheckbox = NSButton(checkboxWithTitle: L("status.disk.displayName"), target: self, action: #selector(diskModuleChanged(_:)))
+        diskCheckbox.state = UserDefaults.standard.bool(forKey: "status.disk.enabled") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: diskCheckbox))
+
         // Row: File Content Index
         let contentIndexCheckbox = NSButton(checkboxWithTitle: L("settings.contentIndex.checkbox"), target: self, action: #selector(contentIndexChanged(_:)))
         contentIndexCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
@@ -590,6 +600,26 @@ final class SettingsWindow: NSWindow {
             StatusItemController.shared.enableModule("memory")
         } else {
             StatusItemController.shared.disableModule("memory")
+        }
+    }
+
+    @objc private func networkModuleChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "status.network.enabled")
+        if enabled {
+            StatusItemController.shared.enableModule("network")
+        } else {
+            StatusItemController.shared.disableModule("network")
+        }
+    }
+
+    @objc private func diskModuleChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "status.disk.enabled")
+        if enabled {
+            StatusItemController.shared.enableModule("disk")
+        } else {
+            StatusItemController.shared.disableModule("disk")
         }
     }
 
