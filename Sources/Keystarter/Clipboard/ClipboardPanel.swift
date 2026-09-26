@@ -21,6 +21,10 @@ final class ClipboardPanel: NSObject {
     /// Cached entries for instant display
     private var cachedEntries: [ClipboardEntry] = []
     private let cacheQueue = DispatchQueue(label: "com.keystarter.clipboard.cache", qos: .utility)
+    
+    /// Thumbnail cache [path: image]
+    private var thumbnailCache: [String: NSImage] = [:]
+    private let thumbnailCacheQueue = DispatchQueue(label: "com.keystarter.clipboard.thumbnails", qos: .utility)
 
     override init() {
         super.init()
@@ -42,6 +46,11 @@ final class ClipboardPanel: NSObject {
             }
             DispatchQueue.main.async {
                 self?.cachedEntries = entries
+            }
+            
+            // Pre-cache thumbnails in background
+            for entry in entries where entry.type == "image" {
+                _ = self?.createThumbnailFromFile(entry.content, maxSize: 32)
             }
         }
     }
@@ -252,6 +261,11 @@ final class ClipboardPanel: NSObject {
     }
 
     private func createThumbnailFromFile(_ path: String, maxSize: CGFloat) -> NSImage? {
+        // Check cache first
+        if let cached = thumbnailCacheQueue.sync(execute: { thumbnailCache[path] }) {
+            return cached
+        }
+        
         guard let imageSource = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil) else {
             return nil
         }
@@ -267,7 +281,14 @@ final class ClipboardPanel: NSObject {
             return nil
         }
 
-        return NSImage(cgImage: cgImage, size: .zero)
+        let image = NSImage(cgImage: cgImage, size: .zero)
+        
+        // Cache for future use
+        thumbnailCacheQueue.async { [weak self] in
+            self?.thumbnailCache[path] = image
+        }
+        
+        return image
     }
 }
 
