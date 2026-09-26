@@ -249,79 +249,54 @@ final class ProcessInfoProvider {
     
     // MARK: - Private Helpers
     
-    private var previousCPUInfo: [Int32: (user: UInt64, system: UInt64, time: Date)] = [:]
-    private let cpuLock = NSLock()
+    private var previousProcCPU: [Int32: (user: UInt64, system: UInt64, time: Date)] = [:]
+    private let procCPULock = NSLock()
     
     private func getProcessCPUUsage(pid: Int32) -> Double {
-        var threadList: thread_act_array_t?
-        var threadCount: mach_msg_type_number_t = 0
-        
-        let task = task_for_pid(mach_task_self_, pid, nil)
-        guard task == KERN_SUCCESS else { return 0 }
-        
-        let result = task_threads(mach_task_self_, &threadList, &threadCount)
-        guard result == KERN_SUCCESS, let threads = threadList else { return 0 }
-        
-        var totalUser: UInt64 = 0
-        var totalSystem: UInt64 = 0
-        
-        for i in 0..<Int(threadCount) {
-            var info = thread_basic_info()
-            var count = mach_msg_type_number_t(THREAD_INFO_MAX)
-            
-            let kr = withUnsafeMutablePointer(to: &info) {
-                $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                    thread_info(threads[Int(i)], thread_flavor_t(THREAD_BASIC_INFO), $0, &count)
-                }
-            }
-            
-            if kr == KERN_SUCCESS && (info.flags & TH_FLAGS_IDLE) == 0 {
-                totalUser += UInt64(info.user_time.seconds) * 1_000_000 + UInt64(info.user_time.microseconds)
-                totalSystem += UInt64(info.system_time.seconds) * 1_000_000 + UInt64(info.system_time.microseconds)
-            }
+        var rusage = rusage_info_current()
+        let rusagePtr = withUnsafeMutablePointer(to: &rusage) {
+            $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { $0 }
         }
+        let result = proc_pid_rusage(Int32(pid), RUSAGE_INFO_CURRENT, rusagePtr)
         
-        // Free thread list
-        let size = vm_size_t(threadCount) * vm_size_t(MemoryLayout<thread_t>.size)
-        vm_deallocate(mach_task_self_, vm_address_t(bitPattern: threads), size)
+        guard result == 0 else { return 0 }
         
-        // Calculate delta from previous measurement
-        cpuLock.lock()
-        defer { cpuLock.unlock() }
+        let userTime = rusage.ri_user_time
+        let systemTime = rusage.ri_system_time
+        let total = userTime + systemTime
+        
+        // Calculate delta from previous
+        procCPULock.lock()
+        defer { procCPULock.unlock() }
         
         let now = Date()
-        if let prev = previousCPUInfo[pid] {
+        if let prev = previousProcCPU[pid] {
             let elapsed = now.timeIntervalSince(prev.time)
             if elapsed > 0 {
-                let userDelta = totalUser > prev.user ? Double(totalUser - prev.user) : 0
-                let systemDelta = totalSystem > prev.system ? Double(totalSystem - prev.system) : 0
-                let cpuTime = (userDelta + systemDelta) / 1_000_000.0
+                let prevTotal = prev.user + prev.system
+                let delta = total > prevTotal ? Double(total - prevTotal) : 0
                 let cores = Double(ProcessInfo.processInfo.activeProcessorCount)
+                // Convert nanoseconds to seconds
+                let cpuTime = delta / 1_000_000_000.0
                 let usage = (cpuTime / elapsed / cores) * 100.0
                 
-                previousCPUInfo[pid] = (totalUser, totalSystem, now)
+                previousProcCPU[pid] = (userTime, systemTime, now)
                 return min(usage, 100.0)
             }
         }
         
-        previousCPUInfo[pid] = (totalUser, totalSystem, now)
+        previousProcCPU[pid] = (userTime, systemTime, now)
         return 0
     }
     
     private func getProcessMemoryUsage(pid: Int32) -> UInt64 {
-        var info = task_basic_info_64()
-        var count = mach_msg_type_number_t(MemoryLayout<task_basic_info_64>.size / MemoryLayout<natural_t>.size)
-        
-        let task = task_for_pid(mach_task_self_, pid, nil)
-        guard task == KERN_SUCCESS else { return 0 }
-        
-        let result = withUnsafeMutablePointer(to: &info) {
-            $0.withMemoryRebound(to: natural_t.self, capacity: Int(count)) {
-                task_info(mach_task_self_, task_flavor_t(TASK_BASIC_INFO_64), $0, &count)
-            }
+        var rusage = rusage_info_current()
+        let rusagePtr = withUnsafeMutablePointer(to: &rusage) {
+            $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { $0 }
         }
+        let result = proc_pid_rusage(Int32(pid), RUSAGE_INFO_CURRENT, rusagePtr)
         
-        guard result == KERN_SUCCESS else { return 0 }
-        return info.resident_size
+        guard result == 0 else { return 0 }
+        return rusage.ri_resident_size
     }
 }

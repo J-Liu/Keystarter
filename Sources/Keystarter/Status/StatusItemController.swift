@@ -59,18 +59,21 @@ final class StatusItemController: NSObject {
     private func setupStatusItem() {
         // Create separate status item for each module (reverse order so first module appears leftmost)
         for module in modules.reversed() {
-            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            let item = NSStatusBar.system.statusItem(withLength: 36)
             
-            // Create two-line title
+            // Create two-line title with proper spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = -2
+            paraStyle.lineSpacing = 0
+            paraStyle.paragraphSpacing = 0
+            paraStyle.minimumLineHeight = 10
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 7, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: 2
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 10, weight: .medium),
@@ -123,18 +126,21 @@ final class StatusItemController: NSObject {
 
         // Recreate status items for current modules (reverse order so first module appears leftmost)
         for module in modules.reversed() {
-            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            let item = NSStatusBar.system.statusItem(withLength: 36)
             
-            // Create two-line title
+            // Create two-line title with proper spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = -2
+            paraStyle.lineSpacing = 0
+            paraStyle.paragraphSpacing = 0
+            paraStyle.minimumLineHeight = 10
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 7, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: 2
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 10, weight: .medium),
@@ -280,13 +286,16 @@ final class StatusItemController: NSObject {
         
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
-        paraStyle.lineSpacing = -2
+        paraStyle.lineSpacing = 0
+        paraStyle.paragraphSpacing = 0
+        paraStyle.minimumLineHeight = 10
         
         let attrString = NSMutableAttributedString()
         let nameAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 7, weight: .medium),
             .foregroundColor: NSColor.labelColor,
-            .paragraphStyle: paraStyle
+            .paragraphStyle: paraStyle,
+            .baselineOffset: 2
         ]
         let valueAttrs: [NSAttributedString.Key: Any] = [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
