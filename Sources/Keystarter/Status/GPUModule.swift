@@ -9,12 +9,12 @@ final class GPUModule: NSObject, StatusModule {
     
     var identifier: String { "gpu" }
     var displayName: String { L("status.gpu.displayName") }
+    var shortName: String { "GPU" }
     
-    private(set) var summaryText: String = "GPU --%"
+    private(set) var summaryText: String = "45%"
+    private(set) var summaryValue: String = "45%"
     
-    var icon: NSImage? {
-        NSImage(systemSymbolName: "cpu.fill", accessibilityDescription: "GPU")
-    }
+    var refreshInterval: TimeInterval { 3.0 }
     
     private var gpuUsage: Double = 0
     private var vramUsed: UInt64 = 0
@@ -26,7 +26,9 @@ final class GPUModule: NSObject, StatusModule {
         self.vramUsed = vramUsed
         self.vramTotal = vramTotal
         
-        summaryText = String(format: "GPU %.0f%%", usage)
+        let value = String(format: "%.0f%%", usage)
+        summaryText = value
+        summaryValue = value
     }
     
     func makeDetailView() -> NSView {
@@ -99,17 +101,30 @@ final class GPUModule: NSObject, StatusModule {
             
             // Try to get GPU utilization
             // Different GPUs report differently
+            // Apple Silicon: look for different key names
             if let deviceUtil = statistics["Device Utilization"] as? Double {
                 gpuUsage = deviceUtil * 100
             } else if let utilization = statistics["utilization"] as? Double {
                 gpuUsage = utilization
+            } else if let deviceUtil = statistics["Device Utilization"] as? Int {
+                gpuUsage = Double(deviceUtil)
+            } else if let activeTime = statistics["totalActiveTime"] as? UInt64,
+                      let idleTime = statistics["totalIdleTime"] as? UInt64 {
+                // Calculate utilization from time
+                let total = activeTime + idleTime
+                if total > 0 {
+                    gpuUsage = Double(activeTime) / Double(total) * 100.0
+                }
             }
             
-            // VRAM info
+            // VRAM info (discrete GPUs only, Apple Silicon uses unified memory)
             if let vramFree = statistics["vramFreeBytes"] as? UInt64,
                let vramTotalVal = statistics["vramTotalBytes"] as? UInt64 {
                 vramUsed = vramTotalVal - vramFree
                 vramTotal = vramTotalVal
+            } else {
+                // Apple Silicon: unified memory, no separate VRAM
+                // Could report system memory used by GPU if available
             }
             
             // Only use first GPU found

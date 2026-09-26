@@ -4,26 +4,28 @@
 import AppKit
 import IOKit
 
-/// Sensor monitoring module.
+/// Sensor monitoring module for Apple Silicon temperature.
 final class SensorModule: NSObject, StatusModule {
     
     var identifier: String { "sensor" }
     var displayName: String { L("status.sensor.displayName") }
+    var shortName: String { "TMP" }
     
-    private(set) var summaryText: String = "CPU --°C"
+    private(set) var summaryText: String = "--°C"
+    private(set) var summaryValue: String = "--°"
     
-    var icon: NSImage? {
-        NSImage(systemSymbolName: "thermometer", accessibilityDescription: "Temperature")
-    }
+    var refreshInterval: TimeInterval { 10.0 }
     
     private var cpuTemp: Double = 0
     
     func refreshSummary() {
         cpuTemp = getCPUTemperature()
         if cpuTemp > 0 {
-            summaryText = String(format: "CPU %.0f°C", cpuTemp)
+            summaryText = String(format: "%.0f°C", cpuTemp)
+            summaryValue = String(format: "%.0f°", cpuTemp)
         } else {
-            summaryText = "CPU --°C"
+            summaryText = "--°C"
+            summaryValue = "--°"
         }
     }
     
@@ -52,16 +54,80 @@ final class SensorModule: NSObject, StatusModule {
         return container
     }
     
-    // MARK: - Sensor Data
+    // MARK: - Temperature Reading
     
     private func getCPUTemperature() -> Double {
-        // Try to find AppleSMC service
+        // Method 1: Try HID sensor (Apple Silicon)
+        if let temp = readHIDSensorTemperature() {
+            return temp
+        }
+        
+        // Method 2: Try AppleSMC (Intel Mac)
+        if let temp = readSMCTemperature() {
+            return temp
+        }
+        
+        return 0
+    }
+    
+    private func readHIDSensorTemperature() -> Double? {
+        // Apple Silicon uses IOHIDDevice for temperature sensors
+        var iterator: io_iterator_t = 0
+        
+        // Match HID devices with Apple Vendor temperature sensors
+        let matching = IOServiceMatching("IOHIDDevice")
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
+            return nil
+        }
+        
+        defer {
+            IOObjectRelease(iterator)
+        }
+        
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            defer {
+                IOObjectRelease(service)
+                service = IOIteratorNext(iterator)
+            }
+            
+            // Get device properties
+            var properties: Unmanaged<CFMutableDictionary>?
+            guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+                  let props = properties?.takeRetainedValue() as? [String: Any] else {
+                continue
+            }
+            
+            // Check if this is a temperature sensor
+            // PrimaryUsagePage: 0xFF00 (Apple Vendor), PrimaryUsage: varies
+            guard let usagePage = props["PrimaryUsagePage"] as? Int,
+                  usagePage == 0xFF00 else { // Apple Vendor page
+                continue
+            }
+            
+            // Try to read temperature value
+            if let inputValues = props["Elements"] as? [[String: Any]] {
+                for element in inputValues {
+                    if let usagePage = element["UsagePage"] as? Int,
+                       usagePage == 0xFF00,
+                       let value = element["Value"] as? Double {
+                        // Value might be in centidegrees or other units
+                        // Typical: temperature * 100
+                        return value / 100.0
+                    }
+                }
+            }
+        }
+        
+        return nil
+    }
+    
+    private func readSMCTemperature() -> Double? {
+        // Intel Mac SMC temperature reading
         var iterator: io_iterator_t = 0
         let matching = IOServiceMatching("AppleSMC")
-        let result = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator)
-        
-        guard result == KERN_SUCCESS, iterator != 0 else {
-            return 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
+            return nil
         }
         
         defer {
@@ -70,28 +136,77 @@ final class SensorModule: NSObject, StatusModule {
         
         let service = IOIteratorNext(iterator)
         guard service != 0 else {
-            return 0
+            return nil
         }
         
         defer {
             IOObjectRelease(service)
         }
         
-        // Try to read temperature via IOKit properties
-        var properties: Unmanaged<CFMutableDictionary>?
-        guard IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-              let props = properties?.takeRetainedValue() as? [String: Any] else {
-            return 0
+        // Open connection to SMC
+        var connect: io_connect_t = 0
+        guard IOServiceOpen(service, mach_task_self_, 1, &connect) == KERN_SUCCESS else {
+            return nil
         }
         
-        // Look for temperature in properties
-        // On Apple Silicon, this might be under different keys
-        if let temp = props["Temperature"] as? Double {
-            return temp
+        defer {
+            IOServiceClose(connect)
         }
         
-        // Alternative: try to use sysctl to get temperature info
-        // This is a fallback that may not work on all systems
-        return 0
+        // Read TC0P key (CPU Proximity Temperature)
+        let result = readSMCKey(connect: connect, key: "TC0P")
+        
+        // Fallback: try TC0D (CPU Die Temperature)
+        if result == nil {
+            return readSMCKey(connect: connect, key: "TC0D")
+        }
+        
+        return result
     }
+    
+    private func readSMCKey(connect: io_connect_t, key: String) -> Double? {
+        let keyBytes = key.utf8.map { UInt8($0) }
+        
+        var input = SMCKeyData()
+        input.key = (UInt32(keyBytes[0]) << 24) | (UInt32(keyBytes[1]) << 16) | (UInt32(keyBytes[2]) << 8) | UInt32(keyBytes[3])
+        input.data8 = UInt8(kSMCReadKey)
+        
+        var output = SMCKeyData()
+        let inputSize: Int = MemoryLayout<SMCKeyData>.size
+        var outputSize: Int = MemoryLayout<SMCKeyData>.size
+        
+        let kr = IOConnectCallStructMethod(
+            connect,
+            kSMCUserClientMethod,
+            &input,
+            inputSize,
+            &output,
+            &outputSize
+        )
+        
+        guard kr == KERN_SUCCESS else { return nil }
+        
+        // Temperature is stored as SP78 (signed 15.8 fixed point)
+        let temp = Double(Int16(bitPattern: UInt16(output.val))) / 256.0
+        return temp > 0 ? temp : nil
+    }
+}
+
+// MARK: - SMC Constants and Structures
+
+private let kSMCUserClientMethod: UInt32 = 2
+private let kSMCReadKey: UInt8 = 5
+
+private struct SMCKeyData {
+    var key: UInt32 = 0
+    var vers: UInt8 = 0
+    var data8: UInt8 = 0
+    var data32: UInt32 = 0
+    var result: UInt8 = 0
+    var status: UInt8 = 0
+    var data8_2: UInt8 = 0
+    var val: UInt32 = 0
+    var bytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    
+    init() {}
 }

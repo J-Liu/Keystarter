@@ -17,12 +17,12 @@ final class NetworkModule: NSObject, StatusModule {
     
     var identifier: String { "network" }
     var displayName: String { L("status.network.displayName") }
+    var shortName: String { "NET" }
     
     private(set) var summaryText: String = "↓-- ↑--"
+    private(set) var summaryValue: String = "--"
     
-    var icon: NSImage? {
-        NSImage(systemSymbolName: "network", accessibilityDescription: "Network")
-    }
+    var refreshInterval: TimeInterval { 2.0 }
     
     private var previousBytesIn: UInt64 = 0
     private var previousBytesOut: UInt64 = 0
@@ -44,53 +44,64 @@ final class NetworkModule: NSObject, StatusModule {
             let bytesOutPerSec = Double(bytesOutDelta) / elapsed
             
             summaryText = "↓\(formatSpeed(bytesInPerSec)) ↑\(formatSpeed(bytesOutPerSec))"
+            summaryValue = "↓\(formatSpeedShort(bytesInPerSec))"
+            
+            // Refresh process stats (expensive, do it less frequently)
+            refreshProcessStats(elapsed: elapsed)
         }
         
         previousBytesIn = bytesIn
         previousBytesOut = bytesOut
         previousTime = now
-        
-        // Also refresh process-level stats
-        refreshProcessStats(elapsed: elapsed)
     }
     
     func makeDetailView() -> NSView {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 450))
+        // Calculate height based on content, max 70% of screen height
+        let screenHeight = NSScreen.main?.visibleFrame.height ?? 800
+        let maxHeight = screenHeight * 0.7
+        let headerHeight: CGFloat = 56
+        let rowHeight: CGFloat = 18
+        let rowCount = min(processStats.count, 30)
+        let totalHeight = headerHeight + CGFloat(rowCount) * rowHeight + 16
+        let finalHeight = min(totalHeight, maxHeight)
+        
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 340, height: finalHeight))
         
         // Header
         let headerView = NSTextField(labelWithString: displayName)
-        headerView.font = .systemFont(ofSize: 14, weight: .semibold)
-        headerView.frame = NSRect(x: 16, y: 420, width: 200, height: 20)
+        headerView.font = .systemFont(ofSize: 12, weight: .semibold)
+        headerView.frame = NSRect(x: 12, y: finalHeight - 24, width: 200, height: 16)
         container.addSubview(headerView)
         
         // Total rates
         let totalLabel = NSTextField(labelWithString: "Total: \(summaryText)")
-        totalLabel.font = .systemFont(ofSize: 12)
+        totalLabel.font = .systemFont(ofSize: 10)
         totalLabel.textColor = .secondaryLabelColor
-        totalLabel.frame = NSRect(x: 16, y: 395, width: 200, height: 16)
+        totalLabel.frame = NSRect(x: 12, y: finalHeight - 44, width: 200, height: 14)
         container.addSubview(totalLabel)
         
         // Process table
-        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 360, height: 380))
-        scrollView.hasVerticalScroller = true
+        let tableHeight = finalHeight - headerHeight
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 340, height: tableHeight))
+        scrollView.hasVerticalScroller = totalHeight > maxHeight
         scrollView.drawsBackground = false
         
         let tableView = NSTableView(frame: scrollView.bounds)
         tableView.headerView = nil
         tableView.backgroundColor = .clear
-        tableView.rowHeight = 24
+        tableView.rowHeight = rowHeight
         tableView.intercellSpacing = NSSize(width: 0, height: 0)
         
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        nameColumn.width = 160
+        nameColumn.width = 150
         tableView.addTableColumn(nameColumn)
         
         let inColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("in"))
-        inColumn.width = 80
+        inColumn.width = 75
         tableView.addTableColumn(inColumn)
         
         let outColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("out"))
-        outColumn.width = 80
+        outColumn.width = 75
         tableView.addTableColumn(outColumn)
         
         tableView.dataSource = self
@@ -188,10 +199,18 @@ final class NetworkModule: NSObject, StatusModule {
             let bytesIn = UInt64(parts[1]) ?? 0
             let bytesOut = UInt64(parts[2]) ?? 0
             
-            // Check if it's an app
-            let isApp = isAppBundle(pid: pid)
+            // Check if it's an app or helper process
+            var isApp = isAppBundle(pid: pid)
+            var displayName = name
             
-            stats.append(ProcessNetworkInfo(pid: pid, name: name, bytesIn: bytesIn, bytesOut: bytesOut, isApp: isApp))
+            // For helper processes, try to get the main app name
+            if !isApp, let mainAppName = getMainAppName(forHelperName: name, pid: pid) {
+                // This is a helper process of a known app
+                displayName = "\(mainAppName) (helper)"
+                isApp = true  // Treat as app since it belongs to one
+            }
+            
+            stats.append(ProcessNetworkInfo(pid: pid, name: displayName, bytesIn: bytesIn, bytesOut: bytesOut, isApp: isApp))
         }
         
         // Sort by total bytes
@@ -207,9 +226,53 @@ final class NetworkModule: NSObject, StatusModule {
         return runningApps.contains { $0.processIdentifier == pid && $0.bundleURL != nil }
     }
     
+    private func getAppBundleIdentifier(pid: Int32) -> String? {
+        // Get the bundle identifier for a process
+        let runningApps = NSWorkspace.shared.runningApplications
+        for app in runningApps {
+            if app.processIdentifier == pid {
+                return app.bundleIdentifier
+            }
+        }
+        return nil
+    }
+    
+    private func getMainAppName(forHelperName name: String, pid: Int32) -> String? {
+        // Try to find the main app for a helper process
+        // Check if this process has the same bundle as a known app
+        if let bundleId = getAppBundleIdentifier(pid: pid) {
+            // If it has a bundle identifier, it's part of an app
+            // Return the app name from the bundle identifier
+            if let appName = bundleId.components(separatedBy: ".").last {
+                return appName
+            }
+        }
+        
+        // Check for common helper patterns
+        // e.g., "App Helper" -> "App", "App Assistant" -> "App"
+        let helperSuffixes = [" Helper", " Assistant", " Agent", " Service"]
+        for suffix in helperSuffixes {
+            if name.hasSuffix(suffix) {
+                return String(name.dropLast(suffix.count))
+            }
+        }
+        
+        return nil
+    }
+    
     private func formatSpeed(_ bytesPerSec: Double) -> String {
         if bytesPerSec >= 1_048_576 {
             return String(format: "%.1fM", bytesPerSec / 1_048_576)
+        } else if bytesPerSec >= 1024 {
+            return String(format: "%.0fK", bytesPerSec / 1024)
+        } else {
+            return String(format: "%.0f", bytesPerSec)
+        }
+    }
+    
+    private func formatSpeedShort(_ bytesPerSec: Double) -> String {
+        if bytesPerSec >= 1_048_576 {
+            return String(format: "%.0fM", bytesPerSec / 1_048_576)
         } else if bytesPerSec >= 1024 {
             return String(format: "%.0fK", bytesPerSec / 1024)
         } else {
@@ -252,26 +315,26 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
             }
             
             let label = NSTextField(labelWithString: displayName)
-            label.font = .systemFont(ofSize: 12)
+            label.font = .systemFont(ofSize: 10)
             if !info.isApp {
                 label.textColor = .systemOrange
             }
             label.lineBreakMode = .byTruncatingTail
-            label.frame = NSRect(x: 8, y: 4, width: 140, height: 16)
+            label.frame = NSRect(x: 6, y: 2, width: 138, height: 14)
             cell.addSubview(label)
         } else if tableColumn?.identifier.rawValue == "in" {
             let label = NSTextField(labelWithString: "↓\(formatBytes(info.bytesIn))")
-            label.font = .systemFont(ofSize: 11)
+            label.font = .systemFont(ofSize: 10)
             label.textColor = .systemBlue
             label.alignment = .right
-            label.frame = NSRect(x: 0, y: 4, width: 64, height: 16)
+            label.frame = NSRect(x: 0, y: 2, width: 62, height: 14)
             cell.addSubview(label)
         } else {
             let label = NSTextField(labelWithString: "↑\(formatBytes(info.bytesOut))")
-            label.font = .systemFont(ofSize: 11)
+            label.font = .systemFont(ofSize: 10)
             label.textColor = .systemGreen
             label.alignment = .right
-            label.frame = NSRect(x: 0, y: 4, width: 64, height: 16)
+            label.frame = NSRect(x: 0, y: 2, width: 62, height: 14)
             cell.addSubview(label)
         }
         

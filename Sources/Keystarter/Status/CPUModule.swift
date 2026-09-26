@@ -8,22 +8,21 @@ final class CPUModule: NSObject, StatusModule {
     
     var identifier: String { "cpu" }
     var displayName: String { L("status.cpu.displayName") }
+    var shortName: String { "CPU" }
     
-    private(set) var summaryText: String = "CPU --%"
+    private(set) var summaryText: String = "23%"
+    private(set) var summaryValue: String = "23%"
     
-    var icon: NSImage? {
-        NSImage(systemSymbolName: "cpu", accessibilityDescription: "CPU")
-    }
+    var refreshInterval: TimeInterval { 2.0 }
     
     private var processes: [AppProcessInfo] = []
-    private var previousTotalTime: UInt64 = 0
-    private var previousIdleTime: UInt64 = 0
     
     func refreshSummary() {
         let usage = ProcessInfoProvider.shared.getTotalCPUUsage()
-        summaryText = String(format: "CPU %.0f%%", usage)
+        let value = String(format: "%.0f%%", usage)
+        summaryText = value
+        summaryValue = value
         
-        // Also update process list
         processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 30)
     }
     

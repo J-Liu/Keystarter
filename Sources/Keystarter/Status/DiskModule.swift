@@ -9,12 +9,12 @@ final class DiskModule: NSObject, StatusModule {
     
     var identifier: String { "disk" }
     var displayName: String { L("status.disk.displayName") }
+    var shortName: String { "DSK" }
     
     private(set) var summaryText: String = "R-- W--"
+    private(set) var summaryValue: String = "--"
     
-    var icon: NSImage? {
-        NSImage(systemSymbolName: "externaldrive", accessibilityDescription: "Disk")
-    }
+    var refreshInterval: TimeInterval { 3.0 }
     
     private var previousReadBytes: UInt64 = 0
     private var previousWriteBytes: UInt64 = 0
@@ -33,6 +33,7 @@ final class DiskModule: NSObject, StatusModule {
             let writePerSec = Double(writeDelta) / elapsed
             
             summaryText = "R\(formatSpeed(readPerSec)) W\(formatSpeed(writePerSec))"
+            summaryValue = "R\(formatSpeedShort(readPerSec))"
         }
         
         previousReadBytes = readBytes
@@ -113,9 +114,19 @@ final class DiskModule: NSObject, StatusModule {
     }
     
     private func formatSpeed(_ bytesPerSec: Double) -> String {
-        if bytesPerSec >= 1_048_576 { // 1 MB/s
+        if bytesPerSec >= 1_048_576 {
             return String(format: "%.1fM", bytesPerSec / 1_048_576)
-        } else if bytesPerSec >= 1024 { // 1 KB/s
+        } else if bytesPerSec >= 1024 {
+            return String(format: "%.0fK", bytesPerSec / 1024)
+        } else {
+            return String(format: "%.0f", bytesPerSec)
+        }
+    }
+    
+    private func formatSpeedShort(_ bytesPerSec: Double) -> String {
+        if bytesPerSec >= 1_048_576 {
+            return String(format: "%.0fM", bytesPerSec / 1_048_576)
+        } else if bytesPerSec >= 1024 {
             return String(format: "%.0fK", bytesPerSec / 1024)
         } else {
             return String(format: "%.0f", bytesPerSec)

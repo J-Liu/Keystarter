@@ -11,15 +11,25 @@ protocol StatusModule: AnyObject {
     /// Display name shown in settings.
     var displayName: String { get }
     
-    /// Current summary text shown in status bar.
+    /// Short name shown in status bar (e.g., "CPU").
+    var shortName: String { get }
+    
+    /// Current value shown in status bar (e.g., "23%").
+    var summaryValue: String { get }
+    
+    /// Full summary text for backwards compatibility.
     var summaryText: String { get }
     
-    /// Icon shown in status bar (optional).
-    var icon: NSImage? { get }
+    /// Refresh interval in seconds.
+    var refreshInterval: TimeInterval { get }
     
     /// Refresh the summary data.
     func refreshSummary()
     
     /// Create the detail view for popover.
     func makeDetailView() -> NSView
+}
+
+extension StatusModule {
+    var refreshInterval: TimeInterval { 2.0 }
 }

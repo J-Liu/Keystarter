@@ -8,12 +8,12 @@ final class MemoryModule: NSObject, StatusModule {
     
     var identifier: String { "memory" }
     var displayName: String { L("status.memory.displayName") }
+    var shortName: String { "MEM" }
     
-    private(set) var summaryText: String = "MEM --"
+    private(set) var summaryText: String = "8.2G"
+    private(set) var summaryValue: String = "8.2G"
     
-    var icon: NSImage? {
-        NSImage(systemSymbolName: "memorychip", accessibilityDescription: "Memory")
-    }
+    var refreshInterval: TimeInterval { 2.0 }
     
     private var processes: [AppProcessInfo] = []
     private var usedMemory: UInt64 = 0
@@ -25,11 +25,11 @@ final class MemoryModule: NSObject, StatusModule {
         totalMemory = total
         
         let usedGB = Double(used) / 1_073_741_824.0
-        let totalGB = Double(total) / 1_073_741_824.0
         
-        summaryText = String(format: "MEM %.1f/%.0fG", usedGB, totalGB)
+        let value = String(format: "%.1fG", usedGB)
+        summaryText = value
+        summaryValue = value
         
-        // Also update process list
         processes = ProcessInfoProvider.shared.getProcessesByMemory(limit: 30)
     }
     

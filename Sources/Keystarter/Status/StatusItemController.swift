@@ -17,7 +17,8 @@ final class StatusItemController: NSObject {
     private var moduleViews: [String: NSView] = [:]
     
     private var refreshTimer: Timer?
-    private let refreshInterval: TimeInterval = 2.0
+    private var lastRefreshTimes: [String: Date] = [:]
+    private let dataQueue = DispatchQueue(label: "com.keystarter.status.data", qos: .utility)
     
     override init() {
         super.init()
@@ -88,33 +89,32 @@ final class StatusItemController: NSObject {
     }
     
     private func createModuleView(_ module: StatusModule) -> NSView {
-        let view = NSView(frame: NSRect(x: 0, y: 0, width: 80, height: 20))
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 50, height: 22))
         
-        // Stack for icon + text
+        // Vertical stack: name on top, value below
         let stack = NSStackView(frame: view.bounds)
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.spacing = 4
+        stack.orientation = .vertical
+        stack.alignment = .centerX
+        stack.spacing = 0
         stack.autoresizingMask = [.width, .height]
         view.addSubview(stack)
         
-        // Icon (if available)
-        if let icon = module.icon {
-            let imageView = NSImageView(frame: NSRect(x: 0, y: 0, width: 16, height: 16))
-            imageView.image = icon
-            imageView.imageScaling = .scaleProportionallyDown
-            stack.addArrangedSubview(imageView)
-        }
+        // Name label (top)
+        let nameLabel = NSTextField(labelWithString: module.shortName)
+        nameLabel.font = .systemFont(ofSize: 9, weight: .medium)
+        nameLabel.alignment = .center
+        nameLabel.textColor = .secondaryLabelColor
+        stack.addArrangedSubview(nameLabel)
         
-        // Text
-        let label = NSTextField(labelWithString: module.summaryText)
-        label.font = .systemFont(ofSize: 12, weight: .medium)
-        label.alignment = .left
-        stack.addArrangedSubview(label)
+        // Value label (bottom)
+        let valueLabel = NSTextField(labelWithString: module.summaryValue)
+        valueLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        valueLabel.alignment = .center
+        stack.addArrangedSubview(valueLabel)
         
         // Store reference for updating
         view.identifier = NSUserInterfaceItemIdentifier(module.identifier)
-        view.subviews.first?.subviews.compactMap { $0 as? NSTextField }.first?.identifier = NSUserInterfaceItemIdentifier("label")
+        valueLabel.identifier = NSUserInterfaceItemIdentifier("valueLabel")
         
         // Click gesture
         let clickGesture = NSClickGestureRecognizer(target: self, action: #selector(moduleClicked(_:)))
@@ -195,15 +195,37 @@ final class StatusItemController: NSObject {
     
     private func startRefreshTimer() {
         refreshTimer?.invalidate()
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: refreshInterval, repeats: true) { [weak self] _ in
-            self?.refreshAll()
+        // Use 1 second timer, check each module's interval
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            self?.refreshIfNeeded()
         }
     }
-    
-    private func refreshAll() {
-        for module in modules {
-            module.refreshSummary()
-            updateModuleLabel(module)
+
+    private func refreshIfNeeded() {
+        let now = Date()
+        let modulesToRefresh = modules.filter { module in
+            let lastRefresh = lastRefreshTimes[module.identifier] ?? .distantPast
+            let elapsed = now.timeIntervalSince(lastRefresh)
+            return elapsed >= module.refreshInterval
+        }
+        
+        guard !modulesToRefresh.isEmpty else { return }
+        
+        // Collect data on background queue
+        dataQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            for module in modulesToRefresh {
+                module.refreshSummary()
+            }
+            
+            // Update UI on main queue
+            DispatchQueue.main.async {
+                for module in modulesToRefresh {
+                    self.updateModuleLabel(module)
+                    self.lastRefreshTimes[module.identifier] = now
+                }
+            }
         }
     }
     
@@ -212,8 +234,8 @@ final class StatusItemController: NSObject {
               let stack = view.subviews.first as? NSStackView else { return }
         
         for subview in stack.arrangedSubviews {
-            if let label = subview as? NSTextField {
-                label.stringValue = module.summaryText
+            if let label = subview as? NSTextField, label.identifier?.rawValue == "valueLabel" {
+                label.stringValue = module.summaryValue
                 break
             }
         }
@@ -261,8 +283,12 @@ final class StatusItemController: NSObject {
             }
         }
         
-        // Refresh all
-        refreshAll()
+        // Refresh all modules immediately
+        for module in modules {
+            module.refreshSummary()
+            updateModuleLabel(module)
+        }
+        lastRefreshTimes.removeAll()
     }
 }
 
