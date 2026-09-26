@@ -64,8 +64,8 @@ final class StatusItemController: NSObject {
             // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = -4
-            paraStyle.paragraphSpacing = -4
+            paraStyle.lineSpacing = -3
+            paraStyle.paragraphSpacing = -3
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
@@ -74,7 +74,7 @@ final class StatusItemController: NSObject {
                 .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -129,8 +129,8 @@ final class StatusItemController: NSObject {
             // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = -4
-            paraStyle.paragraphSpacing = -4
+            paraStyle.lineSpacing = -3
+            paraStyle.paragraphSpacing = -3
             
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
@@ -139,7 +139,7 @@ final class StatusItemController: NSObject {
                 .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -282,8 +282,8 @@ final class StatusItemController: NSObject {
         
         let paraStyle = NSMutableParagraphStyle()
         paraStyle.alignment = .center
-        paraStyle.lineSpacing = -4
-        paraStyle.paragraphSpacing = -4
+        paraStyle.lineSpacing = -3
+        paraStyle.paragraphSpacing = -3
         
         let attrString = NSMutableAttributedString()
         let nameAttrs: [NSAttributedString.Key: Any] = [
@@ -292,7 +292,7 @@ final class StatusItemController: NSObject {
             .paragraphStyle: paraStyle
         ]
         let valueAttrs: [NSAttributedString.Key: Any] = [
-            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
+            .font: NSFont.systemFont(ofSize: 11, weight: .medium),
             .foregroundColor: NSColor.labelColor,
             .paragraphStyle: paraStyle
         ]

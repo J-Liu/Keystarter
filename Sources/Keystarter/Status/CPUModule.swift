@@ -63,22 +63,23 @@ final class CPUModule: NSObject, StatusModule {
         container.addSubview(divider)
         
         // Process list
-        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 360, height: dividerY))
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 340, height: dividerY))
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
+        scrollView.autohidesScrollers = true
         
-        let table = NSTableView(frame: scrollView.bounds)
+        let table = NSTableView(frame: NSRect(x: 0, y: 0, width: 320, height: dividerY))
         table.headerView = nil
         table.backgroundColor = .clear
         table.rowHeight = rowHeight
         table.intercellSpacing = NSSize(width: 0, height: 0)
         
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        nameColumn.width = 240
+        nameColumn.width = 220
         table.addTableColumn(nameColumn)
         
         let cpuColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("cpu"))
-        cpuColumn.width = 100
+        cpuColumn.width = 80
         table.addTableColumn(cpuColumn)
         
         table.dataSource = self
@@ -216,13 +217,13 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
             if process.isApp {
                 displayName = process.name
             } else {
-                displayName = "⚠️ \(process.name) pid:\(process.pid)"
+                displayName = "⚠️ \(process.name) [\(process.pid)]"
             }
             
             let label = NSTextField(labelWithString: displayName)
             label.font = .systemFont(ofSize: 10)
             label.lineBreakMode = .byTruncatingTail
-            label.frame = NSRect(x: 2, y: 2, width: 236, height: 16)
+            label.frame = NSRect(x: 4, y: 2, width: 212, height: 16)
             cell.addSubview(label)
         } else {
             let pctText = String(format: "%.1f%%", process.cpuUsage)
@@ -230,7 +231,7 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
             label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
             label.textColor = .secondaryLabelColor
             label.alignment = .right
-            label.frame = NSRect(x: 2, y: 2, width: 96, height: 16)
+            label.frame = NSRect(x: 4, y: 2, width: 72, height: 16)
             cell.addSubview(label)
         }
         
