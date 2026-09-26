@@ -256,6 +256,15 @@ final class SettingsWindow: NSWindow {
         launcherLogCheckbox.state = LogSettings.shared.launcherLogEnabled ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: launcherLogCheckbox))
 
+        // Log path
+        let launcherLogPath = NSTextField()
+        launcherLogPath.stringValue = LogSettings.shared.launcherLogPath
+        launcherLogPath.isEditable = false
+        launcherLogPath.isBezeled = true
+        launcherLogPath.bezelStyle = .roundedBezel
+        launcherLogPath.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.log.path"), control: launcherLogPath))
+
         return wrapInTopAlignedContainer(stack)
     }
 
@@ -309,6 +318,15 @@ final class SettingsWindow: NSWindow {
         monitorLogCheckbox.state = LogSettings.shared.monitorLogEnabled ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: monitorLogCheckbox))
 
+        // Log path
+        let monitorLogPath = NSTextField()
+        monitorLogPath.stringValue = LogSettings.shared.monitorLogPath
+        monitorLogPath.isEditable = false
+        monitorLogPath.isBezeled = true
+        monitorLogPath.bezelStyle = .roundedBezel
+        monitorLogPath.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.log.path"), control: monitorLogPath))
+
         return wrapInTopAlignedContainer(stack)
     }
 
@@ -335,6 +353,15 @@ final class SettingsWindow: NSWindow {
         let clipboardLogCheckbox = NSButton(checkboxWithTitle: L("settings.clipboard.log.enable"), target: self, action: #selector(clipboardLogChanged(_:)))
         clipboardLogCheckbox.state = LogSettings.shared.clipboardLogEnabled ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: clipboardLogCheckbox))
+
+        // Log path
+        let clipboardLogPath = NSTextField()
+        clipboardLogPath.stringValue = LogSettings.shared.clipboardLogPath
+        clipboardLogPath.isEditable = false
+        clipboardLogPath.isBezeled = true
+        clipboardLogPath.bezelStyle = .roundedBezel
+        clipboardLogPath.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.log.path"), control: clipboardLogPath))
 
         // Row: Max Count
         let maxCountField = NSTextField()

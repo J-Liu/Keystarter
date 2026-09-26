@@ -24,6 +24,7 @@ final class StatusItemController: NSObject {
         super.init()
         loadEnabledModules()
         setupStatusItem()
+        initialRefresh()
         startRefreshTimer()
         
         // Listen for settings changes
@@ -33,6 +34,20 @@ final class StatusItemController: NSObject {
             name: .statusModuleSettingsChanged,
             object: nil
         )
+    }
+
+    /// Perform initial refresh immediately on all modules.
+    private func initialRefresh() {
+        dataQueue.async { [weak self] in
+            guard let self = self else { return }
+            for module in self.modules {
+                module.refreshSummary()
+                DispatchQueue.main.async {
+                    self.updateModuleLabel(module)
+                    self.lastRefreshTimes[module.identifier] = Date()
+                }
+            }
+        }
     }
     
     // MARK: - Setup
