@@ -261,6 +261,11 @@ final class ProcessInfoProvider {
         
         guard result == 0 else { return 0 }
         
+        // Get timebase info to convert mach absolute time to nanoseconds
+        var timebase = mach_timebase_info_data_t()
+        mach_timebase_info(&timebase)
+        let timebaseToNs = Double(timebase.numer) / Double(timebase.denom)
+        
         let userTime = rusage.ri_user_time
         let systemTime = rusage.ri_system_time
         let total = userTime + systemTime
@@ -275,9 +280,9 @@ final class ProcessInfoProvider {
             if elapsed > 0 {
                 let prevTotal = prev.user + prev.system
                 let delta = total > prevTotal ? Double(total - prevTotal) : 0
-                // ri_user_time and ri_system_time are in nanoseconds
-                // Convert to seconds, then calculate percentage
-                let cpuTimeSeconds = delta / 1_000_000_000.0
+                // Convert mach absolute time to nanoseconds, then to seconds
+                let deltaNs = delta * timebaseToNs
+                let cpuTimeSeconds = deltaNs / 1_000_000_000.0
                 let usage = (cpuTimeSeconds / elapsed) * 100.0
                 
                 previousProcCPU[pid] = (userTime, systemTime, now)
