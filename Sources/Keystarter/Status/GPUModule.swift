@@ -26,16 +26,17 @@ final class GPUModule: NSObject, StatusModule {
     private(set) var summaryText: String = "0%"
     private(set) var summaryValue: String = "0%"
     
-    var refreshInterval: TimeInterval { 3.0 }
+    var refreshInterval: TimeInterval { 2.0 }
     
     private var processes: [GPUProcessInfo] = []
     private var gpuUsage: Double = 0
     private var vramUsed: UInt64 = 0
     private var vramTotal: UInt64 = 0
     
-    // GPU energy tracking for per-process usage estimation
-    private var prevGpuEnergy: [Int32: UInt64] = [:]
-    private let gpuEnergyLock = NSLock()
+    // GPU time tracking for per-process usage
+    private var prevGpuTimes: [Int32: UInt64] = [:]
+    private var prevTimestamp: TimeInterval = 0
+    private let gpuTimeLock = NSLock()
     
     private weak var chartView: NSView?
     private weak var tableView: NSTableView?
@@ -139,7 +140,7 @@ final class GPUModule: NSObject, StatusModule {
     
     private func startDetailTimer() {
         detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: true) { [weak self] _ in
+        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.refreshDetail()
         }
     }
@@ -227,7 +228,7 @@ final class GPUModule: NSObject, StatusModule {
         return view
     }
     
-    // MARK: - GPU Data
+    // MARK: - GPU Data from IORegistry
     
     private func getGPUInfo() -> (usage: Double, vramUsed: UInt64, vramTotal: UInt64) {
         var gpuUsage: Double = 0
@@ -258,7 +259,10 @@ final class GPUModule: NSObject, StatusModule {
                 continue
             }
             
-            if let deviceUtil = statistics["Device Utilization"] as? Double {
+            // Get Device Utilization %
+            if let deviceUtil = statistics["Device Utilization %"] as? Double {
+                gpuUsage = deviceUtil
+            } else if let deviceUtil = statistics["Device Utilization"] as? Double {
                 gpuUsage = deviceUtil * 100
             } else if let utilization = statistics["utilization"] as? Double {
                 gpuUsage = utilization
@@ -272,6 +276,7 @@ final class GPUModule: NSObject, StatusModule {
                 }
             }
             
+            // VRAM (discrete GPUs only, Apple Silicon uses unified memory)
             if let vramFree = statistics["vramFreeBytes"] as? UInt64,
                let vramTotalVal = statistics["vramTotalBytes"] as? UInt64 {
                 vramUsed = vramTotalVal - vramFree
@@ -285,6 +290,10 @@ final class GPUModule: NSObject, StatusModule {
     }
     
     private func getGPUProcesses(limit: Int) -> [GPUProcessInfo] {
+        // Get per-process GPU time from IORegistry AGXDeviceUserClient
+        let gpuTimes = getProcessGPUTimesFromIORegistry()
+        
+        // Get running apps for icons and names
         let runningApps = NSWorkspace.shared.runningApplications
         var appPIDs = Set<Int32>()
         var appNames: [Int32: String] = [:]
@@ -294,51 +303,55 @@ final class GPUModule: NSObject, StatusModule {
             guard let url = app.bundleURL else { continue }
             let name = url.deletingPathExtension().lastPathComponent
             let pid = app.processIdentifier
-            if app.activationPolicy == .regular {
-                appPIDs.insert(pid)
-            }
+            appPIDs.insert(pid)
             appNames[pid] = name
             if let icon = app.icon {
                 appIcons[pid] = icon
             }
         }
         
-        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL]
-        var size = 0
-        sysctl(&mib, 3, nil, &size, nil, 0)
-        
-        let count = size / MemoryLayout<kinfo_proc>.size
-        var procList = [kinfo_proc](repeating: kinfo_proc(), count: count)
-        sysctl(&mib, 3, &procList, &size, nil, 0)
-        
+        // Build process list from GPU data
         var processes: [GPUProcessInfo] = []
         
-        for proc in procList {
-            let pid = proc.kp_proc.p_pid
+        for (pid, gpuTime) in gpuTimes {
             guard pid > 0 else { continue }
             
+            // Get process name
             var name: String
-            if let path = getProcessPath(pid: pid) {
+            if let appName = appNames[pid] {
+                name = appName
+            } else if let path = getProcessPath(pid: pid) {
                 name = URL(fileURLWithPath: path).lastPathComponent
             } else {
-                name = String(cString: withUnsafePointer(to: proc.kp_proc.p_comm) {
-                    $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXCOMLEN + 1)) { $0 }
-                })
+                // Fallback to comm name
+                var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+                var proc = kinfo_proc()
+                var size = MemoryLayout<kinfo_proc>.size
+                if sysctl(&mib, 4, &proc, &size, nil, 0) == 0 {
+                    let comm = withUnsafePointer(to: proc.kp_proc.p_comm) {
+                        $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXCOMLEN + 1)) { ptr in
+                            String(cString: ptr)
+                        }
+                    }
+                    name = comm
+                } else {
+                    name = "process"
+                }
             }
+            
             name = name.unicodeScalars.filter { $0.value >= 32 && $0.value <= 126 }.map { Character($0) }.map { String($0) }.joined()
             if name.isEmpty { name = "process" }
             
             let isApp = appPIDs.contains(pid)
-            let uid = proc.kp_eproc.e_ucred.cr_uid
+            let uid = getProcessUID(pid: pid)
             let user = getProcessUser(uid: uid)
             let threads = getProcessThreads(pid: pid)
             let memory = getProcessMemoryUsage(pid: pid)
-            let gpuEnergy = getProcessGPUEnergy(pid: pid)
             
             processes.append(GPUProcessInfo(
                 pid: pid,
-                name: appNames[pid] ?? name,
-                gpuUsage: gpuEnergy,
+                name: name,
+                gpuUsage: gpuTime,
                 memoryUsage: memory,
                 isApp: isApp,
                 icon: appIcons[pid],
@@ -352,12 +365,123 @@ final class GPUModule: NSObject, StatusModule {
         return Array(processes.prefix(limit))
     }
     
+    private func getProcessGPUTimesFromIORegistry() -> [Int32: Double] {
+        var iterator: io_iterator_t = 0
+        let matching = IOServiceMatching("AGXAccelerator")
+        
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
+            return [:]
+        }
+        
+        let gpuService = IOIteratorNext(iterator)
+        IOObjectRelease(iterator)
+        
+        guard gpuService != 0 else {
+            return [:]
+        }
+        
+        defer { IOObjectRelease(gpuService) }
+        
+        // Iterate over AGXDeviceUserClient children
+        var childIter: io_iterator_t = 0
+        guard IORegistryEntryGetChildIterator(gpuService, kIOServicePlane, &childIter) == KERN_SUCCESS else {
+            return [:]
+        }
+        
+        defer { IOObjectRelease(childIter) }
+        
+        var currentTimes: [Int32: UInt64] = [:]
+        var child = IOIteratorNext(childIter)
+        
+        while child != 0 {
+            defer {
+                IOObjectRelease(child)
+                child = IOIteratorNext(childIter)
+            }
+            
+            // Get class name
+            var className = [CChar](repeating: 0, count: 128)
+            IOObjectGetClass(child, &className)
+            let classNameString = String(cString: className)
+            
+            guard classNameString == "AGXDeviceUserClient" else { continue }
+            
+            // Get properties
+            var properties: Unmanaged<CFMutableDictionary>?
+            guard IORegistryEntryCreateCFProperties(child, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+                  let props = properties?.takeRetainedValue() as? [String: Any] else {
+                continue
+            }
+            
+            // Extract PID from IOUserClientCreator
+            guard let creator = props["IOUserClientCreator"] as? String else { continue }
+            
+            // Parse "pid XXX, process_name" format
+            let parts = creator.split(separator: ",", maxSplits: 1)
+            guard parts.count == 2 else { continue }
+            
+            let pidPart = String(parts[0].trimmingCharacters(in: .whitespaces))
+            guard pidPart.hasPrefix("pid "), let pid = Int32(pidPart.dropFirst(4)) else { continue }
+            
+            // Extract AppUsage data
+            guard let appUsage = props["AppUsage"] as? [[String: Any]] else { continue }
+            
+            var processGPUTime: UInt64 = 0
+            for usage in appUsage {
+                if let gpuTime = usage["accumulatedGPUTime"] as? UInt64 {
+                    processGPUTime += gpuTime
+                }
+            }
+            
+            if processGPUTime > 0 {
+                currentTimes[pid] = processGPUTime
+            }
+        }
+        
+        // Calculate percentage from delta
+        let now = Date().timeIntervalSince1970
+        gpuTimeLock.lock()
+        defer { gpuTimeLock.unlock() }
+        
+        var result: [Int32: Double] = [:]
+        let timeDelta = now - prevTimestamp
+        
+        if timeDelta > 0 && prevTimestamp > 0 {
+            for (pid, time) in currentTimes {
+                if let prev = prevGpuTimes[pid] {
+                    let delta = time > prev ? time - prev : 0
+                    // accumulatedGPUTime is in nanoseconds
+                    let deltaTimeS = Double(delta) / 1_000_000_000.0
+                    let percentage = (deltaTimeS / timeDelta) * 100.0
+                    if percentage > 0 {
+                        result[pid] = percentage
+                    }
+                }
+            }
+        }
+        
+        prevGpuTimes = currentTimes
+        prevTimestamp = now
+        
+        return result
+    }
+    
     private func getProcessPath(pid: Int32) -> String? {
         let maxPathSize = 4096
         var path = [CChar](repeating: 0, count: maxPathSize)
         let count = proc_pidpath(pid, &path, UInt32(maxPathSize))
         guard count > 0 else { return nil }
         return String(cString: path)
+    }
+    
+    private func getProcessUID(pid: Int32) -> uid_t {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var proc = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.size
+        if sysctl(&mib, 4, &proc, &size, nil, 0) == 0 {
+            return proc.kp_eproc.e_ucred.cr_uid
+        }
+        return 0
     }
     
     private func getProcessUser(uid: uid_t) -> String {
@@ -382,37 +506,6 @@ final class GPUModule: NSObject, StatusModule {
         let result = proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, rusagePtr)
         guard result == 0 else { return 0 }
         return rusage.ri_resident_size
-    }
-    
-    private func getProcessGPUEnergy(pid: Int32) -> Double {
-        // Use rusage_info_v4 to get GPU energy (private API)
-        // ri_gpu_energy is at offset in rusage_info_v4
-        var rusage = rusage_info_current()
-        let rusagePtr = withUnsafeMutablePointer(to: &rusage) {
-            $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { $0 }
-        }
-        let result = proc_pid_rusage(pid, RUSAGE_INFO_V4, rusagePtr)
-        guard result == 0 else { return 0 }
-        
-        // ri_gpu_energy is field 32 in rusage_info_v4 (nJ - nanojoules)
-        // Access via memory offset since Swift doesn't have the struct definition
-        let gpuEnergy: UInt64 = withUnsafePointer(to: rusage) {
-            $0.withMemoryRebound(to: UInt64.self, capacity: 64) {
-                $0[32]  // ri_gpu_energy offset
-            }
-        }
-        
-        // Calculate delta and convert to percentage
-        gpuEnergyLock.lock()
-        defer { gpuEnergyLock.unlock() }
-
-        let prev = prevGpuEnergy[pid] ?? 0
-        let delta = gpuEnergy > prev ? gpuEnergy - prev : 0
-        prevGpuEnergy[pid] = gpuEnergy
-        
-        // Convert nJ to percentage (rough approximation)
-        // This gives relative GPU activity, not exact usage
-        return min(Double(delta) / 1_000_000_000.0, 100.0)  // Normalize to reasonable range
     }
 }
 
