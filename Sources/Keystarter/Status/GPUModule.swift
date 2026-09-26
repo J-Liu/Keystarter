@@ -62,24 +62,30 @@ final class GPUModule: NSObject, StatusModule {
     
     func makeDetailView() -> NSView {
         // Calculate height
+        let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
         let chartHeight: CGFloat = 100
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 30
-        let totalHeight = headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 400
         
         let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
         
+        // Toolbar
+        let toolbar = PopoverToolbar.create(title: displayName, width: viewWidth)
+        toolbar.frame = NSRect(x: 0, y: totalHeight - toolbarHeight, width: viewWidth, height: toolbarHeight)
+        container.addSubview(toolbar)
+        
         // Header
-        let headerView = NSTextField(labelWithString: displayName)
+        let headerView = NSTextField(labelWithString: "GPU Usage")
         headerView.font = .systemFont(ofSize: 12, weight: .semibold)
-        headerView.frame = NSRect(x: 12, y: totalHeight - 20, width: 200, height: 16)
+        headerView.frame = NSRect(x: 12, y: totalHeight - toolbarHeight - 20, width: 200, height: 16)
         container.addSubview(headerView)
         
         // GPU usage chart
-        let chartY = totalHeight - headerHeight - chartHeight
+        let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = createUsageChart(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chartView = chart
         container.addSubview(chart)

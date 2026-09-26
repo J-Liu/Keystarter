@@ -99,24 +99,30 @@ final class SensorModule: NSObject, StatusModule {
     }
     
     func makeDetailView() -> NSView {
+        let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
         let fanChartHeight: CGFloat = 120
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 10
-        let totalHeight = headerHeight + fanChartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let totalHeight = toolbarHeight + headerHeight + fanChartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 400
         
         let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
         
+        // Toolbar
+        let toolbar = PopoverToolbar.create(title: displayName, width: viewWidth)
+        toolbar.frame = NSRect(x: 0, y: totalHeight - toolbarHeight, width: viewWidth, height: toolbarHeight)
+        container.addSubview(toolbar)
+        
         // Header
-        let headerView = NSTextField(labelWithString: displayName)
+        let headerView = NSTextField(labelWithString: "Sensors")
         headerView.font = .systemFont(ofSize: 12, weight: .semibold)
-        headerView.frame = NSRect(x: 12, y: totalHeight - 20, width: 200, height: 16)
+        headerView.frame = NSRect(x: 12, y: totalHeight - toolbarHeight - 20, width: 200, height: 16)
         container.addSubview(headerView)
         
         // Fan chart (two circles)
-        let fanChartY = totalHeight - headerHeight - fanChartHeight
+        let fanChartY = totalHeight - toolbarHeight - headerHeight - fanChartHeight
         let fanChart = createFanChart(frame: NSRect(x: 12, y: fanChartY, width: viewWidth - 24, height: fanChartHeight))
         chartView = fanChart
         container.addSubview(fanChart)

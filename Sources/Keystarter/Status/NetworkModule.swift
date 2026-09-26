@@ -105,24 +105,30 @@ final class NetworkModule: NSObject, StatusModule {
     }
     
     func makeDetailView() -> NSView {
+        let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
         let chartHeight: CGFloat = 100
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 30
-        let totalHeight = headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 450  // Increased from 400 to show all columns
         
         let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
         
+        // Toolbar
+        let toolbar = PopoverToolbar.create(title: displayName, width: viewWidth)
+        toolbar.frame = NSRect(x: 0, y: totalHeight - toolbarHeight, width: viewWidth, height: toolbarHeight)
+        container.addSubview(toolbar)
+        
         // Header
-        let headerView = NSTextField(labelWithString: displayName)
+        let headerView = NSTextField(labelWithString: "Network I/O")
         headerView.font = .systemFont(ofSize: 12, weight: .semibold)
-        headerView.frame = NSRect(x: 12, y: totalHeight - 20, width: 200, height: 16)
+        headerView.frame = NSRect(x: 12, y: totalHeight - toolbarHeight - 20, width: 200, height: 16)
         container.addSubview(headerView)
         
         // Network chart (mirrored download/upload)
-        let chartY = totalHeight - headerHeight - chartHeight
+        let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = createNetworkChart(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chartView = chart
         container.addSubview(chart)
@@ -210,10 +216,9 @@ final class NetworkModule: NSObject, StatusModule {
         let drawWidth = chartWidth - chartPadding * 2
         let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
         
-        // Find max for scaling
-        let maxDown = downloadHistory.max() ?? 1
-        let maxUp = uploadHistory.max() ?? 1
-        let maxVal = max(maxDown, maxUp, 1)
+        // Separate scaling for download and upload
+        let maxDown = max(downloadHistory.max() ?? 1, 1)
+        let maxUp = max(uploadHistory.max() ?? 1, 1)
         
         // Draw center line
         let centerLine = NSView(frame: NSRect(x: chartPadding, y: centerLineY - 1, width: drawWidth, height: 2))
@@ -221,16 +226,16 @@ final class NetworkModule: NSObject, StatusModule {
         centerLine.layer?.backgroundColor = NSColor.separatorColor.cgColor
         chart.addSubview(centerLine)
         
-        // Calculate points
+        // Calculate points with separate scaling
         let downPoints: [CGPoint] = downloadHistory.enumerated().map { index, value in
             let x = chartWidth - chartPadding - CGFloat(downloadHistory.count - 1 - index) * stepX
-            let y = centerLineY + min(value / maxVal, 1.0) * halfHeight
+            let y = centerLineY + min(value / maxDown, 1.0) * halfHeight
             return CGPoint(x: x, y: y)
         }
         
         let upPoints: [CGPoint] = uploadHistory.enumerated().map { index, value in
             let x = chartWidth - chartPadding - CGFloat(uploadHistory.count - 1 - index) * stepX
-            let y = centerLineY - min(value / maxVal, 1.0) * halfHeight
+            let y = centerLineY - min(value / maxUp, 1.0) * halfHeight
             return CGPoint(x: x, y: y)
         }
         

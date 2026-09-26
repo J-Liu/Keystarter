@@ -92,7 +92,7 @@ final class StatusItemController: NSObject {
                 paraStyle.paragraphSpacing = 0
 
                 let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11),
+                    .font: NSFont(name: "Tahoma", size: 11)!,
                     .foregroundColor: NSColor.labelColor,
                     .paragraphStyle: paraStyle
                 ]
@@ -110,7 +110,7 @@ final class StatusItemController: NSObject {
                     .paragraphStyle: paraStyle
                 ]
                 let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11),
+                    .font: NSFont(name: "Tahoma", size: 11)!,
                     .foregroundColor: NSColor.labelColor,
                     .paragraphStyle: paraStyle
                 ]
@@ -186,7 +186,7 @@ final class StatusItemController: NSObject {
                 paraStyle.paragraphSpacing = 0
 
                 let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11),
+                    .font: NSFont(name: "Tahoma", size: 11)!,
                     .foregroundColor: NSColor.labelColor,
                     .paragraphStyle: paraStyle
                 ]
@@ -204,7 +204,7 @@ final class StatusItemController: NSObject {
                     .paragraphStyle: paraStyle
                 ]
                 let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11),
+                    .font: NSFont(name: "Tahoma", size: 11)!,
                     .foregroundColor: NSColor.labelColor,
                     .paragraphStyle: paraStyle
                 ]
@@ -356,7 +356,7 @@ final class StatusItemController: NSObject {
             paraStyle.paragraphSpacing = 0
 
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont(name: "Tahoma", size: 11),
+                .font: NSFont(name: "Tahoma", size: 11)!,
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -414,7 +414,7 @@ final class StatusItemController: NSObject {
                 .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont(name: "Tahoma", size: 11),
+                .font: NSFont(name: "Tahoma", size: 11)!,
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]

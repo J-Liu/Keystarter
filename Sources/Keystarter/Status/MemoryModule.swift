@@ -22,8 +22,8 @@ final class MemoryModule: NSObject, StatusModule {
     var displayName: String { L("status.memory.displayName") }
     var shortName: String { "MEM" }
 
-    private(set) var summaryText: String = "8.2G"
-    private(set) var summaryValue: String = "8.2G"
+    private(set) var summaryText: String = "8.2"
+    private(set) var summaryValue: String = "8.2"
 
     var refreshInterval: TimeInterval { 2.0 }
 
@@ -51,7 +51,7 @@ final class MemoryModule: NSObject, StatusModule {
             memoryHistory.removeFirst()
         }
 
-        let value = String(format: "%.1fG", usedGB)
+        let value = String(format: "%.1f", usedGB)
         summaryText = value
         summaryValue = value
 
@@ -60,24 +60,30 @@ final class MemoryModule: NSObject, StatusModule {
 
     func makeDetailView() -> NSView {
         // Calculate height
+        let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
         let chartHeight: CGFloat = 80
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 30
-        let totalHeight = headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 400
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
 
+        // Toolbar
+        let toolbar = PopoverToolbar.create(title: displayName, width: viewWidth)
+        toolbar.frame = NSRect(x: 0, y: totalHeight - toolbarHeight, width: viewWidth, height: toolbarHeight)
+        container.addSubview(toolbar)
+
         // Header
-        let headerView = NSTextField(labelWithString: displayName)
+        let headerView = NSTextField(labelWithString: "Memory Usage")
         headerView.font = .systemFont(ofSize: 12, weight: .semibold)
-        headerView.frame = NSRect(x: 12, y: totalHeight - 20, width: 200, height: 16)
+        headerView.frame = NSRect(x: 12, y: totalHeight - toolbarHeight - 20, width: 200, height: 16)
         container.addSubview(headerView)
 
         // Memory usage area chart
-        let chartY = totalHeight - headerHeight - chartHeight
+        let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = createAreaChart(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chartView = chart
         container.addSubview(chart)
@@ -197,7 +203,7 @@ final class MemoryModule: NSObject, StatusModule {
         let areaPath = CGMutablePath()
         areaPath.move(to: CGPoint(x: points[0].x, y: chartPadding))
         areaPath.addLine(to: points[0])
-        
+
         // Build smooth curve directly in area path
         for i in 1..<points.count {
             let prev = points[i - 1]
@@ -207,16 +213,16 @@ final class MemoryModule: NSObject, StatusModule {
             areaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
             areaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
         }
-        
+
         areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartPadding))
         areaPath.closeSubpath()
-        
+
         // Create shape layer for filled area - lighter purple-pink
         let areaLayer = CAShapeLayer()
         areaLayer.path = areaPath
         areaLayer.fillColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.2).cgColor
         chart.layer?.addSublayer(areaLayer)
-        
+
         // Draw smooth line on top
         let linePath = createSmoothPath(points: points)
         let lineLayer = CAShapeLayer()
@@ -244,24 +250,24 @@ final class MemoryModule: NSObject, StatusModule {
         totalLabel.frame = NSRect(x: chartWidth - 70, y: chartHeight - 26, width: 60, height: 10)
         chart.addSubview(totalLabel)
     }
-    
+
     private func createSmoothPath(points: [CGPoint]) -> CGMutablePath {
         let path = CGMutablePath()
         guard points.count > 1 else { return path }
-        
+
         path.move(to: points[0])
-        
+
         for i in 1..<points.count {
             let prev = points[i - 1]
             let curr = points[i]
-            
+
             let midX = (prev.x + curr.x) / 2
             let midY = (prev.y + curr.y) / 2
-            
+
             path.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
             path.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
         }
-        
+
         return path
     }
 
@@ -285,17 +291,17 @@ final class MemoryModule: NSObject, StatusModule {
             let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
 
             let areaPath = CGMutablePath()
-            
+
             // Start at bottom-left corner
             let firstX = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1) * stepX
             areaPath.move(to: CGPoint(x: firstX, y: chartPadding))
-            
+
             for (index, value) in memoryHistory.enumerated() {
                 let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
                 let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
                 areaPath.addLine(to: CGPoint(x: x, y: y))
             }
-            
+
             // Close path
             areaPath.addLine(to: CGPoint(x: chartWidth - chartPadding, y: chartPadding))
             areaPath.closeSubpath()
