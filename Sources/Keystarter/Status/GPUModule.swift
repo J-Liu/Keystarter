@@ -62,7 +62,7 @@ final class GPUModule: NSObject, StatusModule {
     func makeDetailView() -> NSView {
         // Calculate height
         let headerHeight: CGFloat = 24
-        let chartHeight: CGFloat = 80
+        let chartHeight: CGFloat = 100
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 30
@@ -194,47 +194,30 @@ final class GPUModule: NSObject, StatusModule {
 
     private func createPieChart(in parent: NSView, center: NSPoint, radius: CGFloat,
                                 value: Double, color: NSColor, label: String) {
-        // Background circle (gray track)
-        let bgCircle = NSView(frame: NSRect(x: center.x - radius, y: center.y - radius,
-                                            width: radius * 2, height: radius * 2))
-        bgCircle.wantsLayer = true
-        bgCircle.layer?.backgroundColor = NSColor.separatorColor.withAlphaComponent(0.3).cgColor
-        bgCircle.layer?.cornerRadius = radius
-        parent.addSubview(bgCircle)
+        // Solid colored circle
+        let circle = NSView(frame: NSRect(x: center.x - radius, y: center.y - radius,
+                                          width: radius * 2, height: radius * 2))
+        circle.wantsLayer = true
+        circle.layer?.backgroundColor = color.withAlphaComponent(0.85).cgColor
+        circle.layer?.cornerRadius = radius
+        parent.addSubview(circle)
 
-        // Foreground pie (colored arc) using CAShapeLayer
-        let pieLayer = CAShapeLayer()
-        pieLayer.fillColor = nil
-        pieLayer.strokeColor = color.cgColor
-        pieLayer.lineWidth = radius * 0.4
-        pieLayer.strokeStart = 0
-        pieLayer.strokeEnd = min(CGFloat(value / 100.0), 1.0)
-
-        // Create circular path using CGPath
-        let arcRadius = radius - radius * 0.2
-        let cgPath = CGMutablePath()
-        cgPath.addArc(center: CGPoint(x: radius, y: radius), radius: arcRadius,
-                      startAngle: -CGFloat.pi / 2, endAngle: CGFloat.pi * 1.5, clockwise: false)
-        pieLayer.path = cgPath
-
-        bgCircle.layer?.addSublayer(pieLayer)
-
-        // Center percentage label
+        // Center percentage label (white/light color)
         let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", value))
-        pctLabel.font = .systemFont(ofSize: radius > 24 ? 12 : 9, weight: .medium)
-        pctLabel.textColor = color
+        pctLabel.font = .systemFont(ofSize: radius > 24 ? 13 : 10, weight: .semibold)
+        pctLabel.textColor = NSColor.white
         pctLabel.alignment = .center
-        let labelWidth = radius > 24 ? 40.0 : 30.0
+        let labelWidth = radius > 24 ? 50.0 : 35.0
         pctLabel.frame = NSRect(x: center.x - labelWidth / 2, y: center.y - 6,
-                                width: labelWidth, height: 12)
+                                width: labelWidth, height: 14)
         parent.addSubview(pctLabel)
 
         // Name label below
         let nameLabel = NSTextField(labelWithString: label)
-        nameLabel.font = .systemFont(ofSize: 9)
+        nameLabel.font = .systemFont(ofSize: 10)
         nameLabel.textColor = .secondaryLabelColor
         nameLabel.alignment = .center
-        nameLabel.frame = NSRect(x: center.x - 40, y: center.y - radius - 16, width: 80, height: 12)
+        nameLabel.frame = NSRect(x: center.x - 45, y: center.y - radius - 18, width: 90, height: 14)
         parent.addSubview(nameLabel)
     }
 
@@ -248,22 +231,22 @@ final class GPUModule: NSObject, StatusModule {
         let chartWidth = frame.width
         let chartHeight = frame.height
 
-        let bigRadius: CGFloat = 28
-        let smallRadius: CGFloat = 20
+        let bigRadius: CGFloat = 30
+        let smallRadius: CGFloat = 22
 
-        // Center pie (Device)
+        // Center circle (Device)
         let centerX = chartWidth / 2
-        let centerY = chartHeight / 2 - 4
+        let centerY = chartHeight / 2 + 4
         createPieChart(in: view, center: NSPoint(x: centerX, y: centerY), radius: bigRadius,
                        value: gpuUsage, color: NSColor.systemPurple, label: "Device")
 
-        // Left pie (Renderer)
-        let leftX = centerX - bigRadius - smallRadius - 20
+        // Left circle (Renderer)
+        let leftX = centerX - bigRadius - smallRadius - 24
         createPieChart(in: view, center: NSPoint(x: leftX, y: centerY), radius: smallRadius,
                        value: rendererUtil, color: NSColor.systemBlue, label: "Renderer")
 
-        // Right pie (Tiler)
-        let rightX = centerX + bigRadius + smallRadius + 20
+        // Right circle (Tiler)
+        let rightX = centerX + bigRadius + smallRadius + 24
         createPieChart(in: view, center: NSPoint(x: rightX, y: centerY), radius: smallRadius,
                        value: tilerUtil, color: NSColor.systemOrange, label: "Tiler")
 
@@ -507,9 +490,7 @@ final class GPUModule: NSObject, StatusModule {
                     // accumulatedGPUTime is in nanoseconds
                     let deltaTimeS = Double(delta) / 1_000_000_000.0
                     let percentage = (deltaTimeS / timeDelta) * 100.0
-                    if percentage > 0 {
-                        result[pid] = percentage
-                    }
+                    result[pid] = percentage
                 }
             }
         }
