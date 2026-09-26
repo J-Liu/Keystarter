@@ -67,30 +67,57 @@ final class StatusItemController: NSObject {
     private func setupStatusItem() {
         // Create separate status item for each module (reverse order so first module appears leftmost)
         for module in modules.reversed() {
-            // Disk and network modules need wider width for speed display
-            let itemWidth: CGFloat = (module.identifier == "disk" || module.identifier == "network") ? 50 : 36
+            // Width based on module type
+            let itemWidth: CGFloat
+            switch module.identifier {
+            case "disk", "network":
+                itemWidth = 42
+            case "sensor":
+                itemWidth = 26
+            case "memory":
+                itemWidth = 28
+            default:
+                itemWidth = 26
+            }
             let item = NSStatusBar.system.statusItem(withLength: itemWidth)
 
-            // Create two-line title with tight spacing
-            let paraStyle = NSMutableParagraphStyle()
-            paraStyle.alignment = .center
-            paraStyle.lineSpacing = -3
-            paraStyle.paragraphSpacing = -3
-
+            // Sensor module: single line, others: two lines
             let attrString = NSMutableAttributedString()
-            let nameAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 7, weight: .medium),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
-            let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
 
-            attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
-            attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            if module.identifier == "sensor" {
+                // Single line for sensor
+                let paraStyle = NSMutableParagraphStyle()
+                paraStyle.alignment = .center
+                paraStyle.lineSpacing = 0
+                paraStyle.paragraphSpacing = 0
+
+                let valueAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont(name: "Tahoma", size: 11),
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paraStyle
+                ]
+                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            } else {
+                // Two lines for others
+                let paraStyle = NSMutableParagraphStyle()
+                paraStyle.alignment = .center
+                paraStyle.lineSpacing = -3
+                paraStyle.paragraphSpacing = -3
+
+                let nameAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 7, weight: .light),
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paraStyle
+                ]
+                let valueAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont(name: "Tahoma", size: 11),
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paraStyle
+                ]
+
+                attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            }
 
             item.button?.attributedTitle = attrString
             item.button?.target = self
@@ -134,28 +161,57 @@ final class StatusItemController: NSObject {
 
         // Recreate status items for current modules (reverse order so first module appears leftmost)
         for module in modules.reversed() {
-            let item = NSStatusBar.system.statusItem(withLength: 36)
+            // Width based on module type
+            let itemWidth: CGFloat
+            switch module.identifier {
+            case "disk", "network":
+                itemWidth = 42
+            case "sensor":
+                itemWidth = 26
+            case "memory":
+                itemWidth = 28
+            default:
+                itemWidth = 26
+            }
+            let item = NSStatusBar.system.statusItem(withLength: itemWidth)
 
-            // Create two-line title with tight spacing
-            let paraStyle = NSMutableParagraphStyle()
-            paraStyle.alignment = .center
-            paraStyle.lineSpacing = 1
-            paraStyle.paragraphSpacing = 1
-
+            // Sensor module: single line, others: two lines
             let attrString = NSMutableAttributedString()
-            let nameAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 7, weight: .medium),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
-            let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 13, weight: .medium),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
 
-            attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
-            attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            if module.identifier == "sensor" {
+                // Single line for sensor
+                let paraStyle = NSMutableParagraphStyle()
+                paraStyle.alignment = .center
+                paraStyle.lineSpacing = 0
+                paraStyle.paragraphSpacing = 0
+
+                let valueAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont(name: "Tahoma", size: 11),
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paraStyle
+                ]
+                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            } else {
+                // Two lines for others
+                let paraStyle = NSMutableParagraphStyle()
+                paraStyle.alignment = .center
+                paraStyle.lineSpacing = -3
+                paraStyle.paragraphSpacing = -3
+
+                let nameAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont.systemFont(ofSize: 7, weight: .light),
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paraStyle
+                ]
+                let valueAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont(name: "Tahoma", size: 11),
+                    .foregroundColor: NSColor.labelColor,
+                    .paragraphStyle: paraStyle
+                ]
+
+                attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            }
 
             item.button?.attributedTitle = attrString
             item.button?.target = self
@@ -290,22 +346,35 @@ final class StatusItemController: NSObject {
         guard let item = statusItems[module.identifier],
               let button = item.button else { return }
 
-        let paraStyle = NSMutableParagraphStyle()
-        paraStyle.alignment = .center
-        paraStyle.lineSpacing = -3
-        paraStyle.paragraphSpacing = -3
-
         let attrString = NSMutableAttributedString()
 
-        // Special handling for disk and network - show two-line speed display (default colors)
-        if module.identifier == "disk", let diskModule = module as? DiskModule {
+        // Sensor module: single line
+        if module.identifier == "sensor" {
+            let paraStyle = NSMutableParagraphStyle()
+            paraStyle.alignment = .center
+            paraStyle.lineSpacing = 0
+            paraStyle.paragraphSpacing = 0
+
+            let valueAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont(name: "Tahoma", size: 11),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+        } else if module.identifier == "disk", let diskModule = module as? DiskModule {
+            // Disk: two-line speed display
+            let paraStyle = NSMutableParagraphStyle()
+            paraStyle.alignment = .center
+            paraStyle.lineSpacing = -3
+            paraStyle.paragraphSpacing = -3
+
             let topAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 9, weight: .light),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
             let bottomAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 9, weight: .light),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -313,13 +382,19 @@ final class StatusItemController: NSObject {
             attrString.append(NSAttributedString(string: "R " + diskModule.readSpeedText + "\n", attributes: topAttrs))
             attrString.append(NSAttributedString(string: "W " + diskModule.writeSpeedText, attributes: bottomAttrs))
         } else if module.identifier == "network", let networkModule = module as? NetworkModule {
+            // Network: two-line speed display
+            let paraStyle = NSMutableParagraphStyle()
+            paraStyle.alignment = .center
+            paraStyle.lineSpacing = -3
+            paraStyle.paragraphSpacing = -3
+
             let topAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 9, weight: .light),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
             let bottomAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 9, weight: .light),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -327,13 +402,19 @@ final class StatusItemController: NSObject {
             attrString.append(NSAttributedString(string: "↓ " + networkModule.downloadSpeedText + "\n", attributes: topAttrs))
             attrString.append(NSAttributedString(string: "↑ " + networkModule.uploadSpeedText, attributes: bottomAttrs))
         } else {
+            // Other modules: two lines (name + value)
+            let paraStyle = NSMutableParagraphStyle()
+            paraStyle.alignment = .center
+            paraStyle.lineSpacing = -3
+            paraStyle.paragraphSpacing = -3
+
             let nameAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 7, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 7, weight: .light),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .font: NSFont(name: "Tahoma", size: 11),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -352,8 +433,11 @@ final class StatusItemController: NSObject {
 
         let newPopover = NSPopover()
         newPopover.behavior = .transient
-        newPopover.contentViewController = NSViewController()
-        newPopover.contentViewController?.view = module.makeDetailView()
+        let viewController = NSViewController()
+        let contentView = module.makeDetailView()
+        viewController.view = contentView
+        newPopover.contentViewController = viewController
+        newPopover.contentSize = contentView.frame.size
 
         newPopover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         self.popover = newPopover

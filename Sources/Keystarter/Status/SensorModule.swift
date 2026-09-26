@@ -17,387 +17,453 @@ final class SensorModule: NSObject, StatusModule {
     
     var refreshInterval: TimeInterval { 2.0 }
     
-    private var temperatures: [String: Double] = [:]
-    private let sensorReader = SensorReaderSwift()
-    private var powerReader: SensorReaderSwift?
-    private var powerReadings: PowerReadings?
+    // Temperature data
+    private var cpuPcoreTemp: Double = 0
+    private var cpuEcoreTemp: Double = 0
+    private var gpuTemp: Double = 0
+    private var dramTemp: Double = 0
+    private var aneTemp: Double = 0
+    private var pciTemp: Double = 0
+    private var storageTemp: Double = 0
+    private var batteryTemp: Double = 0
+    
+    // Power data
     private var totalPower: Double = 0
+    private let powerReader = SensorReaderSwift()
     
-    // Fan data
-    private var fans: [(speed: Int, maxSpeed: Int)] = []
+    // Fan data from SMC
+    private var fanLeft: Int = 0
+    private var fanRight: Int = 0
+    private var fanLeftMax: Int = 6000
+    private var fanRightMax: Int = 6000
     
-    // Power history
-    private var powerHistory: [Double] = []
-    private let maxHistoryCount = 60
+    // SMC connection
+    private var smcConnection: io_connect_t = 0
+    
+    private weak var chartView: NSView?
+    private weak var tableView: NSTableView?
+    private var detailTimer: Timer?
     
     override init() {
         super.init()
-        powerReader = SensorReaderSwift()
-        powerReader?.setupPowerMonitoring()
+        powerReader.setupPowerMonitoring()
+        openSMCConnection()
+    }
+    
+    deinit {
+        closeSMCConnection()
     }
     
     func refreshSummary() {
-        // Try to read temperatures
-        temperatures = readTemperatures()
+        // Read power
+        let power = powerReader.readPower()
+        totalPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
         
-        // Read power (requires 2+ calls to show values)
-        powerReadings = powerReader?.readPower()
-        
-        // Calculate total power
-        if let power = powerReadings {
-            totalPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
-            
-            // Update history
-            if totalPower > 0 {
-                powerHistory.append(totalPower)
-                if powerHistory.count > maxHistoryCount {
-                    powerHistory.removeFirst()
-                }
-            }
-        }
+        // Read temperatures
+        let temps = SensorReaderSwift.readTemperatures()
+        cpuPcoreTemp = getAverageTemp(for: temps, keys: ["tdie0", "tdie1", "tdie2", "tdie3"])
+        cpuEcoreTemp = getAverageTemp(for: temps, keys: ["tdie4", "tdie5", "tdie6", "tdie7"])
+        gpuTemp = getAverageTemp(for: temps, keys: ["TP1g", "TP2g", "TP3g"])
+        dramTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s", "TP2s"])
+        aneTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s"])
+        pciTemp = getAverageTemp(for: temps, keys: ["tdev"])
+        storageTemp = getAverageTemp(for: temps, keys: ["NAND"])
+        batteryTemp = getAverageTemp(for: temps, keys: ["gas gauge battery"])
         
         // Read fan speeds
-        fans = readFanSpeeds()
+        readFanSpeeds()
         
         if totalPower > 0 {
             summaryText = String(format: "%.0fW", totalPower)
             summaryValue = String(format: "%.0fW", totalPower)
+        } else if cpuPcoreTemp > 0 {
+            summaryText = String(format: "%.0f°", cpuPcoreTemp)
+            summaryValue = String(format: "%.0f°", cpuPcoreTemp)
         } else {
-            // Show CPU temp if no power
-            if let cpuTemp = temperatures.values.first, cpuTemp > 0 {
-                summaryText = String(format: "%.0f°", cpuTemp)
-                summaryValue = String(format: "%.0f°", cpuTemp)
-            } else {
-                summaryText = "--W"
-                summaryValue = "--W"
-            }
+            summaryText = "--W"
+            summaryValue = "--W"
         }
     }
     
-    func makeDetailView() -> NSView {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 280, height: 450))
-        
-        // Header
-        let headerView = NSTextField(labelWithString: displayName)
-        headerView.font = .systemFont(ofSize: 14, weight: .semibold)
-        headerView.frame = NSRect(x: 16, y: 420, width: 200, height: 20)
-        container.addSubview(headerView)
-        
-        var yOffset: CGFloat = 390
-        
-        // Fan section
-        if !fans.isEmpty {
-            let fanHeader = NSTextField(labelWithString: "Fans")
-            fanHeader.font = .systemFont(ofSize: 12, weight: .medium)
-            fanHeader.frame = NSRect(x: 16, y: yOffset, width: 100, height: 16)
-            container.addSubview(fanHeader)
-            yOffset -= 100
-            
-            let fanView = createFanView(frame: NSRect(x: 16, y: yOffset, width: 248, height: 90))
-            container.addSubview(fanView)
-            yOffset -= 16
-            
-            // Divider
-            let divider = NSView(frame: NSRect(x: 16, y: yOffset, width: 248, height: 1))
-            divider.wantsLayer = true
-            divider.layer?.backgroundColor = NSColor.separatorColor.cgColor
-            container.addSubview(divider)
-            yOffset -= 16
-        }
-        
-        // Power section
-        let powerHeader = NSTextField(labelWithString: "Power")
-        powerHeader.font = .systemFont(ofSize: 12, weight: .medium)
-        powerHeader.frame = NSRect(x: 16, y: yOffset, width: 100, height: 16)
-        container.addSubview(powerHeader)
-        yOffset -= 24
-        
-        // Power items
-        if let power = powerReadings {
-            let powerItems: [(String, Double)] = [
-                ("CPU", power.cpu),
-                ("GPU", power.gpu),
-                ("Memory", power.dram),
-                ("Neural Engine", power.ane),
-                ("PCI", power.pci)
-            ]
-            
-            for item in powerItems {
-                if item.1 > 0.01 {
-                    let row = createRow(name: item.0, value: String(format: "%.2f W", item.1), frame: NSRect(x: 16, y: yOffset, width: 248, height: 18))
-                    container.addSubview(row)
-                    yOffset -= 20
+    private func getAverageTemp(for temps: [String: Double], keys: [String]) -> Double {
+        var values: [Double] = []
+        for (name, temp) in temps {
+            for key in keys {
+                if name.localizedCaseInsensitiveContains(key) && temp > 20 && temp < 120 {
+                    values.append(temp)
+                    break
                 }
             }
         }
+        return values.isEmpty ? 0 : values.reduce(0, +) / Double(values.count)
+    }
+    
+    func makeDetailView() -> NSView {
+        let headerHeight: CGFloat = 24
+        let fanChartHeight: CGFloat = 120
+        let dividerHeight: CGFloat = 12
+        let rowHeight: CGFloat = 20
+        let rowCount = 10
+        let totalHeight = headerHeight + fanChartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let viewWidth: CGFloat = 400
+        
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
+        
+        // Header
+        let headerView = NSTextField(labelWithString: displayName)
+        headerView.font = .systemFont(ofSize: 12, weight: .semibold)
+        headerView.frame = NSRect(x: 12, y: totalHeight - 20, width: 200, height: 16)
+        container.addSubview(headerView)
+        
+        // Fan chart (two circles)
+        let fanChartY = totalHeight - headerHeight - fanChartHeight
+        let fanChart = createFanChart(frame: NSRect(x: 12, y: fanChartY, width: viewWidth - 24, height: fanChartHeight))
+        chartView = fanChart
+        container.addSubview(fanChart)
         
         // Divider
-        yOffset -= 8
-        let divider2 = NSView(frame: NSRect(x: 16, y: yOffset, width: 248, height: 1))
-        divider2.wantsLayer = true
-        divider2.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        container.addSubview(divider2)
-        yOffset -= 16
+        let divider1Y = fanChartY - dividerHeight + 4
+        let divider1 = NSBox(frame: NSRect(x: 12, y: divider1Y, width: viewWidth - 24, height: 1))
+        divider1.boxType = .separator
+        container.addSubview(divider1)
         
-        // Temperature section
-        let tempHeader = NSTextField(labelWithString: "Temperature")
-        tempHeader.font = .systemFont(ofSize: 12, weight: .medium)
-        tempHeader.frame = NSRect(x: 16, y: yOffset, width: 100, height: 16)
-        container.addSubview(tempHeader)
-        yOffset -= 20
+        // Temperature table
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: divider1Y))
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        scrollView.autohidesScrollers = true
+        scrollView.borderType = .noBorder
         
-        // Temperature items
-        let tempItems = getTemperatureItems()
-        for item in tempItems {
-            let row = createRow(name: item.name, value: String(format: "%.1f°C", item.value), frame: NSRect(x: 16, y: yOffset, width: 248, height: 18))
-            container.addSubview(row)
-            yOffset -= 20
+        let table = NSTableView(frame: NSRect(x: 0, y: 0, width: viewWidth - 16, height: CGFloat(rowCount) * rowHeight * 2))
+        table.backgroundColor = .clear
+        table.rowHeight = rowHeight
+        table.intercellSpacing = NSSize(width: 0, height: 0)
+        
+        let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
+        nameColumn.width = 150
+        nameColumn.headerCell.title = "Component"
+        table.addTableColumn(nameColumn)
+        
+        let valueColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("value"))
+        valueColumn.width = 80
+        valueColumn.headerCell.title = "Temperature"
+        table.addTableColumn(valueColumn)
+        
+        table.dataSource = self
+        table.delegate = self
+        
+        scrollView.documentView = table
+        tableView = table
+        container.addSubview(scrollView)
+        
+        // Refresh immediately on open, then start timer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.refreshDetail()
+            self?.startDetailTimer()
         }
         
         return container
     }
     
-    // MARK: - Temperature Reading
-    
-    private func readTemperatures() -> [String: Double] {
-        var result: [String: Double] = [:]
-        
-        // Try HID sensors
-        let hidTemps = SensorReaderSwift.readTemperatures()
-        if !hidTemps.isEmpty {
-            // Filter and clean up names
-            for (name, temp) in hidTemps {
-                if temp > 0 && temp < 200 {
-                    // Clean up name
-                    let cleanName = name
-                        .replacingOccurrences(of: "PMU ", with: "")
-                        .replacingOccurrences(of: "gas gauge ", with: "")
-                    result[cleanName] = temp
-                }
-            }
+    private func startDetailTimer() {
+        detailTimer?.invalidate()
+        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.refreshDetail()
         }
-        
-        return result
     }
     
-    // MARK: - Fan Speed Reading
-    
-    private func readFanSpeeds() -> [(speed: Int, maxSpeed: Int)] {
-        var result: [(Int, Int)] = []
+    private func refreshDetail() {
+        // Read power
+        let power = powerReader.readPower()
+        totalPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
         
+        // Read temperatures
+        let temps = SensorReaderSwift.readTemperatures()
+        cpuPcoreTemp = getAverageTemp(for: temps, keys: ["tdie0", "tdie1", "tdie2", "tdie3"])
+        cpuEcoreTemp = getAverageTemp(for: temps, keys: ["tdie4", "tdie5", "tdie6", "tdie7"])
+        gpuTemp = getAverageTemp(for: temps, keys: ["TP1g", "TP2g", "TP3g"])
+        dramTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s", "TP2s"])
+        aneTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s"])
+        pciTemp = getAverageTemp(for: temps, keys: ["tdev"])
+        storageTemp = getAverageTemp(for: temps, keys: ["NAND"])
+        batteryTemp = getAverageTemp(for: temps, keys: ["gas gauge battery"])
+        
+        // Read fan speeds
+        readFanSpeeds()
+        
+        // Update summary
+        if totalPower > 0 {
+            summaryText = String(format: "%.0fW", totalPower)
+            summaryValue = String(format: "%.0fW", totalPower)
+        } else if cpuPcoreTemp > 0 {
+            summaryText = String(format: "%.0f°", cpuPcoreTemp)
+            summaryValue = String(format: "%.0f°", cpuPcoreTemp)
+        }
+        
+        updateFanChart()
+        tableView?.reloadData()
+        
+        NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "sensor"])
+    }
+    
+    private func updateFanChart() {
+        guard let chart = chartView else { return }
+        chart.subviews.forEach { $0.removeFromSuperview() }
+        
+        let chartWidth = chart.bounds.width
+        let chartHeight = chart.bounds.height
+        
+        let radius: CGFloat = 35
+        let centerY = chartHeight / 2
+        
+        // Left fan (purple-ish)
+        let leftX = chartWidth / 2 - radius - 40
+        let leftPercent = fanLeftMax > 0 ? Double(fanLeft) / Double(fanLeftMax) * 100 : 0
+        let leftColor = NSColor(calibratedRed: 0.7, green: 0.5, blue: 0.8, alpha: 0.3)
+        createFanCircle(in: chart, center: NSPoint(x: leftX, y: centerY), radius: radius,
+                       percent: leftPercent, speed: fanLeft, color: leftColor, label: "L")
+        
+        // Right fan (blue-ish)
+        let rightX = chartWidth / 2 + radius + 40
+        let rightPercent = fanRightMax > 0 ? Double(fanRight) / Double(fanRightMax) * 100 : 0
+        let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 0.3)
+        createFanCircle(in: chart, center: NSPoint(x: rightX, y: centerY), radius: radius,
+                       percent: rightPercent, speed: fanRight, color: rightColor, label: "R")
+    }
+    
+    private func createFanCircle(in parent: NSView, center: NSPoint, radius: CGFloat,
+                                 percent: Double, speed: Int, color: NSColor, label: String) {
+        // Light colored circle
+        let circle = NSView(frame: NSRect(x: center.x - radius, y: center.y - radius,
+                                          width: radius * 2, height: radius * 2))
+        circle.wantsLayer = true
+        circle.layer?.backgroundColor = color.cgColor
+        circle.layer?.cornerRadius = radius
+        parent.addSubview(circle)
+        
+        // Center percentage label (white)
+        let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", percent))
+        pctLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+        pctLabel.textColor = NSColor.white
+        pctLabel.alignment = .center
+        pctLabel.frame = NSRect(x: center.x - 30, y: center.y - 8, width: 60, height: 16)
+        parent.addSubview(pctLabel)
+        
+        // Label below (L or R)
+        let nameLabel = NSTextField(labelWithString: label)
+        nameLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        nameLabel.textColor = .secondaryLabelColor
+        nameLabel.alignment = .center
+        nameLabel.frame = NSRect(x: center.x - 20, y: center.y - radius - 20, width: 40, height: 14)
+        parent.addSubview(nameLabel)
+        
+        // RPM label
+        let rpmLabel = NSTextField(labelWithString: "\(speed) RPM")
+        rpmLabel.font = .systemFont(ofSize: 10)
+        rpmLabel.textColor = .secondaryLabelColor
+        rpmLabel.alignment = .center
+        rpmLabel.frame = NSRect(x: center.x - 35, y: center.y + radius + 6, width: 70, height: 12)
+        parent.addSubview(rpmLabel)
+    }
+    
+    private func createFanChart(frame: NSRect) -> NSView {
+        let view = NSView(frame: frame)
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
+        view.layer?.cornerRadius = 4
+        return view
+    }
+    
+    // MARK: - SMC Connection
+    
+    private func openSMCConnection() {
         var iterator: io_iterator_t = 0
         let matching = IOServiceMatching("AppleSMC")
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            return result
-        }
-        
-        defer { IOObjectRelease(iterator) }
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else { return }
         
         let service = IOIteratorNext(iterator)
-        guard service != 0 else { return result }
+        IOObjectRelease(iterator)
+        guard service != 0 else { return }
         
-        defer { IOObjectRelease(service) }
-        
-        var connect: io_connect_t = 0
-        guard IOServiceOpen(service, mach_task_self_, 1, &connect) == KERN_SUCCESS else {
-            return result
+        _ = IOServiceOpen(service, mach_task_self_, 0, &smcConnection)
+        IOObjectRelease(service)
+    }
+    
+    private func closeSMCConnection() {
+        if smcConnection != 0 {
+            IOServiceClose(smcConnection)
+            smcConnection = 0
         }
+    }
+    
+    // MARK: - Fan Speed Reading (SMC)
+    
+    private func readFanSpeeds() {
+        fanLeft = 0
+        fanRight = 0
+        guard smcConnection != 0 else { return }
         
-        defer { IOServiceClose(connect) }
+        guard let fanCount = readSMCValue(key: "FNum") else { return }
+        let count = Int(fanCount)
         
-        // Try to read fan speeds
-        for i in 0..<2 {
-            if let speed = readSMCKey(connect: connect, key: "F\(i)Ac"),
-               let maxSpeed = readSMCKey(connect: connect, key: "F\(i)Mx") {
-                result.append((Int(speed), Int(maxSpeed)))
+        if count >= 1 {
+            if let speed = readSMCValue(key: "F0Ac") {
+                fanLeft = Int(speed)
+            }
+            if let maxSpeed = readSMCValue(key: "F0Mx") {
+                fanLeftMax = Int(maxSpeed)
             }
         }
         
-        return result
+        if count >= 2 {
+            if let speed = readSMCValue(key: "F1Ac") {
+                fanRight = Int(speed)
+            }
+            if let maxSpeed = readSMCValue(key: "F1Mx") {
+                fanRightMax = Int(maxSpeed)
+            }
+        }
     }
     
-    private func readSMCKey(connect: io_connect_t, key: String) -> Double? {
-        let keyBytes = key.utf8.map { UInt8($0) }
+    private func readSMCValue(key: String) -> Double? {
+        guard smcConnection != 0 else { return nil }
         
         var input = SMCKeyData()
-        input.key = (UInt32(keyBytes[0]) << 24) | (UInt32(keyBytes[1]) << 16) | (UInt32(keyBytes[2]) << 8) | UInt32(keyBytes[3])
-        input.data8 = UInt8(kSMCReadKey)
-        
         var output = SMCKeyData()
+        
+        let keyBytes = key.utf8
+        input.key = UInt32(keyBytes[keyBytes.startIndex]) << 24 |
+                    UInt32(keyBytes[keyBytes.index(keyBytes.startIndex, offsetBy: 1)]) << 16 |
+                    UInt32(keyBytes[keyBytes.index(keyBytes.startIndex, offsetBy: 2)]) << 8 |
+                    UInt32(keyBytes[keyBytes.index(keyBytes.startIndex, offsetBy: 3)])
+        input.data8 = UInt8(kSMCReadKeyInfo)
+        
         let inputSize = MemoryLayout<SMCKeyData>.size
         var outputSize = MemoryLayout<SMCKeyData>.size
         
-        let kr = IOConnectCallStructMethod(connect, kSMCUserClientMethod, &input, inputSize, &output, &outputSize)
+        var kr = IOConnectCallStructMethod(smcConnection, UInt32(kSMCKernelIndex), &input, inputSize, &output, &outputSize)
         guard kr == KERN_SUCCESS else { return nil }
         
-        // Fan speed is stored as fpe2 (16.8 fixed point)
-        let value = Double(output.val) / 256.0
-        return value > 0 ? value : nil
+        let dataSize = output.keyInfo.dataSize
+        let dataType = output.keyInfo.dataType
+        
+        input.keyInfo.dataSize = dataSize
+        input.data8 = UInt8(kSMCReadBytes)
+        
+        kr = IOConnectCallStructMethod(smcConnection, UInt32(kSMCKernelIndex), &input, inputSize, &output, &outputSize)
+        guard kr == KERN_SUCCESS else { return nil }
+        
+        let typeStr = String(bytes: [
+            UInt8((dataType >> 24) & 0xFF),
+            UInt8((dataType >> 16) & 0xFF),
+            UInt8((dataType >> 8) & 0xFF),
+            UInt8(dataType & 0xFF)
+        ], encoding: .ascii) ?? ""
+        
+        switch typeStr {
+        case "ui8 ", "UI8 ":
+            return Double(output.bytes.0)
+        case "ui16", "UI16":
+            return Double(UInt16(output.bytes.0) << 8 | UInt16(output.bytes.1))
+        case "ui32", "UI32":
+            return Double(UInt32(output.bytes.0) << 24 | UInt32(output.bytes.1) << 16 | UInt32(output.bytes.2) << 8 | UInt32(output.bytes.3))
+        case "sp78", "SP78":
+            let intValue = Double(Int16(output.bytes.0) << 8 | Int16(output.bytes.1))
+            return intValue / 256.0
+        case "sp96", "SP96":
+            let intValue = Double(Int16(output.bytes.0) << 8 | Int16(output.bytes.1))
+            return intValue / 64.0
+        case "fpe2", "FPE2":
+            return Double(Int(output.bytes.0) << 6 | Int(output.bytes.1) >> 2)
+        case "flt ", "FLT ":
+            var bytes = [output.bytes.0, output.bytes.1, output.bytes.2, output.bytes.3]
+            return bytes.withUnsafeMutableBytes { Double($0.load(as: Float.self)) }
+        default:
+            return Double(Int(output.bytes.0) << 6 | Int(output.bytes.1) >> 2)
+        }
     }
     
-    // MARK: - Temperature Items
+    // MARK: - Temperature data for table
     
-    private func getTemperatureItems() -> [(name: String, value: Double)] {
-        var items: [(String, Double)] = []
-        
-        // Priority order for display
-        let priorityKeys = ["tdie", "cpu", "gpu", "dram", "ane", "battery", "nand", "pmu"]
-        
-        for key in priorityKeys {
-            for (name, temp) in temperatures {
-                if name.lowercased().contains(key) && temp > 0 {
-                    // Add friendly name
-                    let friendlyName: String
-                    switch key {
-                    case "tdie": friendlyName = "CPU Die"
-                    case "cpu": friendlyName = "CPU"
-                    case "gpu": friendlyName = "GPU"
-                    case "dram": friendlyName = "Memory"
-                    case "ane": friendlyName = "Neural Engine"
-                    case "battery": friendlyName = "Battery"
-                    case "nand": friendlyName = "Storage"
-                    case "pmu": friendlyName = "PMU"
-                    default: friendlyName = name
-                    }
-                    
-                    if !items.contains(where: { $0.0 == friendlyName }) {
-                        items.append((friendlyName, temp))
-                    }
-                }
-            }
-        }
-        
-        // Add any remaining sensors
-        for (name, temp) in temperatures {
-            if temp > 0 && !items.contains(where: { $0.0.lowercased().contains(name.lowercased()) }) {
-                items.append((name, temp))
-            }
-        }
-        
-        if items.isEmpty {
-            items.append(("No sensors", 0))
-        }
-        
-        return items
+    private var tempComponents: [(name: String, value: Double)] = []
+    
+    private func updateTempComponents() {
+        tempComponents = [
+            ("CPU P-core", cpuPcoreTemp),
+            ("CPU E-core", cpuEcoreTemp),
+            ("GPU", gpuTemp),
+            ("DRAM", dramTemp),
+            ("ANE", aneTemp),
+            ("PCI", pciTemp),
+            ("Storage", storageTemp),
+            ("Battery", batteryTemp)
+        ]
+    }
+}
+
+// MARK: - NSTableViewDataSource & Delegate
+
+extension SensorModule: NSTableViewDataSource, NSTableViewDelegate {
+    
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        updateTempComponents()
+        return tempComponents.count
     }
     
-    // MARK: - UI Helpers
-    
-    private func createRow(name: String, value: String, frame: NSRect) -> NSView {
-        let row = NSView(frame: frame)
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard row < tempComponents.count else { return nil }
+        let component = tempComponents[row]
         
-        let nameLabel = NSTextField(labelWithString: name)
-        nameLabel.font = .systemFont(ofSize: 11)
-        nameLabel.textColor = .secondaryLabelColor
-        nameLabel.frame = NSRect(x: 0, y: 0, width: 130, height: 16)
-        row.addSubview(nameLabel)
+        let cell = NSTableCellView()
+        let colId = tableColumn?.identifier.rawValue ?? ""
         
-        let valueLabel = NSTextField(labelWithString: value)
-        valueLabel.font = .systemFont(ofSize: 12, weight: .medium)
-        valueLabel.alignment = .right
-        valueLabel.frame = NSRect(x: 170, y: 0, width: 78, height: 16)
-        row.addSubview(valueLabel)
-        
-        return row
-    }
-    
-    private func createFanView(frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
-        
-        let fanCount = min(fans.count, 2)
-        let circleDiameter: CGFloat = 70
-        let spacing: CGFloat = (frame.width - CGFloat(fanCount) * circleDiameter) / CGFloat(fanCount + 1)
-        
-        for i in 0..<fanCount {
-            let fan = fans[i]
-            let x = spacing + CGFloat(i) * (circleDiameter + spacing)
+        switch colId {
+        case "name":
+            let label = NSTextField(labelWithString: component.name)
+            label.font = .systemFont(ofSize: 11)
+            label.frame = NSRect(x: 12, y: 2, width: 130, height: 16)
+            cell.addSubview(label)
             
-            let circleView = createFanCircle(
-                frame: NSRect(x: x, y: 10, width: circleDiameter, height: circleDiameter),
-                speed: fan.speed,
-                maxSpeed: fan.maxSpeed,
-                index: i
-            )
-            view.addSubview(circleView)
+        case "value":
+            let tempText = component.value > 0 ? String(format: "%.0f°", component.value) : "--"
+            let label = NSTextField(labelWithString: tempText)
+            label.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+            label.textColor = .secondaryLabelColor
+            label.alignment = .right
+            label.frame = NSRect(x: 4, y: 2, width: 72, height: 16)
+            cell.addSubview(label)
+            
+        default:
+            break
         }
         
-        return view
-    }
-    
-    private func createFanCircle(frame: NSRect, speed: Int, maxSpeed: Int, index: Int) -> NSView {
-        let view = NSView(frame: frame)
-        view.wantsLayer = true
-        
-        let percentage = maxSpeed > 0 ? min(Double(speed) / Double(maxSpeed), 1.0) : 0
-        
-        // Background circle
-        let bgLayer = CAShapeLayer()
-        let bgPath = CGMutablePath()
-        bgPath.addEllipse(in: NSRect(x: 0, y: 0, width: frame.width, height: frame.height))
-        bgLayer.path = bgPath
-        bgLayer.fillColor = NSColor.controlBackgroundColor.cgColor
-        bgLayer.strokeColor = NSColor.separatorColor.cgColor
-        bgLayer.lineWidth = 2
-        view.layer?.addSublayer(bgLayer)
-        
-        // Progress arc
-        let progressLayer = CAShapeLayer()
-        let center = CGPoint(x: frame.width / 2, y: frame.height / 2)
-        let radius = frame.width / 2 - 4
-        let startAngle = -CGFloat.pi / 2
-        let endAngle = startAngle + CGFloat(percentage) * 2 * CGFloat.pi
-        
-        let progressPath = CGMutablePath()
-        progressPath.addArc(center: center, radius: radius, startAngle: startAngle, endAngle: endAngle, clockwise: false)
-        progressLayer.path = progressPath
-        progressLayer.fillColor = nil
-        progressLayer.strokeColor = NSColor.systemBlue.cgColor
-        progressLayer.lineWidth = 4
-        progressLayer.lineCap = .round
-        view.layer?.addSublayer(progressLayer)
-        
-        // Percentage label
-        let percentLabel = NSTextField(labelWithString: String(format: "%.0f%%", percentage * 100))
-        percentLabel.font = .systemFont(ofSize: 18, weight: .semibold)
-        percentLabel.alignment = .center
-        percentLabel.frame = NSRect(x: 0, y: frame.height / 2 - 5, width: frame.width, height: 22)
-        view.addSubview(percentLabel)
-        
-        // Speed label
-        let speedLabel = NSTextField(labelWithString: "\(speed) RPM")
-        speedLabel.font = .systemFont(ofSize: 9)
-        speedLabel.textColor = .secondaryLabelColor
-        speedLabel.alignment = .center
-        speedLabel.frame = NSRect(x: 0, y: frame.height / 2 - 22, width: frame.width, height: 14)
-        view.addSubview(speedLabel)
-        
-        // Fan label
-        let fanLabel = NSTextField(labelWithString: "Fan \(index + 1)")
-        fanLabel.font = .systemFont(ofSize: 10)
-        fanLabel.textColor = .tertiaryLabelColor
-        fanLabel.alignment = .center
-        fanLabel.frame = NSRect(x: 0, y: -14, width: frame.width, height: 12)
-        view.addSubview(fanLabel)
-        
-        return view
+        return cell
     }
 }
 
 // MARK: - SMC Constants and Structures
 
-private let kSMCUserClientMethod: UInt32 = 2
-private let kSMCReadKey: UInt8 = 5
+private let kSMCKernelIndex: UInt8 = 2
+private let kSMCReadKeyInfo: UInt8 = 9
+private let kSMCReadBytes: UInt8 = 5
 
 private struct SMCKeyData {
     var key: UInt32 = 0
     var vers: UInt8 = 0
     var data8: UInt8 = 0
     var data32: UInt32 = 0
+    var keyInfo: KeyInfo = KeyInfo()
     var result: UInt8 = 0
     var status: UInt8 = 0
     var data8_2: UInt8 = 0
     var val: UInt32 = 0
-    var bytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    var bytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    
+    struct KeyInfo {
+        var dataSize: UInt32 = 0
+        var dataType: UInt32 = 0
+        var dataAttributes: UInt8 = 0
+    }
     
     init() {}
 }
