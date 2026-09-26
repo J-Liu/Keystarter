@@ -287,29 +287,29 @@ final class GPUModule: NSObject, StatusModule {
             }
             
             // Get Device Utilization %
-            if let val = statistics["Device Utilization %"] as? Double {
+            if let num = statistics["Device Utilization %"] as? NSNumber {
+                deviceUtil = num.doubleValue
+            } else if let val = statistics["Device Utilization %"] as? Double {
                 deviceUtil = val
-            } else if let val = statistics["Device Utilization"] as? Double {
-                deviceUtil = val * 100
-            } else if let val = statistics["Device Utilization"] as? Int {
+            } else if let val = statistics["Device Utilization %"] as? Int {
                 deviceUtil = Double(val)
             }
-            
+
             // Get Renderer Utilization %
-            if let val = statistics["Renderer Utilization %"] as? Double {
+            if let num = statistics["Renderer Utilization %"] as? NSNumber {
+                rendererUtil = num.doubleValue
+            } else if let val = statistics["Renderer Utilization %"] as? Double {
                 rendererUtil = val
-            } else if let val = statistics["Renderer Utilization"] as? Double {
-                rendererUtil = val * 100
-            } else if let val = statistics["Renderer Utilization"] as? Int {
+            } else if let val = statistics["Renderer Utilization %"] as? Int {
                 rendererUtil = Double(val)
             }
-            
+
             // Get Tiler Utilization %
-            if let val = statistics["Tiler Utilization %"] as? Double {
+            if let num = statistics["Tiler Utilization %"] as? NSNumber {
+                tilerUtil = num.doubleValue
+            } else if let val = statistics["Tiler Utilization %"] as? Double {
                 tilerUtil = val
-            } else if let val = statistics["Tiler Utilization"] as? Double {
-                tilerUtil = val * 100
-            } else if let val = statistics["Tiler Utilization"] as? Int {
+            } else if let val = statistics["Tiler Utilization %"] as? Int {
                 tilerUtil = Double(val)
             }
             
