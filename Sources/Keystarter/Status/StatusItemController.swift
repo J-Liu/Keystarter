@@ -129,8 +129,8 @@ final class StatusItemController: NSObject {
             // Create two-line title with tight spacing
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = -1.5
-            paraStyle.paragraphSpacing = -3
+            paraStyle.lineSpacing = 1
+            paraStyle.paragraphSpacing = 1
 
             let attrString = NSMutableAttributedString()
             let nameAttrs: [NSAttributedString.Key: Any] = [
@@ -139,7 +139,7 @@ final class StatusItemController: NSObject {
                 .paragraphStyle: paraStyle
             ]
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 11, weight: .medium),
+                .font: NSFont.systemFont(ofSize: 13, weight: .medium),
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]

@@ -275,13 +275,12 @@ final class ProcessInfoProvider {
             if elapsed > 0 {
                 let prevTotal = prev.user + prev.system
                 let delta = total > prevTotal ? Double(total - prevTotal) : 0
-                let cores = Double(ProcessInfo.processInfo.activeProcessorCount)
-                // Convert nanoseconds to seconds
+                // Convert nanoseconds to seconds, then to percentage
                 let cpuTime = delta / 1_000_000_000.0
-                let usage = (cpuTime / elapsed / cores) * 100.0
+                let usage = (cpuTime / elapsed) * 100.0
                 
                 previousProcCPU[pid] = (userTime, systemTime, now)
-                return min(usage, 100.0)
+                return min(usage, 100.0 * Double(ProcessInfo.processInfo.activeProcessorCount))
             }
         }
         
