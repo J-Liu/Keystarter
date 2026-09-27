@@ -71,8 +71,7 @@ install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_BUNDLE}/Con
 
 # 3. Ad-hoc sign (required on Apple Silicon)
 echo "==> Signing..."
-codesign --force --deep --sign - "$APP_BUNDLE"
-
+codesign --force --deep --sign - --identifier com.jialiu.keystarter "$APP_BUNDLE"
 echo ""
 echo "==> Done: ${APP_BUNDLE}"
 echo "    Run:  open \"${APP_BUNDLE}\""

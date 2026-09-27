@@ -5,7 +5,7 @@
     <key>CFBundleExecutable</key>
     <string>Keystarter</string>
     <key>CFBundleIdentifier</key>
-    <string>com.keystarter.app</string>
+    <string>com.jialiu.keystarter</string>
     <key>CFBundleName</key>
     <string>Keystarter</string>
     <key>CFBundleDisplayName</key>
@@ -33,6 +33,6 @@
     <key>SUFeedURL</key>
     <string>https://J-Liu.github.io/Keystarter/appcast.xml</string>
     <key>SUPublicEDKey</key>
-    <string>PBDS5VN8RaVF+gVsHkIKLWt1drP2OsDPcJEDxjuZKZs=</string>
+    <string>W7TrEQ+JKEhXheRSM07yf1qkR8rgAmi7QT9IYe539JA=</string>
 </dict>
 </plist>
