@@ -230,9 +230,19 @@ static void loadPrivateFunctions(void) {
     }
     
     // Get channels for energy monitoring
-    _channels = _IOReportCopyChannelsInGroup(CFSTR("Energy Model"), NULL, 0, 0, 0);
-    if (!_channels) {
+    CFDictionaryRef rawChannels = _IOReportCopyChannelsInGroup(CFSTR("Energy Model"), NULL, 0, 0, 0);
+    if (!rawChannels) {
         NSLog(@"Failed to get Energy Model channels");
+        return;
+    }
+    
+    // Create a mutable copy (like Stats does)
+    CFIndex size = CFDictionaryGetCount(rawChannels);
+    _channels = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, size, rawChannels);
+    CFRelease(rawChannels);
+    
+    if (!_channels) {
+        NSLog(@"Failed to create mutable copy of channels");
         return;
     }
     
@@ -252,10 +262,9 @@ static void loadPrivateFunctions(void) {
         return;
     }
     
-    // Update channels with subscribed dict if provided
+    // Don't replace channels with subscribedDict (Stats doesn't do this)
     if (subscribedDict) {
-        CFRelease(_channels);
-        _channels = subscribedDict;
+        CFRelease(subscribedDict);
     }
     
     // Initialize previous powers
@@ -294,11 +303,15 @@ static void loadPrivateFunctions(void) {
     NSDate *now = [NSDate date];
     NSMutableDictionary *currentPowers = [NSMutableDictionary dictionary];
     
+    // Accumulate sub-channel energies (like Stats does)
+    double eaccCPU = 0, pacc0CPU = 0, pacc1CPU = 0;
+    double cpuAggregate = 0, gpuEnergy = 0, aneEnergy = 0, dramEnergy = 0, pciEnergy = 0;
+    BOOL hasSubChannels = NO;
+    
     // Read energy values
     for (id item in channels) {
         CFDictionaryRef channel = (__bridge CFDictionaryRef)item;
         
-        // Use unretained values (like Stats does with takeUnretainedValue)
         CFStringRef groupCF = _IOReportChannelGetGroup(channel);
         if (!groupCF) continue;
         NSString *group = (__bridge NSString *)groupCF;
@@ -314,7 +327,7 @@ static void loadPrivateFunctions(void) {
         NSString *unit = (__bridge NSString *)unitCF;
         int64_t value = _IOReportSimpleGetIntegerValue(channel, 0);
         
-        // Convert to Joules (like Stats .power() function)
+        // Convert to Joules
         double energy = 0;
         if ([unit isEqualToString:@"mJ"]) {
             energy = value / 1e3;
@@ -324,42 +337,74 @@ static void loadPrivateFunctions(void) {
             energy = value / 1e9;
         }
         
-        // Categorize by channel name
-        if ([channelName hasSuffix:@"CPU Energy"]) {
-            currentPowers[@"CPU"] = @(energy);
-        } else if ([channelName hasSuffix:@"GPU Energy"]) {
-            currentPowers[@"GPU"] = @(energy);
+        // Accumulate sub-channels for CPU (these update individually)
+        if ([channelName isEqualToString:@"EACC_CPU"]) {
+            eaccCPU = energy;
+            hasSubChannels = YES;
+        } else if ([channelName isEqualToString:@"PACC0_CPU"]) {
+            pacc0CPU = energy;
+            hasSubChannels = YES;
+        } else if ([channelName isEqualToString:@"PACC1_CPU"]) {
+            pacc1CPU = energy;
+            hasSubChannels = YES;
+        } else if ([channelName isEqualToString:@"CPU Energy"]) {
+            cpuAggregate = energy; // Fallback if sub-channels not available
+        } else if ([channelName isEqualToString:@"GPU Energy"]) {
+            gpuEnergy = energy;
         } else if ([channelName hasPrefix:@"ANE"]) {
-            currentPowers[@"ANE"] = @(energy);
+            aneEnergy = energy;
         } else if ([channelName hasPrefix:@"DRAM"]) {
-            currentPowers[@"DRAM"] = @(energy);
+            dramEnergy = energy;
         } else if ([channelName hasPrefix:@"PCI"] && [channelName hasSuffix:@"Energy"]) {
-            currentPowers[@"PCI"] = @(energy);
+            pciEnergy = energy;
         }
     }
     
-    // Calculate power from energy delta (like Stats)
+    // Use sub-channel sum if available (E-core + P-core clusters), otherwise fall back to aggregate
+    if (hasSubChannels) {
+        currentPowers[@"CPU"] = @(eaccCPU + pacc0CPU + pacc1CPU);
+    } else {
+        currentPowers[@"CPU"] = @(cpuAggregate);
+    }
+    currentPowers[@"GPU"] = @(gpuEnergy);
+    currentPowers[@"ANE"] = @(aneEnergy);
+    currentPowers[@"DRAM"] = @(dramEnergy);
+    currentPowers[@"PCI"] = @(pciEnergy);
+    
+    // Debug: log energy values (comment out in production)
+    // NSLog(@"[SensorReader] CPU Energy: EACC=%.2f PACC0=%.2f PACC1=%.2f", eaccCPU, pacc0CPU, pacc1CPU);
+    
+    // Calculate power from energy delta
     if (_lastRead) {
         NSTimeInterval elapsed = [now timeIntervalSinceDate:_lastRead];
-        if (elapsed > 0) {
-            double cpuCurrent = [currentPowers[@"CPU"] doubleValue];
-            double cpuPrevious = [_prevPowers[@"CPU"] doubleValue];
-            double gpuCurrent = [currentPowers[@"GPU"] doubleValue];
-            double gpuPrevious = [_prevPowers[@"GPU"] doubleValue];
-            
-            // Only calculate if we have valid previous values (like Stats guard prevCPU != 0)
-            if (cpuCurrent > cpuPrevious && cpuPrevious > 0) {
-                readings.CPU = (cpuCurrent - cpuPrevious) / elapsed;
+        
+        double cpuCurrent = [currentPowers[@"CPU"] doubleValue];
+        double cpuPrevious = [_prevPowers[@"CPU"] doubleValue];
+        double gpuCurrent = [currentPowers[@"GPU"] doubleValue];
+        double gpuPrevious = [_prevPowers[@"GPU"] doubleValue];
+        
+        
+        if (elapsed > 0 && cpuPrevious > 0) {
+            double cpuDelta = cpuCurrent - cpuPrevious;
+            if (cpuDelta > 0) {
+                readings.CPU = cpuDelta / elapsed;
             }
-            if (gpuCurrent > gpuPrevious && gpuPrevious > 0) {
-                readings.GPU = (gpuCurrent - gpuPrevious) / elapsed;
+        }
+        if (elapsed > 0 && gpuPrevious > 0) {
+            double gpuDelta = gpuCurrent - gpuPrevious;
+            if (gpuDelta > 0) {
+                readings.GPU = gpuDelta / elapsed;
             }
-            // Same for other components
-            for (NSString *key in @[@"ANE", @"DRAM", @"PCI"]) {
-                double current = [currentPowers[key] doubleValue];
-                double previous = [_prevPowers[key] doubleValue];
-                if (current > previous && previous > 0) {
-                    double power = (current - previous) / elapsed;
+        }
+        
+        // Other components
+        for (NSString *key in @[@"ANE", @"DRAM", @"PCI"]) {
+            double current = [currentPowers[key] doubleValue];
+            double previous = [_prevPowers[key] doubleValue];
+            if (elapsed > 0 && previous > 0) {
+                double delta = current - previous;
+                if (delta > 0) {
+                    double power = delta / elapsed;
                     if ([key isEqualToString:@"ANE"]) readings.ANE = power;
                     else if ([key isEqualToString:@"DRAM"]) readings.DRAM = power;
                     else if ([key isEqualToString:@"PCI"]) readings.PCI = power;

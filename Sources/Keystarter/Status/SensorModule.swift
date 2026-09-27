@@ -30,6 +30,7 @@ final class SensorModule: NSObject, StatusModule {
     // Power data
     private var totalPower: Double = 0
     private let powerReader = SensorReaderSwift()
+    private var smcPower: Double = 0  // SMC PSTR power
     
     // Fan data from SMC
     private var fanLeft: Int = 0
@@ -55,9 +56,15 @@ final class SensorModule: NSObject, StatusModule {
     }
     
     func refreshSummary() {
-        // Read power
-        let power = powerReader.readPower()
-        totalPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
+        // Read power from SMC PSTR (System Total) - most reliable
+        readSMCPower()
+        totalPower = smcPower
+        
+        // Fallback to IOReport if SMC fails
+        if totalPower <= 0 {
+            let power = powerReader.readPower()
+            totalPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
+        }
         
         // Read temperatures
         let temps = SensorReaderSwift.readTemperatures()
@@ -179,9 +186,15 @@ final class SensorModule: NSObject, StatusModule {
     }
     
     private func refreshDetail() {
-        // Read power
+        // Read power from IOReport
         let power = powerReader.readPower()
-        totalPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
+        let ioReportPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
+        
+        // Read power from SMC (PSTR - System Total)
+        readSMCPower()
+        
+        // Use SMC power if available, otherwise use IOReport power
+        totalPower = smcPower > 0 ? smcPower : ioReportPower
         
         // Read temperatures
         let temps = SensorReaderSwift.readTemperatures()
@@ -285,14 +298,19 @@ final class SensorModule: NSObject, StatusModule {
     private func openSMCConnection() {
         var iterator: io_iterator_t = 0
         let matching = IOServiceMatching("AppleSMC")
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else { return }
+        let result = IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator)
+        guard result == KERN_SUCCESS else { return }
         
         let service = IOIteratorNext(iterator)
         IOObjectRelease(iterator)
         guard service != 0 else { return }
         
-        _ = IOServiceOpen(service, mach_task_self_, 0, &smcConnection)
+        let openResult = IOServiceOpen(service, mach_task_self_, 0, &smcConnection)
         IOObjectRelease(service)
+        
+        if openResult != KERN_SUCCESS {
+            smcConnection = 0
+        }
     }
     
     private func closeSMCConnection() {
@@ -331,21 +349,30 @@ final class SensorModule: NSObject, StatusModule {
         }
     }
     
+    private func readSMCPower() {
+        smcPower = 0
+        guard smcConnection != 0 else { return }
+        if let power = readSMCValue(key: "PSTR") {
+            smcPower = power
+        }
+    }
+    
     private func readSMCValue(key: String) -> Double? {
         guard smcConnection != 0 else { return nil }
         
         var input = SMCKeyData()
         var output = SMCKeyData()
         
-        let keyBytes = key.utf8
-        input.key = UInt32(keyBytes[keyBytes.startIndex]) << 24 |
-                    UInt32(keyBytes[keyBytes.index(keyBytes.startIndex, offsetBy: 1)]) << 16 |
-                    UInt32(keyBytes[keyBytes.index(keyBytes.startIndex, offsetBy: 2)]) << 8 |
-                    UInt32(keyBytes[keyBytes.index(keyBytes.startIndex, offsetBy: 3)])
+        let keyBytes = Array(key.utf8)
+        guard keyBytes.count == 4 else { return nil }
+        input.key = UInt32(keyBytes[0]) << 24 |
+                    UInt32(keyBytes[1]) << 16 |
+                    UInt32(keyBytes[2]) << 8 |
+                    UInt32(keyBytes[3])
         input.data8 = UInt8(kSMCReadKeyInfo)
         
-        let inputSize = MemoryLayout<SMCKeyData>.size
-        var outputSize = MemoryLayout<SMCKeyData>.size
+        let inputSize = MemoryLayout<SMCKeyData>.stride
+        var outputSize = MemoryLayout<SMCKeyData>.stride
         
         var kr = IOConnectCallStructMethod(smcConnection, UInt32(kSMCKernelIndex), &input, inputSize, &output, &outputSize)
         guard kr == KERN_SUCCESS else { return nil }
@@ -454,22 +481,48 @@ private let kSMCReadKeyInfo: UInt8 = 9
 private let kSMCReadBytes: UInt8 = 5
 
 private struct SMCKeyData {
-    var key: UInt32 = 0
-    var vers: UInt8 = 0
-    var data8: UInt8 = 0
-    var data32: UInt32 = 0
-    var keyInfo: KeyInfo = KeyInfo()
-    var result: UInt8 = 0
-    var status: UInt8 = 0
-    var data8_2: UInt8 = 0
-    var val: UInt32 = 0
-    var bytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    // Exact copy from Stats SMC/smc.swift
+    typealias SMCBytes_t = (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                            UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                            UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                            UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+                            UInt8, UInt8, UInt8, UInt8)
     
-    struct KeyInfo {
+    struct vers_t {
+        var major: UInt8 = 0
+        var minor: UInt8 = 0
+        var build: UInt8 = 0
+        var reserved: UInt8 = 0
+        var release: UInt16 = 0
+    }
+    
+    struct LimitData_t {
+        var version: UInt16 = 0
+        var length: UInt16 = 0
+        var cpuPLimit: UInt32 = 0
+        var gpuPLimit: UInt32 = 0
+        var memPLimit: UInt32 = 0
+    }
+    
+    struct keyInfo_t {
         var dataSize: UInt32 = 0
         var dataType: UInt32 = 0
         var dataAttributes: UInt8 = 0
     }
     
-    init() {}
+    var key: UInt32 = 0
+    var vers = vers_t()
+    var pLimitData = LimitData_t()
+    var keyInfo = keyInfo_t()
+    var padding: UInt16 = 0
+    var result: UInt8 = 0
+    var status: UInt8 = 0
+    var data8: UInt8 = 0
+    var data32: UInt32 = 0
+    var bytes: SMCBytes_t = (UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
+                             UInt8(0), UInt8(0))
 }
