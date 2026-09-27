@@ -29,7 +29,7 @@ final class NetworkModule: NSObject, StatusModule {
     var downloadSpeedText: String { formatSpeed(downloadSpeed) }
     var uploadSpeedText: String { formatSpeed(uploadSpeed) }
     
-    var refreshInterval: TimeInterval { 2.0 }
+    var refreshInterval: TimeInterval { 1.0 }
     
     private var previousBytesIn: UInt64 = 0
     private var previousBytesOut: UInt64 = 0
@@ -48,7 +48,7 @@ final class NetworkModule: NSObject, StatusModule {
     private var prevNetIO: [Int32: (in: UInt64, out: UInt64, time: Date)] = [:]
     private var netIOLock = NSLock()
     
-    private weak var chartView: NSView?
+    private weak var chartView: NetworkChartView?
     private weak var tableView: NSTableView?
     private var detailTimer: Timer?
     
@@ -96,7 +96,8 @@ final class NetworkModule: NSObject, StatusModule {
                 
                 // Only update chart and notify if detail view is open
                 if self.detailTimer != nil {
-                    self.updateChart()
+                    self.chartView?.setDownloadHistory(self.downloadHistory, uploadHistory: self.uploadHistory)
+                    self.chartView?.needsDisplay = true
                     self.tableView?.reloadData()
                     NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "network"])
                 }
@@ -129,7 +130,7 @@ final class NetworkModule: NSObject, StatusModule {
         
         // Network chart (mirrored download/upload)
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = createNetworkChart(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        let chart = NetworkChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chartView = chart
         container.addSubview(chart)
         
@@ -192,175 +193,13 @@ final class NetworkModule: NSObject, StatusModule {
     
     private func startDetailTimer() {
         detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        detailTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.refreshDetail()
         }
     }
     
     private func refreshDetail() {
         updateNetworkData()
-    }
-    
-    private func updateChart() {
-        guard let chart = chartView else { return }
-        
-        // Remove both subviews and sublayers
-        chart.subviews.forEach { $0.removeFromSuperview() }
-        chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
-        
-        let chartWidth = chart.bounds.width
-        let chartHeight = chart.bounds.height
-        let chartPadding: CGFloat = 8
-        let centerLineY = chartHeight / 2
-        let halfHeight = chartHeight / 2 - chartPadding - 8
-        let drawWidth = chartWidth - chartPadding * 2
-        let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
-        
-        // Separate scaling for download and upload
-        let maxDown = max(downloadHistory.max() ?? 1, 1)
-        let maxUp = max(uploadHistory.max() ?? 1, 1)
-        
-        // Draw center line
-        let centerLine = NSView(frame: NSRect(x: chartPadding, y: centerLineY - 1, width: drawWidth, height: 2))
-        centerLine.wantsLayer = true
-        centerLine.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        chart.addSubview(centerLine)
-        
-        // Calculate points with separate scaling
-        let downPoints: [CGPoint] = downloadHistory.enumerated().map { index, value in
-            let x = chartWidth - chartPadding - CGFloat(downloadHistory.count - 1 - index) * stepX
-            let y = centerLineY + min(value / maxDown, 1.0) * halfHeight
-            return CGPoint(x: x, y: y)
-        }
-        
-        let upPoints: [CGPoint] = uploadHistory.enumerated().map { index, value in
-            let x = chartWidth - chartPadding - CGFloat(uploadHistory.count - 1 - index) * stepX
-            let y = centerLineY - min(value / maxUp, 1.0) * halfHeight
-            return CGPoint(x: x, y: y)
-        }
-        
-        // Draw download chart (top half, above center line) - light purple
-        if downPoints.count > 1 {
-            let downAreaPath = CGMutablePath()
-            downAreaPath.move(to: CGPoint(x: downPoints[0].x, y: centerLineY))
-            downAreaPath.addLine(to: downPoints[0])
-            
-            // Build smooth curve directly
-            for i in 1..<downPoints.count {
-                let prev = downPoints[i - 1]
-                let curr = downPoints[i]
-                let midX = (prev.x + curr.x) / 2
-                let midY = (prev.y + curr.y) / 2
-                downAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
-                downAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
-            }
-            
-            downAreaPath.addLine(to: CGPoint(x: downPoints.last!.x, y: centerLineY))
-            downAreaPath.closeSubpath()
-            
-            let downLayer = CAShapeLayer()
-            downLayer.path = downAreaPath
-            downLayer.fillColor = NSColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 0.2).cgColor
-            chart.layer?.addSublayer(downLayer)
-            
-            let downLinePath = createSmoothPath(points: downPoints)
-            let downLineLayer = CAShapeLayer()
-            downLineLayer.path = downLinePath
-            downLineLayer.fillColor = nil
-            downLineLayer.strokeColor = NSColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 0.8).cgColor
-            downLineLayer.lineWidth = 1.5
-            downLineLayer.lineCap = .round
-            downLineLayer.lineJoin = .round
-            chart.layer?.addSublayer(downLineLayer)
-        }
-        
-        // Draw upload chart (bottom half, below center line) - light red
-        if upPoints.count > 1 {
-            let upAreaPath = CGMutablePath()
-            upAreaPath.move(to: CGPoint(x: upPoints[0].x, y: centerLineY))
-            upAreaPath.addLine(to: upPoints[0])
-            
-            // Build smooth curve directly
-            for i in 1..<upPoints.count {
-                let prev = upPoints[i - 1]
-                let curr = upPoints[i]
-                let midX = (prev.x + curr.x) / 2
-                let midY = (prev.y + curr.y) / 2
-                upAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
-                upAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
-            }
-            
-            upAreaPath.addLine(to: CGPoint(x: upPoints.last!.x, y: centerLineY))
-            upAreaPath.closeSubpath()
-            
-            let upLayer = CAShapeLayer()
-            upLayer.path = upAreaPath
-            upLayer.fillColor = NSColor(red: 0.75, green: 0.35, blue: 0.35, alpha: 0.2).cgColor
-            chart.layer?.addSublayer(upLayer)
-            
-            let upLinePath = createSmoothPath(points: upPoints)
-            let upLineLayer = CAShapeLayer()
-            upLineLayer.path = upLinePath
-            upLineLayer.fillColor = nil
-            upLineLayer.strokeColor = NSColor(red: 0.75, green: 0.35, blue: 0.35, alpha: 0.8).cgColor
-            upLineLayer.lineWidth = 1.5
-            upLineLayer.lineCap = .round
-            upLineLayer.lineJoin = .round
-            chart.layer?.addSublayer(upLineLayer)
-        }
-        
-        // Labels
-        let downLabel = NSTextField(labelWithString: "↓ \(formatSpeed(downloadSpeed))")
-        downLabel.font = NSFont.systemFont(ofSize: 10)
-        downLabel.textColor = .secondaryLabelColor
-        downLabel.frame = NSRect(x: chartWidth - 80, y: chartHeight - 16, width: 70, height: 12)
-        chart.addSubview(downLabel)
-        
-        let upLabel = NSTextField(labelWithString: "↑ \(formatSpeed(uploadSpeed))")
-        upLabel.font = NSFont.systemFont(ofSize: 10)
-        upLabel.textColor = .secondaryLabelColor
-        upLabel.frame = NSRect(x: chartWidth - 80, y: 4, width: 70, height: 12)
-        chart.addSubview(upLabel)
-    }
-    
-    private func createSmoothPath(points: [CGPoint]) -> CGMutablePath {
-        let path = CGMutablePath()
-        guard points.count > 1 else { return path }
-        
-        path.move(to: points[0])
-        
-        for i in 1..<points.count {
-            let prev = points[i - 1]
-            let curr = points[i]
-            
-            let midX = (prev.x + curr.x) / 2
-            let midY = (prev.y + curr.y) / 2
-            
-            path.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
-            path.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
-        }
-        
-        return path
-    }
-    
-    private func createNetworkChart(frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-        view.layer?.cornerRadius = 4
-        
-        let chartWidth = frame.width
-        let chartHeight = frame.height
-        let chartPadding: CGFloat = 8
-        let centerLineY = chartHeight / 2
-        
-        // Center line
-        let centerLine = NSView(frame: NSRect(x: chartPadding, y: centerLineY - 1, width: chartWidth - chartPadding * 2, height: 2))
-        centerLine.wantsLayer = true
-        centerLine.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        view.addSubview(centerLine)
-        
-        return view
     }
     
     // MARK: - Network Data
@@ -635,5 +474,164 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
         }
         
         return cell
+    }
+}
+
+// MARK: - Network Chart View (Stats-style)
+
+/// Chart view for network download/upload speed using NSBezierPath like Stats
+final class NetworkChartView: NSView {
+    private var downloadHistory: [Double] = []
+    private var uploadHistory: [Double] = []
+    private let maxHistoryCount = 60
+    
+    private let downloadColor = NSColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 1.0)  // Purple for download
+    private let uploadColor = NSColor(red: 0.75, green: 0.35, blue: 0.35, alpha: 1.0)  // Red for upload
+    
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
+        layer?.cornerRadius = 4
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func setDownloadHistory(_ download: [Double], uploadHistory upload: [Double]) {
+        self.downloadHistory = download
+        self.uploadHistory = upload
+    }
+    
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        context.setShouldAntialias(true)
+        
+        let chartWidth = bounds.width
+        let chartHeight = bounds.height
+        let chartPadding: CGFloat = 8
+        let centerLineY = chartHeight / 2
+        let halfHeight = chartHeight / 2 - chartPadding - 8
+        let drawWidth = chartWidth - chartPadding * 2
+        let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
+        let lineWidth: CGFloat = 1.0 / (NSScreen.main?.backingScaleFactor ?? 1)
+        
+        // Draw center line
+        let centerPath = NSBezierPath()
+        centerPath.move(to: CGPoint(x: chartPadding, y: centerLineY))
+        centerPath.line(to: CGPoint(x: chartWidth - chartPadding, y: centerLineY))
+        centerPath.lineWidth = lineWidth
+        NSColor.separatorColor.setStroke()
+        centerPath.stroke()
+        
+        // Find max values for scaling (separate for each series)
+        let maxDown = max(downloadHistory.max() ?? 1, 1)
+        let maxUp = max(uploadHistory.max() ?? 1, 1)
+        
+        // Draw upload chart (bottom half, below center line) - draw first so download is on top
+        if uploadHistory.count > 1 {
+            let points = calculatePoints(uploadHistory, maxVal: maxUp, stepX: stepX, centerLineY: centerLineY, halfHeight: halfHeight, chartWidth: chartWidth, chartPadding: chartPadding, isDownload: false)
+            
+            // Draw filled area with gradient
+            let areaPath = NSBezierPath()
+            areaPath.move(to: CGPoint(x: points[0].x, y: centerLineY))
+            for point in points {
+                areaPath.line(to: point)
+            }
+            areaPath.line(to: CGPoint(x: points.last!.x, y: centerLineY))
+            areaPath.close()
+            
+            if let gradient = NSGradient(colors: [uploadColor.withAlphaComponent(0.3), uploadColor.withAlphaComponent(0.5)]) {
+                gradient.draw(in: areaPath, angle: 90)
+            }
+            
+            // Draw line
+            let linePath = NSBezierPath()
+            linePath.move(to: points[0])
+            for i in 1..<points.count {
+                linePath.line(to: points[i])
+            }
+            linePath.lineWidth = lineWidth
+            uploadColor.setStroke()
+            linePath.stroke()
+        }
+        
+        // Draw download chart (top half, above center line)
+        if downloadHistory.count > 1 {
+            let points = calculatePoints(downloadHistory, maxVal: maxDown, stepX: stepX, centerLineY: centerLineY, halfHeight: halfHeight, chartWidth: chartWidth, chartPadding: chartPadding, isDownload: true)
+            
+            // Draw filled area with gradient
+            let areaPath = NSBezierPath()
+            areaPath.move(to: CGPoint(x: points[0].x, y: centerLineY))
+            for point in points {
+                areaPath.line(to: point)
+            }
+            areaPath.line(to: CGPoint(x: points.last!.x, y: centerLineY))
+            areaPath.close()
+            
+            if let gradient = NSGradient(colors: [downloadColor.withAlphaComponent(0.3), downloadColor.withAlphaComponent(0.5)]) {
+                gradient.draw(in: areaPath, angle: 90)
+            }
+            
+            // Draw line
+            let linePath = NSBezierPath()
+            linePath.move(to: points[0])
+            for i in 1..<points.count {
+                linePath.line(to: points[i])
+            }
+            linePath.lineWidth = lineWidth
+            downloadColor.setStroke()
+            linePath.stroke()
+        }
+        
+        // Draw labels
+        let downSpeed = downloadHistory.last ?? 0
+        let upSpeed = uploadHistory.last ?? 0
+        
+        let downLabel = "↓ \(formatSpeed(downSpeed))"
+        let upLabel = "↑ \(formatSpeed(upSpeed))"
+        
+        let labelFont = NSFont.systemFont(ofSize: 10)
+        let labelAttributes: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        
+        let downLabelStr = NSAttributedString(string: downLabel, attributes: labelAttributes)
+        let upLabelStr = NSAttributedString(string: upLabel, attributes: labelAttributes)
+        
+        let downLabelSize = downLabelStr.size()
+        let upLabelSize = upLabelStr.size()
+        
+        downLabelStr.draw(at: CGPoint(x: chartWidth - chartPadding - downLabelSize.width, y: chartHeight - chartPadding - downLabelSize.height))
+        upLabelStr.draw(at: CGPoint(x: chartWidth - chartPadding - upLabelSize.width, y: chartPadding))
+    }
+    
+    private func calculatePoints(_ history: [Double], maxVal: Double, stepX: CGFloat, centerLineY: CGFloat, halfHeight: CGFloat, chartWidth: CGFloat, chartPadding: CGFloat, isDownload: Bool) -> [CGPoint] {
+        return history.enumerated().map { index, value in
+            let x = chartWidth - chartPadding - CGFloat(history.count - 1 - index) * stepX
+            let y: CGFloat
+            if isDownload {
+                y = centerLineY + min(value / maxVal, 1.0) * halfHeight
+            } else {
+                y = centerLineY - min(value / maxVal, 1.0) * halfHeight
+            }
+            return CGPoint(x: x, y: y)
+        }
+    }
+    
+    private func formatSpeed(_ bytesPerSec: Double) -> String {
+        if bytesPerSec >= 1_073_741_824 {
+            return String(format: "%.1fG", bytesPerSec / 1_073_741_824)
+        } else if bytesPerSec >= 1_048_576 {
+            return String(format: "%.1fM", bytesPerSec / 1_048_576)
+        } else if bytesPerSec >= 1024 {
+            return String(format: "%.1fK", bytesPerSec / 1024)
+        } else {
+            return String(format: "%.0f", bytesPerSec)
+        }
     }
 }
