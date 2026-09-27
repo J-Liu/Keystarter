@@ -192,9 +192,9 @@ final class MemoryModule: NSObject, StatusModule {
         let drawHeight = chartHeight - 24
         let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
 
-        // Calculate points
+        // Calculate points - newest on right, grows from right to left
         let points: [CGPoint] = memoryHistory.enumerated().map { index, value in
-            let x = chartPadding + CGFloat(index) * stepX
+            let x = chartPadding + CGFloat(memoryHistory.count - 1 - index) * stepX
             let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
             return CGPoint(x: x, y: y)
         }
@@ -268,9 +268,9 @@ final class MemoryModule: NSObject, StatusModule {
             let drawHeight = chartHeight - 24
             let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
 
-            // Build points from left to right
+            // Build points - newest on right, grows from right to left
             let points: [CGPoint] = memoryHistory.enumerated().map { index, value in
-                let x = chartPadding + CGFloat(index) * stepX
+                let x = chartPadding + CGFloat(memoryHistory.count - 1 - index) * stepX
                 let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
                 return CGPoint(x: x, y: y)
             }
