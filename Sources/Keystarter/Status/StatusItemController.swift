@@ -82,14 +82,16 @@ final class StatusItemController: NSObject {
             // Width based on module type
             let itemWidth: CGFloat
             switch module.identifier {
-            case "disk", "network":
-                itemWidth = 42
+            case "network":
+                itemWidth = 40
+            case "disk":
+                itemWidth = 46
             case "sensor":
-                itemWidth = 26
+                itemWidth = 23
             case "memory":
-                itemWidth = 28
+                itemWidth = 23
             default:
-                itemWidth = 26
+                itemWidth = 23
             }
             let item = NSStatusBar.system.statusItem(withLength: itemWidth)
 
@@ -176,14 +178,16 @@ final class StatusItemController: NSObject {
             // Width based on module type
             let itemWidth: CGFloat
             switch module.identifier {
-            case "disk", "network":
-                itemWidth = 42
+            case "network":
+                itemWidth = 40
+            case "disk":
+                itemWidth = 46
             case "sensor":
-                itemWidth = 26
+                itemWidth = 23
             case "memory":
-                itemWidth = 28
+                itemWidth = 23
             default:
-                itemWidth = 26
+                itemWidth = 23
             }
             let item = NSStatusBar.system.statusItem(withLength: itemWidth)
 
