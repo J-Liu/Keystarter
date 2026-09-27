@@ -191,47 +191,42 @@ final class MemoryModule: NSObject, StatusModule {
         let drawWidth = chartWidth - chartPadding * 2
         let drawHeight = chartHeight - 24
         let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
-        let zero = chartPadding  // bottom of chart area
 
         // Calculate points
         let points: [CGPoint] = memoryHistory.enumerated().map { index, value in
-            let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
+            let x = chartPadding + CGFloat(index) * stepX
             let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
             return CGPoint(x: x, y: y)
         }
 
-        // Create filled area path
+        // Draw filled area with gradient
         let areaPath = CGMutablePath()
-        areaPath.move(to: CGPoint(x: points[0].x, y: zero))
+        areaPath.move(to: CGPoint(x: points[0].x, y: chartPadding))
         for point in points {
             areaPath.addLine(to: point)
         }
-        areaPath.addLine(to: CGPoint(x: points.last!.x, y: zero))
+        areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartPadding))
         areaPath.closeSubpath()
 
-        // Create gradient layer for filled area
-        let shapeLayer = CAShapeLayer()
-        shapeLayer.path = areaPath
-        shapeLayer.fillColor = nil
-        
-        // Add gradient fill
-        let gradientLayer = CAGradientLayer()
-        gradientLayer.frame = chart.bounds
-        gradientLayer.colors = [
-            NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.1).cgColor,
-            NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.4).cgColor
-        ]
-        gradientLayer.startPoint = CGPoint(x: 0.5, y: 1.0)  // bottom
-        gradientLayer.endPoint = CGPoint(x: 0.5, y: 0.0)    // top
-        gradientLayer.mask = shapeLayer
-        chart.layer?.addSublayer(gradientLayer)
+        let areaLayer = CAShapeLayer()
+        areaLayer.path = areaPath
+        areaLayer.fillColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.3).cgColor
+        chart.layer?.addSublayer(areaLayer)
 
-        // Draw line on top
-        let linePath = createSmoothPath(points: points)
+        // Draw line on top (straight lines, not smooth)
+        let linePath = CGMutablePath()
+        for (index, point) in points.enumerated() {
+            if index == 0 {
+                linePath.move(to: point)
+            } else {
+                linePath.addLine(to: point)
+            }
+        }
+
         let lineLayer = CAShapeLayer()
         lineLayer.path = linePath
         lineLayer.fillColor = nil
-        lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.8).cgColor
+        lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.9).cgColor
         lineLayer.lineWidth = 1.5
         lineLayer.lineCap = .round
         lineLayer.lineJoin = .round
@@ -254,26 +249,6 @@ final class MemoryModule: NSObject, StatusModule {
         chart.addSubview(totalLabel)
     }
 
-    private func createSmoothPath(points: [CGPoint]) -> CGMutablePath {
-        let path = CGMutablePath()
-        guard points.count > 1 else { return path }
-
-        path.move(to: points[0])
-
-        for i in 1..<points.count {
-            let prev = points[i - 1]
-            let curr = points[i]
-
-            let midX = (prev.x + curr.x) / 2
-            let midY = (prev.y + curr.y) / 2
-
-            path.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
-            path.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
-        }
-
-        return path
-    }
-
     private func createAreaChart(frame: NSRect) -> NSView {
         let view = NSView(frame: frame)
 
@@ -292,39 +267,27 @@ final class MemoryModule: NSObject, StatusModule {
             let drawWidth = chartWidth - chartPadding * 2
             let drawHeight = chartHeight - 24
             let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
-            let zero = chartPadding
 
-            // Build points
+            // Build points from left to right
             let points: [CGPoint] = memoryHistory.enumerated().map { index, value in
-                let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
+                let x = chartPadding + CGFloat(index) * stepX
                 let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
                 return CGPoint(x: x, y: y)
             }
 
-            // Create filled area path
+            // Create filled area
             let areaPath = CGMutablePath()
-            areaPath.move(to: CGPoint(x: points[0].x, y: zero))
+            areaPath.move(to: CGPoint(x: points[0].x, y: chartPadding))
             for point in points {
                 areaPath.addLine(to: point)
             }
-            areaPath.addLine(to: CGPoint(x: points.last!.x, y: zero))
+            areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartPadding))
             areaPath.closeSubpath()
 
-            // Create shape layer for mask
-            let shapeLayer = CAShapeLayer()
-            shapeLayer.path = areaPath
-
-            // Add gradient fill
-            let gradientLayer = CAGradientLayer()
-            gradientLayer.frame = view.bounds
-            gradientLayer.colors = [
-                NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.1).cgColor,
-                NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.4).cgColor
-            ]
-            gradientLayer.startPoint = CGPoint(x: 0.5, y: 1.0)
-            gradientLayer.endPoint = CGPoint(x: 0.5, y: 0.0)
-            gradientLayer.mask = shapeLayer
-            view.layer?.addSublayer(gradientLayer)
+            let areaLayer = CAShapeLayer()
+            areaLayer.path = areaPath
+            areaLayer.fillColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.3).cgColor
+            view.layer?.addSublayer(areaLayer)
 
             // Draw line on top
             let linePath = CGMutablePath()
@@ -339,7 +302,7 @@ final class MemoryModule: NSObject, StatusModule {
             let lineLayer = CAShapeLayer()
             lineLayer.path = linePath
             lineLayer.fillColor = nil
-            lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.8).cgColor
+            lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.9).cgColor
             lineLayer.lineWidth = 1.5
             view.layer?.addSublayer(lineLayer)
         }
