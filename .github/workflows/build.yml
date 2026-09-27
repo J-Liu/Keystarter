@@ -47,14 +47,19 @@ jobs:
         ZIP="Keystarter-${VERSION}.zip"
 
         echo "${{ secrets.SPARKLE_PRIVATE_KEY }}" > /tmp/sparkle_key.txt
-        SIGNATURE=$(./.build/artifacts/sparkle/Sparkle/bin/sign_update "$ZIP" --ed-key-file /tmp/sparkle_key.txt)
+        RAW=$(./.build/artifacts/sparkle/Sparkle/bin/sign_update "$ZIP" --ed-key-file /tmp/sparkle_key.txt)
         rm /tmp/sparkle_key.txt
 
+        # Extract just the base64 signature from: sparkle:edSignature="..." length="..."
+        SIGNATURE=$(echo "$RAW" | sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p')
+
         LENGTH=$(stat -f%z "$ZIP")
+        BUILD_NUMBER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" Keystarter.app/Contents/Info.plist)
 
         echo "signature=$SIGNATURE" >> "$GITHUB_OUTPUT"
         echo "length=$LENGTH" >> "$GITHUB_OUTPUT"
         echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "build=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
 
     - name: Upload app bundle
       uses: actions/upload-artifact@v4
@@ -77,6 +82,7 @@ jobs:
         VERSION="${{ steps.sign.outputs.version }}"
         SIGNATURE="${{ steps.sign.outputs.signature }}"
         LENGTH="${{ steps.sign.outputs.length }}"
+        BUILD="${{ steps.sign.outputs.build }}"
         DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 
         # Build the new item block
@@ -84,7 +90,7 @@ jobs:
         <item>
             <title>Version ${VERSION}</title>
             <pubDate>${DATE}</pubDate>
-            <sparkle:version>${VERSION}</sparkle:version>
+            <sparkle:version>${BUILD}</sparkle:version>
             <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <enclosure
@@ -105,7 +111,6 @@ jobs:
 
         new_item = """${NEW_ITEM}"""
 
-        # Insert after <language>en</language>
         content = re.sub(
             r'(<language>en</language>)',
             r'\1\n    ' + new_item,
