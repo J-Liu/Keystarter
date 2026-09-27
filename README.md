@@ -1,21 +1,22 @@
 # Keystarter
 
-**Lightweight, open-source macOS launcher. Local-first, AI optional. Clipboard history + Alfred workflow compatibility.**
+**Lightweight, open-source macOS system utility. Local-first, AI optional. Launcher + Status bar monitor + Clipboard history.**
 
 ---
 
 ## What is this
 
-Keystarter is a fast, local-first launcher for macOS. It was built out of a simple frustration: existing launchers are either slow, bloated, or force AI into places it doesn't belong.
+Keystarter is a fast, local-first macOS utility. It was built out of a simple frustration: existing tools are either slow, bloated, or force AI into places it doesn't belong.
 
-I use it every day. It launches apps, looks up words in the system dictionary, translates text, and manages clipboard history. No accounts, no telemetry, no cloud dependency.
+I use it every day. It combines three things I need in the menu bar: an app launcher, a system monitor (CPU/GPU/memory/disk/network/sensors), and clipboard history. No accounts, no telemetry, no cloud dependency.
 
 ## Features
 
 - **App launcher** — `Cmd+Space` to summon, type to filter, Enter to launch
+- **Status bar monitor** — Real-time CPU, GPU, memory, disk, network, and sensor (temperature/fan/power) stats in the menu bar
+- **Clipboard history** — `Cmd+Shift+V` opens a grouped panel at the cursor, select to paste
 - **Dictionary lookup** — `dict <word>` queries the macOS system dictionary directly in the launcher
 - **Translation** — `tr <text>` translates without opening another app
-- **Clipboard history** — `Cmd+Shift+V` opens a grouped panel at the cursor, select to paste
 - **Local-first** — everything runs on your machine, no network required for core features
 - **No AI** — deterministic operations stay deterministic
 
@@ -45,15 +46,15 @@ xattr -cr /Applications/Keystarter.app
 
 Then open normally.
 
-You'll only need to do this once. Subsequent auto-updates (once implemented) won't trigger the warning again.
+You'll only need to do this once. Subsequent auto-updates (via Sparkle) won't trigger the warning again.
 
 ## Build from source
 
 ```bash
 git clone https://github.com/J-Liu/Keystarter.git
 cd Keystarter
-./scripts/build-app.sh
-open build/Keystarter.app
+./build.sh
+open Keystarter.app
 ```
 
 Requires Xcode command line tools and macOS 13+.
@@ -75,9 +76,10 @@ Requires Xcode command line tools and macOS 13+.
 - [x] System dictionary lookup
 - [x] Translation
 - [x] Clipboard history
+- [x] Status bar monitor (CPU/GPU/Memory/Disk/Network/Sensors)
 - [ ] SQLite file index
 - [ ] Alfred workflow compatibility
-- [ ] Auto-update via Sparkle
+- [x] Auto-update via Sparkle
 
 ## License
 
