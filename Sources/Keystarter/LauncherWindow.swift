@@ -416,9 +416,8 @@ final class LauncherWindow: NSWindow {
 
     // MARK: - Input Source Management
 
-    /// Save current input source and switch to English
-    private func switchToEnglishInput() {
-        // Save current input source
+    /// Save current input source immediately
+    private func saveCurrentInputSource() {
         if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
             savedInputSource = currentSource
             let sourceID = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID)
@@ -427,7 +426,10 @@ final class LauncherWindow: NSWindow {
         } else {
             print("[Input] No current input source to save")
         }
+    }
 
+    /// Switch to English input source
+    private func switchToEnglishInput() {
         // Find English input source
         guard let inputSources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
             return
@@ -454,6 +456,7 @@ final class LauncherWindow: NSWindow {
             print("[Input] No saved input source to restore")
             return
         }
+        // Only restore once, then clear
         savedInputSource = nil
         let sourceID = TISGetInputSourceProperty(savedSource, kTISPropertyInputSourceID)
         let sourceIDString = sourceID != nil ? (Unmanaged<CFString>.fromOpaque(sourceID!).takeUnretainedValue() as String) : "unknown"
@@ -473,6 +476,9 @@ final class LauncherWindow: NSWindow {
     }
 
     func show() {
+        // Save current input source immediately before any async operations
+        saveCurrentInputSource()
+        
         // Don't switch input source here - wait until window has focus
         isHandlingDockClick = true
         log("LauncherWindow shown")
@@ -556,8 +562,9 @@ final class LauncherWindow: NSWindow {
 
     override func resignKey() {
         super.resignKey()
-        // Don't restore input source here - let hide() handle it
-        // This prevents duplicate calls
+        // Always restore input source when window loses key status
+        // This handles all cases: click outside, app switch, window close, etc.
+        restoreInputSource()
     }
 
     override var canBecomeKey: Bool { true }
