@@ -3,6 +3,7 @@
 
 import AppKit
 import IOKit
+import CoreServices
 
 /// Disk process information.
 struct DiskProcessInfo {
@@ -30,10 +31,10 @@ final class DiskModule: NSObject, StatusModule {
     var readSpeedText: String { formatSpeed(readSpeed) }
     var writeSpeedText: String { formatSpeed(writeSpeed) }
     
-    var refreshInterval: TimeInterval { 2.0 }
+    var refreshInterval: TimeInterval { 1.0 }
     
-    private var previousReadBytes: UInt64 = 0
-    private var previousWriteBytes: UInt64 = 0
+    private var previousReadBytes: Int64 = 0
+    private var previousWriteBytes: Int64 = 0
     private var previousTime: Date = Date()
     
     // Per-process disk I/O tracking
@@ -49,7 +50,7 @@ final class DiskModule: NSObject, StatusModule {
     private var readSpeed: Double = 0
     private var writeSpeed: Double = 0
     
-    private weak var chartView: NSView?
+    private weak var chartView: DiskChartView?
     private weak var tableView: NSTableView?
     private var detailTimer: Timer?
     
@@ -63,7 +64,7 @@ final class DiskModule: NSObject, StatusModule {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
-            let (readBytes, writeBytes) = self.getDiskBytes()
+            let (readBytes, writeBytes) = self.getDiskBytesFromDASession()
             let now = Date()
             let elapsed = now.timeIntervalSince(self.previousTime)
             
@@ -97,7 +98,8 @@ final class DiskModule: NSObject, StatusModule {
                 
                 // Only update chart and notify if detail view is open
                 if self.detailTimer != nil {
-                    self.updateChart()
+                    self.chartView?.setReadHistory(self.readHistory, writeHistory: self.writeHistory)
+                    self.chartView?.needsDisplay = true
                     self.tableView?.reloadData()
                     NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "disk"])
                 }
@@ -130,7 +132,7 @@ final class DiskModule: NSObject, StatusModule {
         
         // Disk I/O chart (mirrored read/write)
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = createDiskChart(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        let chart = DiskChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chartView = chart
         container.addSubview(chart)
         
@@ -193,7 +195,7 @@ final class DiskModule: NSObject, StatusModule {
     
     private func startDetailTimer() {
         detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        detailTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.refreshDetail()
         }
     }
@@ -202,145 +204,80 @@ final class DiskModule: NSObject, StatusModule {
         updateDiskData()
     }
     
-    private func updateChart() {
-        guard let chart = chartView else { return }
-        
-        // Remove both subviews and sublayers
-        chart.subviews.forEach { $0.removeFromSuperview() }
-        chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
-        
-        let chartWidth = chart.bounds.width
-        let chartHeight = chart.bounds.height
-        let chartPadding: CGFloat = 8
-        let centerLineY = chartHeight / 2
-        let halfHeight = chartHeight / 2 - chartPadding - 8
-        let drawWidth = chartWidth - chartPadding * 2
-        let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
-        
-        // Separate max values for each series to show variations
-        let maxRead = max(readHistory.max() ?? 1, 1)
-        let maxWrite = max(writeHistory.max() ?? 1, 1)
-        
-        // Draw center line
-        let centerLine = NSView(frame: NSRect(x: chartPadding, y: centerLineY - 1, width: drawWidth, height: 2))
-        centerLine.wantsLayer = true
-        centerLine.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        chart.addSubview(centerLine)
-        
-        // Calculate points for read and write (separate scaling)
-        let readPoints: [CGPoint] = readHistory.enumerated().map { index, value in
-            let x = chartWidth - chartPadding - CGFloat(readHistory.count - 1 - index) * stepX
-            let y = centerLineY + min(value / maxRead, 1.0) * halfHeight
-            return CGPoint(x: x, y: y)
+    // MARK: - Disk Data using DASession (Stats approach)
+    
+    private func getDiskBytesFromDASession() -> (read: Int64, write: Int64) {
+        guard let session = DASessionCreate(kCFAllocatorDefault) else {
+            return getDiskBytesFromIOKit()
         }
         
-        let writePoints: [CGPoint] = writeHistory.enumerated().map { index, value in
-            let x = chartWidth - chartPadding - CGFloat(writeHistory.count - 1 - index) * stepX
-            let y = centerLineY - min(value / maxWrite, 1.0) * halfHeight
-            return CGPoint(x: x, y: y)
+        var totalRead: Int64 = 0
+        var totalWrite: Int64 = 0
+        
+        let keys: [URLResourceKey] = [.volumeNameKey]
+        guard let paths = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: keys, options: [.skipHiddenVolumes]) else {
+            return getDiskBytesFromIOKit()
         }
         
-        // Draw read chart (top half, above center line)
-        if readPoints.count > 1 {
-            // Area path with straight lines
-            let readAreaPath = CGMutablePath()
-            readAreaPath.move(to: CGPoint(x: readPoints[0].x, y: centerLineY))
-            for point in readPoints {
-                readAreaPath.addLine(to: point)
-            }
-            readAreaPath.addLine(to: CGPoint(x: readPoints.last!.x, y: centerLineY))
-            readAreaPath.closeSubpath()
-            
-            let readAreaLayer = CAShapeLayer()
-            readAreaLayer.path = readAreaPath
-            readAreaLayer.fillColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.25).cgColor
-            chart.layer?.addSublayer(readAreaLayer)
-            
-            // Straight line
-            let readLinePath = CGMutablePath()
-            readLinePath.move(to: readPoints[0])
-            for i in 1..<readPoints.count {
-                readLinePath.addLine(to: readPoints[i])
+        for url in paths {
+            // Only process root and /Volumes paths
+            guard url.pathComponents.count == 1 || (url.pathComponents.count > 1 && url.pathComponents[1] == "Volumes") else {
+                continue
             }
             
-            let readLineLayer = CAShapeLayer()
-            readLineLayer.path = readLinePath
-            readLineLayer.fillColor = nil
-            readLineLayer.strokeColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.9).cgColor
-            readLineLayer.lineWidth = 1.5
-            chart.layer?.addSublayer(readLineLayer)
+            guard let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, url as CFURL) else {
+                continue
+            }
+            
+            defer {
+                // Don't release disk here as we're not using it directly
+            }
+            
+            // Get the BSD name to find the IOKit object
+            guard let diskName = DADiskGetBSDName(disk) else { continue }
+            let bsdName = String(cString: diskName)
+            
+            // Get IOKit service for this disk
+            let service = IOServiceGetMatchingService(kIOMainPortDefault, IOBSDNameMatching(kIOMainPortDefault, 0, bsdName))
+            if service == 0 { continue }
+            defer { IOObjectRelease(service) }
+            
+            // Get parent device to read statistics
+            var parent: io_registry_entry_t = 0
+            guard IORegistryEntryGetParentEntry(service, kIOServicePlane, &parent) == KERN_SUCCESS else { continue }
+            defer { IOObjectRelease(parent) }
+            
+            // Get properties
+            var properties: Unmanaged<CFMutableDictionary>?
+            guard IORegistryEntryCreateCFProperties(parent, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS else { continue }
+            guard let props = properties?.takeRetainedValue() as? [String: Any] else { continue }
+            
+            // Read Statistics
+            if let statistics = props["Statistics"] as? [String: Any] {
+                if let read = statistics["Bytes (Read)"] as? Int64 {
+                    totalRead += read
+                } else if let read = statistics["Bytes (Read)"] as? NSNumber {
+                    totalRead += read.int64Value
+                }
+                if let write = statistics["Bytes (Write)"] as? Int64 {
+                    totalWrite += write
+                } else if let write = statistics["Bytes (Write)"] as? NSNumber {
+                    totalWrite += write.int64Value
+                }
+            }
         }
         
-        // Draw write chart (bottom half, below center line)
-        if writePoints.count > 1 {
-            // Area path with straight lines
-            let writeAreaPath = CGMutablePath()
-            writeAreaPath.move(to: CGPoint(x: writePoints[0].x, y: centerLineY))
-            for point in writePoints {
-                writeAreaPath.addLine(to: point)
-            }
-            writeAreaPath.addLine(to: CGPoint(x: writePoints.last!.x, y: centerLineY))
-            writeAreaPath.closeSubpath()
-            
-            let writeAreaLayer = CAShapeLayer()
-            writeAreaLayer.path = writeAreaPath
-            writeAreaLayer.fillColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 0.25).cgColor
-            chart.layer?.addSublayer(writeAreaLayer)
-            
-            // Straight line
-            let writeLinePath = CGMutablePath()
-            writeLinePath.move(to: writePoints[0])
-            for i in 1..<writePoints.count {
-                writeLinePath.addLine(to: writePoints[i])
-            }
-            
-            let writeLineLayer = CAShapeLayer()
-            writeLineLayer.path = writeLinePath
-            writeLineLayer.fillColor = nil
-            writeLineLayer.strokeColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 0.9).cgColor
-            writeLineLayer.lineWidth = 1.5
-            chart.layer?.addSublayer(writeLineLayer)
+        if totalRead > 0 || totalWrite > 0 {
+            return (totalRead, totalWrite)
         }
         
-        // Labels
-        let readLabel = NSTextField(labelWithString: "R \(formatSpeed(readSpeed))")
-        readLabel.font = NSFont.systemFont(ofSize: 10)
-        readLabel.textColor = .secondaryLabelColor
-        readLabel.frame = NSRect(x: chartWidth - 80, y: chartHeight - 16, width: 70, height: 12)
-        chart.addSubview(readLabel)
-        
-        let writeLabel = NSTextField(labelWithString: "W \(formatSpeed(writeSpeed))")
-        writeLabel.font = NSFont.systemFont(ofSize: 10)
-        writeLabel.textColor = .secondaryLabelColor
-        writeLabel.frame = NSRect(x: chartWidth - 80, y: 4, width: 70, height: 12)
-        chart.addSubview(writeLabel)
+        // Fallback to IOKit approach
+        return getDiskBytesFromIOKit()
     }
     
-    private func createDiskChart(frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-        view.layer?.cornerRadius = 4
-        
-        let chartWidth = frame.width
-        let chartHeight = frame.height
-        let chartPadding: CGFloat = 8
-        let centerLineY = chartHeight / 2
-        
-        // Center line
-        let centerLine = NSView(frame: NSRect(x: chartPadding, y: centerLineY - 1, width: chartWidth - chartPadding * 2, height: 2))
-        centerLine.wantsLayer = true
-        centerLine.layer?.backgroundColor = NSColor.separatorColor.cgColor
-        view.addSubview(centerLine)
-        
-        return view
-    }
-    
-    // MARK: - Disk Data
-    
-    private func getDiskBytes() -> (read: UInt64, write: UInt64) {
-        var totalRead: UInt64 = 0
-        var totalWrite: UInt64 = 0
+    private func getDiskBytesFromIOKit() -> (read: Int64, write: Int64) {
+        var totalRead: Int64 = 0
+        var totalWrite: Int64 = 0
         
         let masterPort = kIOMainPortDefault
         var iterator: io_iterator_t = 0
@@ -377,9 +314,9 @@ final class DiskModule: NSObject, StatusModule {
                     // Keys are "Bytes (Read)" and "Bytes (Write)" on macOS
                     for readKey in ["Bytes (Read)", "BytesRead", "ReadBytes", "bytesRead"] {
                         if let num = statistics[readKey] as? NSNumber {
-                            totalRead += num.uint64Value
+                            totalRead += num.int64Value
                             break
-                        } else if let val = statistics[readKey] as? UInt64 {
+                        } else if let val = statistics[readKey] as? Int64 {
                             totalRead += val
                             break
                         }
@@ -387,47 +324,10 @@ final class DiskModule: NSObject, StatusModule {
                     
                     for writeKey in ["Bytes (Write)", "BytesWritten", "WriteBytes", "bytesWritten"] {
                         if let num = statistics[writeKey] as? NSNumber {
-                            totalWrite += num.uint64Value
+                            totalWrite += num.int64Value
                             break
-                        } else if let val = statistics[writeKey] as? UInt64 {
+                        } else if let val = statistics[writeKey] as? Int64 {
                             totalWrite += val
-                            break
-                        }
-                    }
-                }
-                
-                // Also check for direct properties (some drivers don't use Statistics)
-                for readKey in ["Bytes Read", "TotalRead", "BytesRead", "Read Bytes"] {
-                    if let num = props[readKey] as? NSNumber {
-                        totalRead += num.uint64Value
-                        break
-                    } else if let val = props[readKey] as? UInt64 {
-                        totalRead += val
-                        break
-                    }
-                }
-                
-                for writeKey in ["Bytes Written", "TotalWrite", "BytesWritten", "Write Bytes"] {
-                    if let num = props[writeKey] as? NSNumber {
-                        totalWrite += num.uint64Value
-                        break
-                    } else if let val = props[writeKey] as? UInt64 {
-                        totalWrite += val
-                        break
-                    }
-                }
-                
-                // Check Device Characteristics for size info (not I/O but sometimes present)
-                if let deviceChars = props["Device Characteristics"] as? [String: Any] {
-                    for readKey in ["BytesRead", "ReadBytes"] {
-                        if let num = deviceChars[readKey] as? NSNumber {
-                            totalRead += num.uint64Value
-                            break
-                        }
-                    }
-                    for writeKey in ["BytesWritten", "WriteBytes"] {
-                        if let num = deviceChars[writeKey] as? NSNumber {
-                            totalWrite += num.uint64Value
                             break
                         }
                     }
@@ -440,66 +340,7 @@ final class DiskModule: NSObject, StatusModule {
             }
         }
         
-        // Fallback: try iostat if IOKit returns nothing
-        if totalRead == 0 && totalWrite == 0 {
-            return getDiskBytesFromIostat()
-        }
-        
         return (totalRead, totalWrite)
-    }
-    
-    private func getDiskBytesFromIostat() -> (read: UInt64, write: UInt64) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/sbin/iostat")
-        task.arguments = ["-d", "-c", "2"]
-        
-        let pipe = Pipe()
-        task.standardOutput = pipe
-        task.standardError = FileHandle.nullDevice
-        
-        do {
-            try task.run()
-            task.waitUntilExit()
-            
-            let data = pipe.fileHandleForReading.readDataToEndOfFile()
-            if let output = String(data: data, encoding: .utf8) {
-                // Parse iostat output
-                // Format: disk0  KB/t tps  MB/s
-                // We need to find the main disk and parse values
-                var totalReadMB: Double = 0
-                var totalWriteMB: Double = 0
-                
-                for line in output.components(separatedBy: "\n") {
-                    let parts = line.split(separator: " ").map { String($0) }
-                    // Skip header lines
-                    if parts.count >= 4, let _ = Double(parts[0].replacingOccurrences(of: "disk", with: "")) {
-                        // This is a header line, skip
-                        continue
-                    }
-                    // Look for lines with numbers
-                    if parts.count >= 4 {
-                        // Try to parse as MB/s values
-                        // iostat -d shows: KB/t, tps, MB/s (read+write combined)
-                        // For separate read/write, we'd need iostat -I
-                        if let mbps = Double(parts.last ?? "0") {
-                            // This is combined read+write in MB/s, estimate as 50/50
-                            totalReadMB += mbps / 2.0
-                            totalWriteMB += mbps / 2.0
-                        }
-                    }
-                }
-                
-                // Convert MB/s to bytes (this is a rate, not total)
-                // We can't get total bytes from iostat, so return 0
-                // iostat gives rates, not cumulative bytes
-            }
-        } catch {
-            // iostat failed
-        }
-        
-        // iostat doesn't give us cumulative bytes, so this approach won't work
-        // Return 0 and let the caller handle it
-        return (0, 0)
     }
     
     private func getProcessesByDiskIO(limit: Int) -> [DiskProcessInfo] {
@@ -713,5 +554,164 @@ extension DiskModule: NSTableViewDataSource, NSTableViewDelegate {
         }
         
         return cell
+    }
+}
+
+// MARK: - Disk Chart View (Stats-style)
+
+/// Chart view for disk read/write speed using NSBezierPath like Stats
+final class DiskChartView: NSView {
+    private var readHistory: [Double] = []
+    private var writeHistory: [Double] = []
+    private let maxHistoryCount = 60
+    
+    private let readColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1.0)  // Blue for read
+    private let writeColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 1.0)  // Red for write
+    
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
+        layer?.cornerRadius = 4
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func setReadHistory(_ read: [Double], writeHistory write: [Double]) {
+        self.readHistory = read
+        self.writeHistory = write
+    }
+    
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        context.setShouldAntialias(true)
+        
+        let chartWidth = bounds.width
+        let chartHeight = bounds.height
+        let chartPadding: CGFloat = 8
+        let centerLineY = chartHeight / 2
+        let halfHeight = chartHeight / 2 - chartPadding - 8
+        let drawWidth = chartWidth - chartPadding * 2
+        let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
+        let lineWidth: CGFloat = 1.0 / (NSScreen.main?.backingScaleFactor ?? 1)
+        
+        // Draw center line
+        let centerPath = NSBezierPath()
+        centerPath.move(to: CGPoint(x: chartPadding, y: centerLineY))
+        centerPath.line(to: CGPoint(x: chartWidth - chartPadding, y: centerLineY))
+        centerPath.lineWidth = lineWidth
+        NSColor.separatorColor.setStroke()
+        centerPath.stroke()
+        
+        // Find max values for scaling (separate for each series)
+        let maxRead = max(readHistory.max() ?? 1, 1)
+        let maxWrite = max(writeHistory.max() ?? 1, 1)
+        
+        // Draw write chart (bottom half, below center line) - draw first so read is on top
+        if writeHistory.count > 1 {
+            let points = calculatePoints(writeHistory, maxVal: maxWrite, stepX: stepX, centerLineY: centerLineY, halfHeight: halfHeight, chartWidth: chartWidth, chartPadding: chartPadding, isRead: false)
+            
+            // Draw filled area with gradient
+            let areaPath = NSBezierPath()
+            areaPath.move(to: CGPoint(x: points[0].x, y: centerLineY))
+            for point in points {
+                areaPath.line(to: point)
+            }
+            areaPath.line(to: CGPoint(x: points.last!.x, y: centerLineY))
+            areaPath.close()
+            
+            if let gradient = NSGradient(colors: [writeColor.withAlphaComponent(0.3), writeColor.withAlphaComponent(0.5)]) {
+                gradient.draw(in: areaPath, angle: 90)
+            }
+            
+            // Draw line
+            let linePath = NSBezierPath()
+            linePath.move(to: points[0])
+            for i in 1..<points.count {
+                linePath.line(to: points[i])
+            }
+            linePath.lineWidth = lineWidth
+            writeColor.setStroke()
+            linePath.stroke()
+        }
+        
+        // Draw read chart (top half, above center line)
+        if readHistory.count > 1 {
+            let points = calculatePoints(readHistory, maxVal: maxRead, stepX: stepX, centerLineY: centerLineY, halfHeight: halfHeight, chartWidth: chartWidth, chartPadding: chartPadding, isRead: true)
+            
+            // Draw filled area with gradient
+            let areaPath = NSBezierPath()
+            areaPath.move(to: CGPoint(x: points[0].x, y: centerLineY))
+            for point in points {
+                areaPath.line(to: point)
+            }
+            areaPath.line(to: CGPoint(x: points.last!.x, y: centerLineY))
+            areaPath.close()
+            
+            if let gradient = NSGradient(colors: [readColor.withAlphaComponent(0.3), readColor.withAlphaComponent(0.5)]) {
+                gradient.draw(in: areaPath, angle: 90)
+            }
+            
+            // Draw line
+            let linePath = NSBezierPath()
+            linePath.move(to: points[0])
+            for i in 1..<points.count {
+                linePath.line(to: points[i])
+            }
+            linePath.lineWidth = lineWidth
+            readColor.setStroke()
+            linePath.stroke()
+        }
+        
+        // Draw labels
+        let readSpeed = readHistory.last ?? 0
+        let writeSpeed = writeHistory.last ?? 0
+        
+        let readLabel = "R \(formatSpeed(readSpeed))"
+        let writeLabel = "W \(formatSpeed(writeSpeed))"
+        
+        let labelFont = NSFont.systemFont(ofSize: 10)
+        let labelAttributes: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        
+        let readLabelStr = NSAttributedString(string: readLabel, attributes: labelAttributes)
+        let writeLabelStr = NSAttributedString(string: writeLabel, attributes: labelAttributes)
+        
+        let readLabelSize = readLabelStr.size()
+        let writeLabelSize = writeLabelStr.size()
+        
+        readLabelStr.draw(at: CGPoint(x: chartWidth - chartPadding - readLabelSize.width, y: chartHeight - chartPadding - readLabelSize.height))
+        writeLabelStr.draw(at: CGPoint(x: chartWidth - chartPadding - writeLabelSize.width, y: chartPadding))
+    }
+    
+    private func calculatePoints(_ history: [Double], maxVal: Double, stepX: CGFloat, centerLineY: CGFloat, halfHeight: CGFloat, chartWidth: CGFloat, chartPadding: CGFloat, isRead: Bool) -> [CGPoint] {
+        return history.enumerated().map { index, value in
+            let x = chartWidth - chartPadding - CGFloat(history.count - 1 - index) * stepX
+            let y: CGFloat
+            if isRead {
+                y = centerLineY + min(value / maxVal, 1.0) * halfHeight
+            } else {
+                y = centerLineY - min(value / maxVal, 1.0) * halfHeight
+            }
+            return CGPoint(x: x, y: y)
+        }
+    }
+    
+    private func formatSpeed(_ bytesPerSec: Double) -> String {
+        if bytesPerSec >= 1_073_741_824 {
+            return String(format: "%.1fG", bytesPerSec / 1_073_741_824)
+        } else if bytesPerSec >= 1_048_576 {
+            return String(format: "%.1fM", bytesPerSec / 1_048_576)
+        } else if bytesPerSec >= 1024 {
+            return String(format: "%.1fK", bytesPerSec / 1024)
+        } else {
+            return String(format: "%.0f", bytesPerSec)
+        }
     }
 }
