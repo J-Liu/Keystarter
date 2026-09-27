@@ -4,6 +4,7 @@
 import AppKit
 import IOKit
 import CoreServices
+import CoreVideo
 
 /// Disk process information.
 struct DiskProcessInfo {
@@ -135,6 +136,7 @@ final class DiskModule: NSObject, StatusModule {
         let chart = DiskChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         // Set existing history immediately
         chart.setReadHistory(readHistory, writeHistory: writeHistory)
+        chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
         
@@ -561,11 +563,14 @@ extension DiskModule: NSTableViewDataSource, NSTableViewDelegate {
 
 // MARK: - Disk Chart View (Stats-style with two internal charts)
 
-/// Single line chart view with smooth Bezier curves
+/// Single line chart view with smooth Bezier curves and animated scrolling
 private final class DiskLineChartView: NSView {
     private var points: [Double?] = []
     private var color: NSColor
     private var flipY: Bool = false
+    private var lastUpdateTime: Date = Date()
+    private var displayLink: CVDisplayLink?
+    private let sampleInterval: TimeInterval = 2.0
     
     init(frame: NSRect, num: Int, color: NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
@@ -578,21 +583,53 @@ private final class DiskLineChartView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
     
+    deinit {
+        stopAnimation()
+    }
+    
     func addValue(_ value: Double) {
-        // Shift all points left and add new value at the end
         for i in 0..<(points.count - 1) {
             points[i] = points[i + 1]
         }
         points[points.count - 1] = value
+        lastUpdateTime = Date()
     }
     
     func reinit(_ num: Int) {
         points = Array(repeating: nil, count: max(num, 2))
+        lastUpdateTime = Date()
         needsDisplay = true
     }
     
     func setFlipY(_ value: Bool) {
         flipY = value
+    }
+    
+    func startAnimation() {
+        guard displayLink == nil else { return }
+        
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        guard let link else { return }
+        
+        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
+            guard let userInfo else { return kCVReturnSuccess }
+            let view = Unmanaged<DiskLineChartView>.fromOpaque(userInfo).takeUnretainedValue()
+            DispatchQueue.main.async {
+                view.needsDisplay = true
+            }
+            return kCVReturnSuccess
+        }, Unmanaged.passUnretained(self).toOpaque())
+        
+        CVDisplayLinkStart(link)
+        displayLink = link
+    }
+    
+    func stopAnimation() {
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+            displayLink = nil
+        }
     }
     
     override func draw(_ dirtyRect: NSRect) {
@@ -601,7 +638,6 @@ private final class DiskLineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
         
-        // Find max value
         var maxValue: Double = 0
         for opt in points {
             if let p = opt, p > maxValue { maxValue = p }
@@ -613,7 +649,11 @@ private final class DiskLineChartView: NSView {
         let xRatio = self.frame.width / CGFloat(points.count - 1)
         let zero = flipY ? 0 : self.frame.height
         
-        // Build line points
+        // Smooth scroll animation
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / sampleInterval, 1.0)
+        let xOffset = progress * xRatio
+        
         var linePoints: [CGPoint] = []
         for (i, v) in points.enumerated() {
             guard let v else { continue }
@@ -623,21 +663,18 @@ private final class DiskLineChartView: NSView {
                 y = height - y
             }
             
-            let point = CGPoint(x: CGFloat(i) * xRatio, y: y)
-            linePoints.append(point)
+            let x = CGFloat(i) * xRatio - xOffset
+            linePoints.append(CGPoint(x: x, y: y))
         }
         
         guard linePoints.count > 1 else { return }
         
-        // Draw smooth curve using quadratic Bezier
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
         
         for i in 1..<linePoints.count {
             let prev = linePoints[i - 1]
             let curr = linePoints[i]
-            
-            // Control point at midpoint creates smooth curve
             let midX = (prev.x + curr.x) / 2
             linePath.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
         }
@@ -646,7 +683,6 @@ private final class DiskLineChartView: NSView {
         color.setStroke()
         linePath.stroke()
         
-        // Draw filled area with gradient
         let areaPath = linePath.copy() as! NSBezierPath
         areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: zero))
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
@@ -698,6 +734,20 @@ final class DiskChartView: NSView {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    deinit {
+        stopAnimation()
+    }
+    
+    func startAnimation() {
+        writeChart.startAnimation()
+        readChart.startAnimation()
+    }
+    
+    func stopAnimation() {
+        writeChart.stopAnimation()
+        readChart.stopAnimation()
     }
     
     func setReadHistory(_ read: [Double], writeHistory write: [Double]) {

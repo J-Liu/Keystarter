@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import CoreVideo
 
 /// Network process information.
 struct NetworkProcessInfo {
@@ -133,6 +134,7 @@ final class NetworkModule: NSObject, StatusModule {
         let chart = NetworkChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         // Set existing history immediately
         chart.setDownloadHistory(downloadHistory, uploadHistory: uploadHistory)
+        chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
         
@@ -481,11 +483,14 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
 
 // MARK: - Network Chart View (Stats-style with two internal charts)
 
-/// Single line chart view with smooth Bezier curves
+/// Single line chart view with smooth Bezier curves and animated scrolling
 private final class NetworkLineChartView: NSView {
     private var points: [Double?] = []
     private var color: NSColor
     private var flipY: Bool = false
+    private var lastUpdateTime: Date = Date()
+    private var displayLink: CVDisplayLink?
+    private let sampleInterval: TimeInterval = 2.0  // Match the 2-second sampling rate
     
     init(frame: NSRect, num: Int, color: NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
@@ -498,21 +503,54 @@ private final class NetworkLineChartView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
     
+    deinit {
+        stopAnimation()
+    }
+    
     func addValue(_ value: Double) {
         // Shift all points left and add new value at the end
         for i in 0..<(points.count - 1) {
             points[i] = points[i + 1]
         }
         points[points.count - 1] = value
+        lastUpdateTime = Date()
     }
     
     func reinit(_ num: Int) {
         points = Array(repeating: nil, count: max(num, 2))
+        lastUpdateTime = Date()
         needsDisplay = true
     }
     
     func setFlipY(_ value: Bool) {
         flipY = value
+    }
+    
+    func startAnimation() {
+        guard displayLink == nil else { return }
+        
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        guard let link else { return }
+        
+        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
+            guard let userInfo else { return kCVReturnSuccess }
+            let view = Unmanaged<NetworkLineChartView>.fromOpaque(userInfo).takeUnretainedValue()
+            DispatchQueue.main.async {
+                view.needsDisplay = true
+            }
+            return kCVReturnSuccess
+        }, Unmanaged.passUnretained(self).toOpaque())
+        
+        CVDisplayLinkStart(link)
+        displayLink = link
+    }
+    
+    func stopAnimation() {
+        if let link = displayLink {
+            CVDisplayLinkStop(link)
+            displayLink = nil
+        }
     }
     
     override func draw(_ dirtyRect: NSRect) {
@@ -533,7 +571,12 @@ private final class NetworkLineChartView: NSView {
         let xRatio = self.frame.width / CGFloat(points.count - 1)
         let zero = flipY ? 0 : self.frame.height
         
-        // Build line points
+        // Calculate animation progress for smooth scrolling
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / sampleInterval, 1.0)
+        let xOffset = progress * xRatio  // Smoothly scroll left
+        
+        // Build line points with animation offset
         var linePoints: [CGPoint] = []
         for (i, v) in points.enumerated() {
             guard let v else { continue }
@@ -543,8 +586,9 @@ private final class NetworkLineChartView: NSView {
                 y = height - y
             }
             
-            let point = CGPoint(x: CGFloat(i) * xRatio, y: y)
-            linePoints.append(point)
+            // Apply smooth scroll offset: points move left continuously
+            let x = CGFloat(i) * xRatio - xOffset
+            linePoints.append(CGPoint(x: x, y: y))
         }
         
         guard linePoints.count > 1 else { return }
@@ -618,6 +662,20 @@ final class NetworkChartView: NSView {
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    
+    deinit {
+        stopAnimation()
+    }
+    
+    func startAnimation() {
+        uploadChart.startAnimation()
+        downloadChart.startAnimation()
+    }
+    
+    func stopAnimation() {
+        uploadChart.stopAnimation()
+        downloadChart.stopAnimation()
     }
     
     func setDownloadHistory(_ download: [Double], uploadHistory upload: [Double]) {
