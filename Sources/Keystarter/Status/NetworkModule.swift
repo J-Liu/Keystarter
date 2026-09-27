@@ -479,7 +479,7 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
 
 // MARK: - Network Chart View (Stats-style with two internal charts)
 
-/// Single line chart view matching Stats' LineChartView pattern
+/// Single line chart view with smooth Bezier curves
 private final class NetworkLineChartView: NSView {
     private var points: [Double?] = []
     private var color: NSColor
@@ -547,12 +547,19 @@ private final class NetworkLineChartView: NSView {
         
         guard linePoints.count > 1 else { return }
         
-        // Draw line
+        // Draw smooth curve using quadratic Bezier
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
+        
         for i in 1..<linePoints.count {
-            linePath.line(to: linePoints[i])
+            let prev = linePoints[i - 1]
+            let curr = linePoints[i]
+            
+            // Control point at midpoint creates smooth curve
+            let midX = (prev.x + curr.x) / 2
+            linePath.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
         }
+        
         linePath.lineWidth = offset
         color.setStroke()
         linePath.stroke()

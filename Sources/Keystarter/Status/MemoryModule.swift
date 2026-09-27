@@ -35,7 +35,7 @@ final class MemoryModule: NSObject, StatusModule {
     private var memoryHistory: [Double] = []
     private let maxHistoryCount = 60
 
-    private weak var chartView: NSView?
+    private weak var chartView: MemoryChartView?
     private weak var tableView: NSTableView?
     private var detailTimer: Timer?
 
@@ -84,7 +84,8 @@ final class MemoryModule: NSObject, StatusModule {
 
         // Memory usage area chart
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = createAreaChart(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        let chart = MemoryChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        chart.setTotalMemory(totalMemory)
         chartView = chart
         container.addSubview(chart)
 
@@ -168,164 +169,8 @@ final class MemoryModule: NSObject, StatusModule {
 
         processes = getProcessesByMemory(limit: 100)
 
-        updateChart()
+        chartView?.setHistory(memoryHistory, usedMemory: usedMemory)
         tableView?.reloadData()
-    }
-
-    private func updateChart() {
-        guard let chart = chartView else { return }
-
-        // Remove both subviews and sublayers
-        chart.subviews.forEach { $0.removeFromSuperview() }
-        chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
-
-        let totalGB = Double(totalMemory) / 1_073_741_824.0
-        let usedGB = Double(usedMemory) / 1_073_741_824.0
-
-        // Draw area chart
-        guard memoryHistory.count > 1 else { return }
-
-        let chartWidth = chart.bounds.width
-        let chartHeight = chart.bounds.height
-        let chartPadding: CGFloat = 8
-        let drawWidth = chartWidth - chartPadding * 2
-        let drawHeight = chartHeight - 24
-        let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
-
-        // Calculate points - newest on right edge, grows towards left
-        // Rightmost point is always at the right edge
-        let points: [CGPoint] = memoryHistory.enumerated().map { index, value in
-            // index 0 = oldest, last index = newest
-            // newest should be at right edge (chartWidth - chartPadding)
-            // oldest moves left as more data comes in
-            let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
-            let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
-            return CGPoint(x: x, y: y)
-        }
-
-        // Draw filled area with gradient
-        let areaPath = CGMutablePath()
-        areaPath.move(to: CGPoint(x: points[0].x, y: chartPadding))
-        for point in points {
-            areaPath.addLine(to: point)
-        }
-        areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartPadding))
-        areaPath.closeSubpath()
-
-        let areaLayer = CAShapeLayer()
-        areaLayer.path = areaPath
-        areaLayer.fillColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.3).cgColor
-        chart.layer?.addSublayer(areaLayer)
-
-        // Draw line on top (straight lines, not smooth)
-        let linePath = CGMutablePath()
-        for (index, point) in points.enumerated() {
-            if index == 0 {
-                linePath.move(to: point)
-            } else {
-                linePath.addLine(to: point)
-            }
-        }
-
-        let lineLayer = CAShapeLayer()
-        lineLayer.path = linePath
-        lineLayer.fillColor = nil
-        lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.9).cgColor
-        lineLayer.lineWidth = 1.5
-        lineLayer.lineCap = .round
-        lineLayer.lineJoin = .round
-        chart.layer?.addSublayer(lineLayer)
-
-        // Current usage label
-        let usageLabel = NSTextField(labelWithString: String(format: "%.1f GB", usedGB))
-        usageLabel.font = NSFont.systemFont(ofSize: 10)
-        usageLabel.textColor = NSColor.secondaryLabelColor
-        usageLabel.alignment = .right
-        usageLabel.frame = NSRect(x: chartWidth - 70, y: chartHeight - 14, width: 60, height: 12)
-        chart.addSubview(usageLabel)
-
-        // Total memory label
-        let totalLabel = NSTextField(labelWithString: String(format: "/ %.0f GB", totalGB))
-        totalLabel.font = NSFont.systemFont(ofSize: 9)
-        totalLabel.textColor = NSColor.tertiaryLabelColor
-        totalLabel.alignment = .right
-        totalLabel.frame = NSRect(x: chartWidth - 70, y: chartHeight - 26, width: 60, height: 10)
-        chart.addSubview(totalLabel)
-    }
-
-    private func createAreaChart(frame: NSRect) -> NSView {
-        let view = NSView(frame: frame)
-
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-        view.layer?.cornerRadius = 4
-
-        let totalGB = Double(totalMemory) / 1_073_741_824.0
-        let usedGB = Double(usedMemory) / 1_073_741_824.0
-
-        // Draw initial area chart
-        if memoryHistory.count > 1 {
-            let chartWidth = frame.width
-            let chartHeight = frame.height
-            let chartPadding: CGFloat = 8
-            let drawWidth = chartWidth - chartPadding * 2
-            let drawHeight = chartHeight - 24
-            let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
-
-            // Build points - newest on right edge, grows towards left
-            let points: [CGPoint] = memoryHistory.enumerated().map { index, value in
-                let x = chartWidth - chartPadding - CGFloat(memoryHistory.count - 1 - index) * stepX
-                let y = chartPadding + min(value / totalGB, 1.0) * drawHeight
-                return CGPoint(x: x, y: y)
-            }
-
-            // Create filled area
-            let areaPath = CGMutablePath()
-            areaPath.move(to: CGPoint(x: points[0].x, y: chartPadding))
-            for point in points {
-                areaPath.addLine(to: point)
-            }
-            areaPath.addLine(to: CGPoint(x: points.last!.x, y: chartPadding))
-            areaPath.closeSubpath()
-
-            let areaLayer = CAShapeLayer()
-            areaLayer.path = areaPath
-            areaLayer.fillColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.3).cgColor
-            view.layer?.addSublayer(areaLayer)
-
-            // Draw line on top
-            let linePath = CGMutablePath()
-            for (index, point) in points.enumerated() {
-                if index == 0 {
-                    linePath.move(to: point)
-                } else {
-                    linePath.addLine(to: point)
-                }
-            }
-
-            let lineLayer = CAShapeLayer()
-            lineLayer.path = linePath
-            lineLayer.fillColor = nil
-            lineLayer.strokeColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 0.9).cgColor
-            lineLayer.lineWidth = 1.5
-            view.layer?.addSublayer(lineLayer)
-        }
-
-        let usageLabel = NSTextField(labelWithString: String(format: "%.1f GB", usedGB))
-        usageLabel.font = NSFont.systemFont(ofSize: 10)
-        usageLabel.textColor = NSColor.secondaryLabelColor
-        usageLabel.alignment = .right
-        usageLabel.frame = NSRect(x: frame.width - 70, y: frame.height - 14, width: 60, height: 12)
-        view.addSubview(usageLabel)
-
-        let totalLabel = NSTextField(labelWithString: String(format: "/ %.0f GB", totalGB))
-        totalLabel.font = NSFont.systemFont(ofSize: 9)
-        totalLabel.textColor = NSColor.tertiaryLabelColor
-        totalLabel.alignment = .right
-        totalLabel.frame = NSRect(x: frame.width - 70, y: frame.height - 26, width: 60, height: 10)
-        view.addSubview(totalLabel)
-
-        return view
     }
 
     // MARK: - Memory Data
@@ -561,5 +406,115 @@ extension MemoryModule: NSTableViewDataSource, NSTableViewDelegate {
         }
 
         return cell
+    }
+}
+
+// MARK: - Memory Chart View with smooth curves
+
+/// Memory chart view with smooth Bezier curves
+final class MemoryChartView: NSView {
+    private var history: [Double] = []
+    private var totalMemory: UInt64 = 0
+    private var usedMemory: UInt64 = 0
+    private let maxHistoryCount = 60
+    
+    private let chartColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 1.0)
+    
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
+        layer?.cornerRadius = 4
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func setTotalMemory(_ total: UInt64) {
+        self.totalMemory = total
+    }
+    
+    func setHistory(_ history: [Double], usedMemory: UInt64) {
+        self.history = history
+        self.usedMemory = usedMemory
+        needsDisplay = true
+    }
+    
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        
+        guard history.count > 1 else { return }
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        context.setShouldAntialias(true)
+        
+        let totalGB = Double(totalMemory) / 1_073_741_824.0
+        let usedGB = Double(usedMemory) / 1_073_741_824.0
+        
+        let padding: CGFloat = 8
+        let labelHeight: CGFloat = 24
+        let height = bounds.height - labelHeight - padding
+        let width = bounds.width - padding * 2
+        let xRatio = width / CGFloat(maxHistoryCount - 1)
+        
+        // Build line points
+        var linePoints: [CGPoint] = []
+        for (i, value) in history.enumerated() {
+            let x = padding + CGFloat(i) * xRatio
+            let y = padding + min(value / totalGB, 1.0) * height
+            linePoints.append(CGPoint(x: x, y: y))
+        }
+        
+        guard linePoints.count > 1 else { return }
+        
+        // Draw smooth curve using quadratic Bezier
+        let linePath = NSBezierPath()
+        linePath.move(to: linePoints[0])
+        
+        for i in 1..<linePoints.count {
+            let prev = linePoints[i - 1]
+            let curr = linePoints[i]
+            
+            // Control point at midpoint creates smooth curve
+            let midX = (prev.x + curr.x) / 2
+            linePath.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
+        }
+        
+        // Draw filled area with gradient
+        let areaPath = linePath.copy() as! NSBezierPath
+        areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: padding))
+        areaPath.line(to: CGPoint(x: linePoints[0].x, y: padding))
+        areaPath.close()
+        
+        let gradient = NSGradient(colors: [
+            chartColor.withAlphaComponent(0.2),
+            chartColor.withAlphaComponent(0.4)
+        ])
+        gradient?.draw(in: areaPath, angle: 90)
+        
+        // Draw line
+        linePath.lineWidth = 1.5
+        chartColor.withAlphaComponent(0.9).setStroke()
+        linePath.stroke()
+        
+        // Draw labels
+        let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
+        let valueAttrs: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+        let totalAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 9),
+            .foregroundColor: NSColor.tertiaryLabelColor
+        ]
+        
+        let usageLabel = NSAttributedString(string: String(format: "%.1f GB", usedGB), attributes: valueAttrs)
+        let totalLabel = NSAttributedString(string: String(format: "/ %.0f GB", totalGB), attributes: totalAttrs)
+        
+        let usageSize = usageLabel.size()
+        let totalSize = totalLabel.size()
+        
+        usageLabel.draw(at: CGPoint(x: bounds.width - padding - usageSize.width, y: bounds.height - padding - usageSize.height))
+        totalLabel.draw(at: CGPoint(x: bounds.width - padding - totalSize.width, y: bounds.height - padding - usageSize.height - totalSize.height - 2))
     }
 }
