@@ -217,10 +217,9 @@ final class DiskModule: NSObject, StatusModule {
         let drawWidth = chartWidth - chartPadding * 2
         let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
         
-        // Find max for scaling
-        let maxRead = readHistory.max() ?? 1
-        let maxWrite = writeHistory.max() ?? 1
-        let maxVal = max(maxRead, maxWrite, 1)
+        // Separate max values for each series to show variations
+        let maxRead = max(readHistory.max() ?? 1, 1)
+        let maxWrite = max(writeHistory.max() ?? 1, 1)
         
         // Draw center line
         let centerLine = NSView(frame: NSRect(x: chartPadding, y: centerLineY - 1, width: drawWidth, height: 2))
@@ -228,90 +227,78 @@ final class DiskModule: NSObject, StatusModule {
         centerLine.layer?.backgroundColor = NSColor.separatorColor.cgColor
         chart.addSubview(centerLine)
         
-        // Calculate points for read and write
+        // Calculate points for read and write (separate scaling)
         let readPoints: [CGPoint] = readHistory.enumerated().map { index, value in
             let x = chartWidth - chartPadding - CGFloat(readHistory.count - 1 - index) * stepX
-            let y = centerLineY + min(value / maxVal, 1.0) * halfHeight
+            let y = centerLineY + min(value / maxRead, 1.0) * halfHeight
             return CGPoint(x: x, y: y)
         }
         
         let writePoints: [CGPoint] = writeHistory.enumerated().map { index, value in
             let x = chartWidth - chartPadding - CGFloat(writeHistory.count - 1 - index) * stepX
-            let y = centerLineY - min(value / maxVal, 1.0) * halfHeight
+            let y = centerLineY - min(value / maxWrite, 1.0) * halfHeight
             return CGPoint(x: x, y: y)
         }
         
         // Draw read chart (top half, above center line)
         if readPoints.count > 1 {
-            // Area path
+            // Area path with straight lines
             let readAreaPath = CGMutablePath()
             readAreaPath.move(to: CGPoint(x: readPoints[0].x, y: centerLineY))
-            readAreaPath.addLine(to: readPoints[0])
-            
-            // Build smooth curve directly
-            for i in 1..<readPoints.count {
-                let prev = readPoints[i - 1]
-                let curr = readPoints[i]
-                let midX = (prev.x + curr.x) / 2
-                let midY = (prev.y + curr.y) / 2
-                readAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
-                readAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+            for point in readPoints {
+                readAreaPath.addLine(to: point)
             }
-            
             readAreaPath.addLine(to: CGPoint(x: readPoints.last!.x, y: centerLineY))
             readAreaPath.closeSubpath()
             
-            let readLayer = CAShapeLayer()
-            readLayer.path = readAreaPath
-            readLayer.fillColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.2).cgColor
-            chart.layer?.addSublayer(readLayer)
+            let readAreaLayer = CAShapeLayer()
+            readAreaLayer.path = readAreaPath
+            readAreaLayer.fillColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.25).cgColor
+            chart.layer?.addSublayer(readAreaLayer)
             
-            // Smooth line
-            let readLinePath = createSmoothPath(points: readPoints)
+            // Straight line
+            let readLinePath = CGMutablePath()
+            readLinePath.move(to: readPoints[0])
+            for i in 1..<readPoints.count {
+                readLinePath.addLine(to: readPoints[i])
+            }
+            
             let readLineLayer = CAShapeLayer()
             readLineLayer.path = readLinePath
             readLineLayer.fillColor = nil
-            readLineLayer.strokeColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.8).cgColor
+            readLineLayer.strokeColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 0.9).cgColor
             readLineLayer.lineWidth = 1.5
-            readLineLayer.lineCap = .round
-            readLineLayer.lineJoin = .round
             chart.layer?.addSublayer(readLineLayer)
         }
         
         // Draw write chart (bottom half, below center line)
         if writePoints.count > 1 {
-            // Area path
+            // Area path with straight lines
             let writeAreaPath = CGMutablePath()
             writeAreaPath.move(to: CGPoint(x: writePoints[0].x, y: centerLineY))
-            writeAreaPath.addLine(to: writePoints[0])
-            
-            // Build smooth curve directly
-            for i in 1..<writePoints.count {
-                let prev = writePoints[i - 1]
-                let curr = writePoints[i]
-                let midX = (prev.x + curr.x) / 2
-                let midY = (prev.y + curr.y) / 2
-                writeAreaPath.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
-                writeAreaPath.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
+            for point in writePoints {
+                writeAreaPath.addLine(to: point)
             }
-            
             writeAreaPath.addLine(to: CGPoint(x: writePoints.last!.x, y: centerLineY))
             writeAreaPath.closeSubpath()
             
-            let writeLayer = CAShapeLayer()
-            writeLayer.path = writeAreaPath
-            writeLayer.fillColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 0.2).cgColor
-            chart.layer?.addSublayer(writeLayer)
+            let writeAreaLayer = CAShapeLayer()
+            writeAreaLayer.path = writeAreaPath
+            writeAreaLayer.fillColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 0.25).cgColor
+            chart.layer?.addSublayer(writeAreaLayer)
             
-            // Smooth line
-            let writeLinePath = createSmoothPath(points: writePoints)
+            // Straight line
+            let writeLinePath = CGMutablePath()
+            writeLinePath.move(to: writePoints[0])
+            for i in 1..<writePoints.count {
+                writeLinePath.addLine(to: writePoints[i])
+            }
+            
             let writeLineLayer = CAShapeLayer()
             writeLineLayer.path = writeLinePath
             writeLineLayer.fillColor = nil
-            writeLineLayer.strokeColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 0.8).cgColor
+            writeLineLayer.strokeColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 0.9).cgColor
             writeLineLayer.lineWidth = 1.5
-            writeLineLayer.lineCap = .round
-            writeLineLayer.lineJoin = .round
             chart.layer?.addSublayer(writeLineLayer)
         }
         
@@ -327,28 +314,6 @@ final class DiskModule: NSObject, StatusModule {
         writeLabel.textColor = .secondaryLabelColor
         writeLabel.frame = NSRect(x: chartWidth - 80, y: 4, width: 70, height: 12)
         chart.addSubview(writeLabel)
-    }
-    
-    private func createSmoothPath(points: [CGPoint]) -> CGMutablePath {
-        let path = CGMutablePath()
-        guard points.count > 1 else { return path }
-        
-        path.move(to: points[0])
-        
-        for i in 1..<points.count {
-            let prev = points[i - 1]
-            let curr = points[i]
-            
-            // Calculate control points for smooth curve
-            let midX = (prev.x + curr.x) / 2
-            let midY = (prev.y + curr.y) / 2
-            
-            // Use quadratic bezier with midpoint as control
-            path.addQuadCurve(to: CGPoint(x: midX, y: midY), control: CGPoint(x: prev.x, y: prev.y))
-            path.addQuadCurve(to: curr, control: CGPoint(x: midX, y: midY))
-        }
-        
-        return path
     }
     
     private func createDiskChart(frame: NSRect) -> NSView {
