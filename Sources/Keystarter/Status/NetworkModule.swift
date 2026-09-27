@@ -131,6 +131,8 @@ final class NetworkModule: NSObject, StatusModule {
         // Network chart (mirrored download/upload)
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = NetworkChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        // Set existing history immediately
+        chart.setDownloadHistory(downloadHistory, uploadHistory: uploadHistory)
         chartView = chart
         container.addSubview(chart)
         

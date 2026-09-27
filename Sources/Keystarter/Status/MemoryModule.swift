@@ -86,6 +86,7 @@ final class MemoryModule: NSObject, StatusModule {
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = MemoryChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chart.setTotalMemory(totalMemory)
+        chart.setHistory(memoryHistory, usedMemory: usedMemory)
         chartView = chart
         container.addSubview(chart)
 
@@ -457,10 +458,13 @@ final class MemoryChartView: NSView {
         let width = bounds.width - padding * 2
         let xRatio = width / CGFloat(maxHistoryCount - 1)
         
-        // Build line points
+        // Build line points - newest on right edge, grows from right to left
         var linePoints: [CGPoint] = []
         for (i, value) in history.enumerated() {
-            let x = padding + CGFloat(i) * xRatio
+            // i=0 is oldest, i=count-1 is newest
+            // Newest should be at right edge (bounds.width - padding)
+            // Oldest moves left as more data comes in
+            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio
             let y = padding + min(value / totalGB, 1.0) * height
             linePoints.append(CGPoint(x: x, y: y))
         }

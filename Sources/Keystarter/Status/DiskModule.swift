@@ -133,6 +133,8 @@ final class DiskModule: NSObject, StatusModule {
         // Disk I/O chart (mirrored read/write)
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = DiskChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        // Set existing history immediately
+        chart.setReadHistory(readHistory, writeHistory: writeHistory)
         chartView = chart
         container.addSubview(chart)
         
