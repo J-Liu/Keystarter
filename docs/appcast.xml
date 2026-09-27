@@ -4,6 +4,18 @@
         <title>Keystarter</title>
         <description>Most recent changes for Keystarter</description>
         <language>en</language>
+    <item>
+    <title>Version 0.1.1</title>
+    <pubDate>Sun, 27 Sep 2026 00:44:25 +0000</pubDate>
+    <sparkle:version>2</sparkle:version>
+    <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
+    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+    <enclosure
+        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.1/Keystarter-0.1.1.zip"
+        sparkle:edSignature="gmjfd7mw9Ob+S4G1MJZeYgZVRCinY/03OKuvB2WcAmuvDdEIhq+++yVKWIcrlMhVtNXadveLzZkMsUKuWXnYDg=="
+        length="6173182"
+        type="application/octet-stream"/>
+</item>
         <item>
             <title>Version 0.1.0</title>
             <pubDate>Thu, 24 Sep 2026 00:00:00 +0000</pubDate>
