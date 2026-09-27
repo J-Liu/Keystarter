@@ -4,78 +4,6 @@
         <title>Keystarter</title>
         <description>Most recent changes for Keystarter</description>
         <language>en</language>
-    <item>
-    <title>Version 0.1.1</title>
-    <pubDate>Sat, 26 Sep 2026 23:41:08 +0000</pubDate>
-    <sparkle:version>0.1.1</sparkle:version>
-    <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
-    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-    <enclosure
-        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.1/Keystarter-0.1.1.zip"
-        sparkle:edSignature="sparkle:edSignature=dEWuAoGh3ldAvlESWFY4ZZBbcri1yzjfhyYeyxSeD7fOyKSLgj348oBg71WJQkAaDKCDPZWxzFyl024tnQKwCw== length=6173180"
-        length="6173180"
-        type="application/octet-stream"/>
-</item>
-    <item>
-    <title>Version 0.1.1</title>
-    <pubDate>Sat, 27 Sep 2026 00:00:00 +0000</pubDate>
-    <sparkle:version>2</sparkle:version>
-    <sparkle:shortVersionString>0.1.1</sparkle:shortVersionString>
-    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-    <enclosure
-        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.1/Keystarter-0.1.1.zip"
-        sparkle:edSignature="PLACEHOLDER"
-        length="0"
-        type="application/octet-stream"/>
-</item>
-    <item>
-    <title>Version 0.1.0</title>
-    <pubDate>Thu, 24 Sep 2026 06:03:26 +0000</pubDate>
-    <sparkle:version>0.1.0</sparkle:version>
-    <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-    <enclosure
-        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.0/Keystarter-0.1.0.zip"
-        sparkle:edSignature="sparkle:edSignature=lEntpS+N/tx2l94I7s9FKqMNBk5Lx9odkutj9bmRBQM84ONFclEk+e3n7h4NBwsvJgpII/E+9krbtVceQSvMBA== length=5902238"
-        length="5902238"
-        type="application/octet-stream"/>
-</item>
-    <item>
-    <title>Version 0.1.0</title>
-    <pubDate>Thu, 24 Sep 2026 05:28:39 +0000</pubDate>
-    <sparkle:version>0.1.0</sparkle:version>
-    <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-    <enclosure
-        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.0/Keystarter-0.1.0.zip"
-        sparkle:edSignature="sparkle:edSignature=jQ7/MY6N0AZQ0q4cUukdRvDu2Zv2EmFXuyacphex7QaB9pZpf0+5umg8BH9eL4zDQPLA10aalYY26DM7E/ECAA== length=5899593"
-        length="5899593"
-        type="application/octet-stream"/>
-</item>
-    <item>
-    <title>Version 0.1.0</title>
-    <pubDate>Thu, 24 Sep 2026 05:18:23 +0000</pubDate>
-    <sparkle:version>0.1.0</sparkle:version>
-    <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-    <enclosure
-        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.0/Keystarter-0.1.0.zip"
-        sparkle:edSignature="sparkle:edSignature=KzFRcbeWrmGGbcIa7LW7+uSQhVC2sMcw3ChWLBU7vfnRhRFnbUVWvYHgVdAR2HkynZcC1NtVkJ1lL8jKTlaMAg== length=5899569"
-        length="5899569"
-        type="application/octet-stream"/>
-</item>
-    <item>
-    <title>Version 0.1.0</title>
-    <pubDate>Thu, 24 Sep 2026 05:12:14 +0000</pubDate>
-    <sparkle:version>0.1.0</sparkle:version>
-    <sparkle:shortVersionString>0.1.0</sparkle:shortVersionString>
-    <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
-    <enclosure
-        url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.0/Keystarter-0.1.0.zip"
-        sparkle:edSignature="sparkle:edSignature=eMo1mecyL2m6BzYPvMCnr1K73cDsrYKxbdjxUyo2NYBzSILbKQThgkT8hqgxEL98BIlP91ojWcYWrDHeOUJwCA== length=2947065"
-        length="2947065"
-        type="application/octet-stream"/>
-</item>
         <item>
             <title>Version 0.1.0</title>
             <pubDate>Thu, 24 Sep 2026 00:00:00 +0000</pubDate>
@@ -84,8 +12,8 @@
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <enclosure
                 url="https://github.com/J-Liu/Keystarter/releases/download/v0.1.0/Keystarter-0.1.0.zip"
-                sparkle:edSignature="PLACEHOLDER"
-                length="0"
+                sparkle:edSignature="lEntpS+N/tx2l94I7s9FKqMNBk5Lx9odkutj9bmRBQM84ONFclEk+e3n7h4NBwsvJgpII/E+9krbtVceQSvMBA=="
+                length="5902238"
                 type="application/octet-stream"/>
         </item>
     </channel>
