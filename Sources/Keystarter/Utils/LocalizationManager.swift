@@ -188,6 +188,23 @@ final class LocalizationManager {
             "status.process.cpu": "CPU",
             "status.process.memory": "Memory",
 
+            // Sensor Names
+            "sensor.cpu.pcore": "CPU P-core",
+            "sensor.cpu.ecore": "CPU E-core",
+            "sensor.cpu.core": "CPU Core",
+            "sensor.gpu": "GPU",
+            "sensor.memory": "Memory",
+            "sensor.battery": "Battery",
+            "sensor.storage": "Storage",
+            "sensor.airport": "Airport (WiFi)",
+            "sensor.display": "Display",
+            "sensor.thunderbolt": "Thunderbolt",
+            "sensor.thunderbolt.left": "Thunderbolt Left",
+            "sensor.thunderbolt.right": "Thunderbolt Right",
+            "sensor.mainboard": "Mainboard",
+            "sensor.airflow.left": "Airflow Left",
+            "sensor.airflow.right": "Airflow Right",
+
             // Stock Plugin
             "stock.enterNameOrCode": "Enter stock name or code",
             "stock.example": "Example: AAPL or TSLA",
@@ -343,6 +360,23 @@ final class LocalizationManager {
             "status.process.name": "进程",
             "status.process.cpu": "CPU",
             "status.process.memory": "内存",
+
+            // Sensor Names
+            "sensor.cpu.pcore": "CPU 性能核",
+            "sensor.cpu.ecore": "CPU 能效核",
+            "sensor.cpu.core": "CPU 核心",
+            "sensor.gpu": "GPU",
+            "sensor.memory": "内存",
+            "sensor.battery": "电池",
+            "sensor.storage": "硬盘",
+            "sensor.airport": "无线网卡",
+            "sensor.display": "显示器",
+            "sensor.thunderbolt": "雷雳接口",
+            "sensor.thunderbolt.left": "左侧雷雳",
+            "sensor.thunderbolt.right": "右侧雷雳",
+            "sensor.mainboard": "主板",
+            "sensor.airflow.left": "左侧气流",
+            "sensor.airflow.right": "右侧气流",
 
             // Stock Plugin
             "stock.enterNameOrCode": "请输入股票名称或代码",
@@ -506,6 +540,23 @@ final class LocalizationManager {
             "status.process.name": "程序",
             "status.process.cpu": "CPU",
             "status.process.memory": "記憶體",
+
+            // Sensor Names
+            "sensor.cpu.pcore": "CPU 效能核心",
+            "sensor.cpu.ecore": "CPU 節能核心",
+            "sensor.cpu.core": "CPU 核心",
+            "sensor.gpu": "GPU",
+            "sensor.memory": "記憶體",
+            "sensor.battery": "電池",
+            "sensor.storage": "硬碟",
+            "sensor.airport": "無線網卡",
+            "sensor.display": "顯示器",
+            "sensor.thunderbolt": "雷靂接口",
+            "sensor.thunderbolt.left": "左側雷靂",
+            "sensor.thunderbolt.right": "右側雷靂",
+            "sensor.mainboard": "主機板",
+            "sensor.airflow.left": "左側氣流",
+            "sensor.airflow.right": "右側氣流",
 
             // Stock Plugin
             "stock.enterNameOrCode": "請輸入股票名稱或代碼",

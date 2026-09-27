@@ -83,7 +83,7 @@ final class StatusItemController: NSObject {
             let itemWidth: CGFloat
             switch module.identifier {
             case "network":
-                itemWidth = 40
+                itemWidth = 42
             case "disk":
                 itemWidth = 46
             case "sensor":
@@ -179,7 +179,7 @@ final class StatusItemController: NSObject {
             let itemWidth: CGFloat
             switch module.identifier {
             case "network":
-                itemWidth = 40
+                itemWidth = 42
             case "disk":
                 itemWidth = 46
             case "sensor":

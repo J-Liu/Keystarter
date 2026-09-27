@@ -111,8 +111,9 @@ final class SensorModule: NSObject, StatusModule {
         let fanChartHeight: CGFloat = 120
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
-        let rowCount = 10
-        let totalHeight = toolbarHeight + headerHeight + fanChartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let rowCount = 30  // Increased for more sensors
+        let tableHeight: CGFloat = 300  // Fixed height for scrollable area
+        let totalHeight = toolbarHeight + headerHeight + fanChartHeight + dividerHeight + tableHeight + 16
         let viewWidth: CGFloat = 400
         
         let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
@@ -141,19 +142,19 @@ final class SensorModule: NSObject, StatusModule {
         container.addSubview(divider1)
         
         // Temperature table
-        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: divider1Y))
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: tableHeight))
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
         
-        let table = NSTableView(frame: NSRect(x: 0, y: 0, width: viewWidth - 16, height: CGFloat(rowCount) * rowHeight * 2))
+        let table = NSTableView(frame: NSRect(x: 0, y: 0, width: viewWidth - 16, height: CGFloat(rowCount) * rowHeight))
         table.backgroundColor = .clear
         table.rowHeight = rowHeight
         table.intercellSpacing = NSSize(width: 0, height: 0)
         
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        nameColumn.width = 150
+        nameColumn.width = 200
         nameColumn.headerCell.title = "Component"
         table.addTableColumn(nameColumn)
         
@@ -196,16 +197,8 @@ final class SensorModule: NSObject, StatusModule {
         // Use SMC power if available, otherwise use IOReport power
         totalPower = smcPower > 0 ? smcPower : ioReportPower
         
-        // Read temperatures
-        let temps = SensorReaderSwift.readTemperatures()
-        cpuPcoreTemp = getAverageTemp(for: temps, keys: ["tdie0", "tdie1", "tdie2", "tdie3"])
-        cpuEcoreTemp = getAverageTemp(for: temps, keys: ["tdie4", "tdie5", "tdie6", "tdie7"])
-        gpuTemp = getAverageTemp(for: temps, keys: ["TP1g", "TP2g", "TP3g"])
-        dramTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s", "TP2s"])
-        aneTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s"])
-        pciTemp = getAverageTemp(for: temps, keys: ["tdev"])
-        storageTemp = getAverageTemp(for: temps, keys: ["NAND"])
-        batteryTemp = getAverageTemp(for: temps, keys: ["gas gauge battery"])
+        // Read all sensors from HID and SMC
+        readAllSensors()
         
         // Read fan speeds
         readFanSpeeds()
@@ -214,9 +207,9 @@ final class SensorModule: NSObject, StatusModule {
         if totalPower > 0 {
             summaryText = String(format: "%.0fW", totalPower)
             summaryValue = String(format: "%.0fW", totalPower)
-        } else if cpuPcoreTemp > 0 {
-            summaryText = String(format: "%.0f°", cpuPcoreTemp)
-            summaryValue = String(format: "%.0f°", cpuPcoreTemp)
+        } else if let first = allSensors.first, first.value > 0 {
+            summaryText = String(format: "%.0f°", first.value)
+            summaryValue = String(format: "%.0f°", first.value)
         }
         
         updateFanChart()
@@ -417,10 +410,201 @@ final class SensorModule: NSObject, StatusModule {
     }
     
     // MARK: - Temperature data for table
-    
+
+    private var allSensors: [(key: String, name: String, value: Double)] = []
     private var tempComponents: [(name: String, value: Double)] = []
     
+    private func readAllSMCKeys() -> [String] {
+        guard smcConnection != 0 else { return [] }
+        
+        // First, get the total number of keys
+        guard let keyCount = readSMCValue(key: "#KEY") else {
+            return []
+        }
+        let count = Int(keyCount)
+        
+        var keys: [String] = []
+        
+        for i in 0..<count {
+            var input = SMCKeyData()
+            var output = SMCKeyData()
+            
+            input.data8 = UInt8(kSMCGetKeyFromIndex)
+            input.data32 = UInt32(i)
+            
+            let inputSize = MemoryLayout<SMCKeyData>.stride
+            var outputSize = MemoryLayout<SMCKeyData>.stride
+            
+            let kr = IOConnectCallStructMethod(smcConnection, UInt32(kSMCKernelIndex), &input, inputSize, &output, &outputSize)
+            guard kr == KERN_SUCCESS else { continue }
+            
+            // Extract key from output.key
+            let key = String(bytes: [
+                UInt8((output.key >> 24) & 0xFF),
+                UInt8((output.key >> 16) & 0xFF),
+                UInt8((output.key >> 8) & 0xFF),
+                UInt8(output.key & 0xFF)
+            ], encoding: .ascii) ?? ""
+            
+            if !key.isEmpty {
+                keys.append(key)
+            }
+        }
+        
+        return keys
+    }
+    
+    private func readAllSensors() {
+        allSensors = []
+        
+        // Read from HID first (most reliable for Apple Silicon CPU/GPU temps)
+        let hidTemps = SensorReaderSwift.readTemperatures()
+        for (key, value) in hidTemps {
+            let name = mapHIDSensorName(key)
+            // Only include sensors with valid names and reasonable values
+            if !name.isEmpty && value > 0 && value < 120 {
+                allSensors.append((key: key, name: name, value: value))
+            }
+        }
+        
+        // Read from SMC for additional sensors
+        if smcConnection != 0 {
+            let allKeys = readAllSMCKeys()
+            
+            // Filter to temperature keys only (start with T)
+            let tempKeys = allKeys.filter { $0.hasPrefix("T") }
+            
+            // Sensor name mapping based on discovered keys on Apple Silicon
+            let sensorMap: [String: String] = [
+                // Apple Silicon specific airflow/ambient sensors
+                "TaLP": "sensor.airflow.left",
+                "TaRF": "sensor.airflow.right",
+                // Airport/WiFi
+                "TW0P": "sensor.airport",
+                // Storage/NAND
+                "TH0x": "sensor.storage",
+                "TH0a": "sensor.storage",
+                "TH0b": "sensor.storage",
+                "TH1a": "sensor.storage",
+                "TH1b": "sensor.storage",
+                // Battery
+                "TB0T": "sensor.battery",
+                "TB1T": "sensor.battery",
+                "TB2T": "sensor.battery",
+                // Memory
+                "Tm0C": "sensor.memory",
+                "Tm0D": "sensor.memory",
+                "Tm0E": "sensor.memory",
+            ]
+            
+            for key in tempKeys {
+                // Check if this key matches a known sensor
+                var localizedName: String? = nil
+                if let nameKey = sensorMap[key] {
+                    localizedName = L(nameKey)
+                }
+                
+                // Pattern matching for common prefixes
+                if key.hasPrefix("TH") && localizedName == nil {
+                    localizedName = L("sensor.storage")
+                }
+                if key.hasPrefix("Tm") && localizedName == nil {
+                    localizedName = L("sensor.memory")
+                }
+                
+                // Only read keys we have names for
+                if localizedName == nil { continue }
+                
+                if let value = readSMCValue(key: key) {
+                    // Filter out invalid values (0, >120, or clearly broken sensors)
+                    if value > 10 && value < 120 {
+                        if !allSensors.contains(where: { $0.key == key }) {
+                            allSensors.append((key: key, name: localizedName!, value: value))
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Sort by name, CPU first, then GPU, Memory, etc.
+        allSensors.sort { a, b in
+            let order = [
+                L("sensor.cpu.pcore"),
+                L("sensor.cpu.ecore"),
+                L("sensor.cpu.core"),
+                L("sensor.gpu"),
+                L("sensor.memory"),
+                L("sensor.battery"),
+                L("sensor.storage"),
+                L("sensor.airport"),
+                L("sensor.display"),
+                L("sensor.thunderbolt"),
+                L("sensor.mainboard"),
+                L("sensor.airflow")
+            ]
+            for prefix in order {
+                if a.name.hasPrefix(prefix) && !b.name.hasPrefix(prefix) { return true }
+                if !a.name.hasPrefix(prefix) && b.name.hasPrefix(prefix) { return false }
+            }
+            return a.name < b.name
+        }
+    }
+    
+    private func mapHIDSensorName(_ key: String) -> String {
+        // Remove "PMU " prefix if present
+        let cleanKey = key.hasPrefix("PMU ") ? String(key.dropFirst(4)) : key
+        
+        // CPU核心温度 (tdie = die temperature)
+        // M3/M4 MacBook Pro: 通常是 8个性能核 + 2个能效核
+        // tdie0-7 = 性能核, tdie8-9 = 能效核 (具体取决于芯片型号)
+        if cleanKey.hasPrefix("tdie") {
+            let numStr = cleanKey.replacingOccurrences(of: "tdie", with: "")
+            if let num = Int(numStr) {
+                // 假设前8个是性能核，后2个是能效核（M3 Pro典型配置）
+                if num < 8 {
+                    return "\(L("sensor.cpu.pcore")) \(num + 1)"
+                } else if num < 10 {
+                    return "\(L("sensor.cpu.ecore")) \(num - 7)"
+                } else {
+                    return "\(L("sensor.cpu.core")) \(num + 1)"
+                }
+            }
+            return L("sensor.cpu.core")
+        }
+        
+        // GPU温度 (TP*g = GPU temperature point)
+        if cleanKey.hasPrefix("TP") && cleanKey.hasSuffix("g") {
+            return L("sensor.gpu")
+        }
+        
+        // 内存温度 (TP*s = DRAM temperature)
+        if cleanKey.hasPrefix("TP") && cleanKey.hasSuffix("s") {
+            return L("sensor.memory")
+        }
+        
+        // 设备温度 (tdev = device temperature)
+        // 这些是各种外设的温度，但无法确定具体是哪个设备
+        if cleanKey.hasPrefix("tdev") {
+            return "" // 跳过，无实际意义
+        }
+        
+        // 其他已知传感器
+        if cleanKey == "tcal" { return "" }  // 校准温度，跳过
+        if cleanKey.contains("NAND") { return L("sensor.storage") }
+        if cleanKey.contains("gas gauge") { return L("sensor.battery") }
+        
+        // 未知传感器不显示
+        return ""
+    }
+    
     private func updateTempComponents() {
+        // If we have all sensors, use them
+        if !allSensors.isEmpty {
+            tempComponents = allSensors.map { ($0.name, $0.value) }
+            return
+        }
+        
+        // Fallback to hardcoded list
         tempComponents = [
             ("CPU P-core", cpuPcoreTemp),
             ("CPU E-core", cpuEcoreTemp),
@@ -479,6 +663,46 @@ extension SensorModule: NSTableViewDataSource, NSTableViewDelegate {
 private let kSMCKernelIndex: UInt8 = 2
 private let kSMCReadKeyInfo: UInt8 = 9
 private let kSMCReadBytes: UInt8 = 5
+private let kSMCGetKeyFromIndex: UInt8 = 8
+
+// Sensor name mapping based on Stats SensorsList
+private let smcSensorNames: [String: String] = [
+    // M3 Apple Silicon temperature sensors
+    "Te05": "CPU E-core 1", "Te0L": "CPU E-core 2", "Te0P": "CPU E-core 3", "Te0S": "CPU E-core 4",
+    "Tf04": "CPU P-core 1", "Tf09": "CPU P-core 2", "Tf0A": "CPU P-core 3", "Tf0B": "CPU P-core 4",
+    "Tf0D": "CPU P-core 5", "Tf0E": "CPU P-core 6", "Tf44": "CPU P-core 7", "Tf49": "CPU P-core 8",
+    "Tf4A": "CPU P-core 9", "Tf4B": "CPU P-core 10", "Tf4D": "CPU P-core 11", "Tf4E": "CPU P-core 12",
+    "Tf14": "GPU 1", "Tf18": "GPU 2", "Tf19": "GPU 3", "Tf1A": "GPU 4",
+    "Tf24": "GPU 5", "Tf28": "GPU 6", "Tf29": "GPU 7", "Tf2A": "GPU 8",
+    
+    // M2 temperature sensors
+    "Tp1h": "CPU E-core 1", "Tp1t": "CPU E-core 2", "Tp1p": "CPU E-core 3", "Tp1l": "CPU E-core 4",
+    "Tp01": "CPU P-core 1", "Tp05": "CPU P-core 2", "Tp09": "CPU P-core 3", "Tp0D": "CPU P-core 4",
+    "Tp0X": "CPU P-core 5", "Tp0b": "CPU P-core 6", "Tp0f": "CPU P-core 7", "Tp0j": "CPU P-core 8",
+    "Tg0f": "GPU 1", "Tg0j": "GPU 2",
+    
+    // M4 temperature sensors (unique keys)
+    "Te0H": "CPU E-core 4",
+    "Tp0V": "CPU P-core 5", "Tp0Y": "CPU P-core 6", "Tp0e": "CPU P-core 8",
+    "Tg0G": "GPU 1", "Tg0H": "GPU 2", "Tg1U": "GPU 1 Pro", "Tg1k": "GPU 2 Pro",
+    "Tg0K": "GPU 3", "Tg0d": "GPU 5", "Tg0k": "GPU 8",
+    "Tm0p": "Memory 1", "Tm1p": "Memory 2", "Tm2p": "Memory 3",
+    
+    // M1 temperature sensors (unique keys not already in M2)
+    "Tp0T": "CPU E-core 2",
+    "Tp0H": "CPU P-core 4", "Tp0L": "CPU P-core 5", "Tp0P": "CPU P-core 6",
+    "Tg05": "GPU 1", "Tg0D": "GPU 2", "Tg0L": "GPU 3", "Tg0T": "GPU 4",
+    "Tm02": "Memory 1", "Tm06": "Memory 2", "Tm08": "Memory 3", "Tm09": "Memory 4",
+    
+    // Common sensors
+    "TaLP": "Airflow Left", "TaRF": "Airflow Right",
+    "TH0x": "NAND", "TB1T": "Battery", "TB2T": "Battery 2",
+    
+    // Intel sensors
+    "TC0D": "CPU Diode", "TC0P": "CPU Proximity", "TC0H": "CPU Heatsink",
+    "TG0D": "GPU Diode", "TG0P": "GPU Proximity",
+    "Tm0P": "Mainboard", "TL0P": "Display"
+]
 
 private struct SMCKeyData {
     // Exact copy from Stats SMC/smc.swift
