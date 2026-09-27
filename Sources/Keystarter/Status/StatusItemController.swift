@@ -395,8 +395,8 @@ final class StatusItemController: NSObject {
                 .paragraphStyle: paraStyle
             ]
 
-            attrString.append(NSAttributedString(string: "R " + diskModule.readSpeedText + "\n", attributes: topAttrs))
-            attrString.append(NSAttributedString(string: "W " + diskModule.writeSpeedText, attributes: bottomAttrs))
+            attrString.append(NSAttributedString(string: "W " + diskModule.writeSpeedText + "\n", attributes: topAttrs))
+            attrString.append(NSAttributedString(string: "R " + diskModule.readSpeedText, attributes: bottomAttrs))
         } else if module.identifier == "network", let networkModule = module as? NetworkModule {
             // Network: two-line speed display
             let paraStyle = NSMutableParagraphStyle()
@@ -415,8 +415,8 @@ final class StatusItemController: NSObject {
                 .paragraphStyle: paraStyle
             ]
 
-            attrString.append(NSAttributedString(string: "↓ " + networkModule.downloadSpeedText + "\n", attributes: topAttrs))
-            attrString.append(NSAttributedString(string: "↑ " + networkModule.uploadSpeedText, attributes: bottomAttrs))
+            attrString.append(NSAttributedString(string: "↑ " + networkModule.uploadSpeedText + "\n", attributes: topAttrs))
+            attrString.append(NSAttributedString(string: "↓ " + networkModule.downloadSpeedText, attributes: bottomAttrs))
         } else {
             // Other modules: two lines (name + value)
             let paraStyle = NSMutableParagraphStyle()

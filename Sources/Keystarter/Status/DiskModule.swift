@@ -557,31 +557,40 @@ extension DiskModule: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
-// MARK: - Disk Chart View (Stats-style)
+// MARK: - Disk Chart View (Stats-style with two internal charts)
 
-/// Chart view for disk read/write speed using NSBezierPath like Stats
-final class DiskChartView: NSView {
-    private var readHistory: [Double] = []
-    private var writeHistory: [Double] = []
-    private let maxHistoryCount = 60
+/// Single line chart view matching Stats' LineChartView pattern
+private final class DiskLineChartView: NSView {
+    private var points: [Double?] = []
+    private var color: NSColor
+    private var flipY: Bool = false
     
-    private let readColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1.0)  // Blue for read
-    private let writeColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 1.0)  // Red for write
-    
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
+    init(frame: NSRect, num: Int, color: NSColor) {
+        self.points = Array(repeating: nil, count: max(num, 2))
+        self.color = color
+        super.init(frame: frame)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-        layer?.cornerRadius = 4
     }
     
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
     
-    func setReadHistory(_ read: [Double], writeHistory write: [Double]) {
-        self.readHistory = read
-        self.writeHistory = write
+    func addValue(_ value: Double) {
+        // Shift all points left and add new value at the end
+        for i in 0..<(points.count - 1) {
+            points[i] = points[i + 1]
+        }
+        points[points.count - 1] = value
+    }
+    
+    func reinit(_ num: Int) {
+        points = Array(repeating: nil, count: max(num, 2))
+        needsDisplay = true
+    }
+    
+    func setFlipY(_ value: Bool) {
+        flipY = value
     }
     
     override func draw(_ dirtyRect: NSRect) {
@@ -590,117 +599,163 @@ final class DiskChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
         
-        let chartWidth = bounds.width
-        let chartHeight = bounds.height
-        let chartPadding: CGFloat = 8
-        let centerLineY = chartHeight / 2
-        let halfHeight = chartHeight / 2 - chartPadding - 8
-        let drawWidth = chartWidth - chartPadding * 2
-        let stepX = drawWidth / CGFloat(maxHistoryCount - 1)
-        let lineWidth: CGFloat = 1.0 / (NSScreen.main?.backingScaleFactor ?? 1)
+        // Find max value
+        var maxValue: Double = 0
+        for opt in points {
+            if let p = opt, p > maxValue { maxValue = p }
+        }
+        if maxValue == 0 { maxValue = 1 }
         
-        // Draw center line
-        let centerPath = NSBezierPath()
-        centerPath.move(to: CGPoint(x: chartPadding, y: centerLineY))
-        centerPath.line(to: CGPoint(x: chartWidth - chartPadding, y: centerLineY))
-        centerPath.lineWidth = lineWidth
-        NSColor.separatorColor.setStroke()
-        centerPath.stroke()
+        let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
+        let height = self.frame.height - offset
+        let xRatio = self.frame.width / CGFloat(points.count - 1)
+        let zero = flipY ? 0 : self.frame.height
         
-        // Find max values for scaling (separate for each series)
-        let maxRead = max(readHistory.max() ?? 1, 1)
-        let maxWrite = max(writeHistory.max() ?? 1, 1)
-        
-        // Draw write chart (bottom half, below center line) - draw first so read is on top
-        if writeHistory.count > 1 {
-            let points = calculatePoints(writeHistory, maxVal: maxWrite, stepX: stepX, centerLineY: centerLineY, halfHeight: halfHeight, chartWidth: chartWidth, chartPadding: chartPadding, isRead: false)
+        // Build line points
+        var linePoints: [CGPoint] = []
+        for (i, v) in points.enumerated() {
+            guard let v else { continue }
             
-            // Draw filled area with gradient
-            let areaPath = NSBezierPath()
-            areaPath.move(to: CGPoint(x: points[0].x, y: centerLineY))
-            for point in points {
-                areaPath.line(to: point)
-            }
-            areaPath.line(to: CGPoint(x: points.last!.x, y: centerLineY))
-            areaPath.close()
-            
-            if let gradient = NSGradient(colors: [writeColor.withAlphaComponent(0.3), writeColor.withAlphaComponent(0.5)]) {
-                gradient.draw(in: areaPath, angle: 90)
+            var y = (v / maxValue) * height
+            if !flipY {
+                y = height - y
             }
             
-            // Draw line
-            let linePath = NSBezierPath()
-            linePath.move(to: points[0])
-            for i in 1..<points.count {
-                linePath.line(to: points[i])
-            }
-            linePath.lineWidth = lineWidth
-            writeColor.setStroke()
-            linePath.stroke()
+            let point = CGPoint(x: CGFloat(i) * xRatio, y: y)
+            linePoints.append(point)
         }
         
-        // Draw read chart (top half, above center line)
-        if readHistory.count > 1 {
-            let points = calculatePoints(readHistory, maxVal: maxRead, stepX: stepX, centerLineY: centerLineY, halfHeight: halfHeight, chartWidth: chartWidth, chartPadding: chartPadding, isRead: true)
-            
-            // Draw filled area with gradient
-            let areaPath = NSBezierPath()
-            areaPath.move(to: CGPoint(x: points[0].x, y: centerLineY))
-            for point in points {
-                areaPath.line(to: point)
-            }
-            areaPath.line(to: CGPoint(x: points.last!.x, y: centerLineY))
-            areaPath.close()
-            
-            if let gradient = NSGradient(colors: [readColor.withAlphaComponent(0.3), readColor.withAlphaComponent(0.5)]) {
-                gradient.draw(in: areaPath, angle: 90)
-            }
-            
-            // Draw line
-            let linePath = NSBezierPath()
-            linePath.move(to: points[0])
-            for i in 1..<points.count {
-                linePath.line(to: points[i])
-            }
-            linePath.lineWidth = lineWidth
-            readColor.setStroke()
-            linePath.stroke()
+        guard linePoints.count > 1 else { return }
+        
+        // Draw line
+        let linePath = NSBezierPath()
+        linePath.move(to: linePoints[0])
+        for i in 1..<linePoints.count {
+            linePath.line(to: linePoints[i])
         }
+        linePath.lineWidth = offset
+        color.setStroke()
+        linePath.stroke()
         
-        // Draw labels
-        let readSpeed = readHistory.last ?? 0
-        let writeSpeed = writeHistory.last ?? 0
+        // Draw filled area with gradient
+        let areaPath = linePath.copy() as! NSBezierPath
+        areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: zero))
+        areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
+        areaPath.close()
         
-        let readLabel = "R \(formatSpeed(readSpeed))"
-        let writeLabel = "W \(formatSpeed(writeSpeed))"
+        let gradient = NSGradient(colors: [
+            color.withAlphaComponent(0.3),
+            color.withAlphaComponent(0.5)
+        ])
+        gradient?.draw(in: areaPath, angle: flipY ? 0 : 90)
+    }
+}
+
+/// Disk chart view with two internal charts - write on top, read on bottom
+final class DiskChartView: NSView {
+    private let writeChart: DiskLineChartView
+    private let readChart: DiskLineChartView
+    
+    private let readColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1.0)  // Blue for read
+    private let writeColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 1.0)  // Red for write
+    private let maxHistoryCount = 60
+    
+    private var currentReadSpeed: Double = 0
+    private var currentWriteSpeed: Double = 0
+    
+    override init(frame frameRect: NSRect) {
+        let safeHeight = max(frameRect.height, 2)
+        let topFrame = NSRect(x: 0, y: safeHeight / 2, width: frameRect.width, height: safeHeight / 2)
+        let bottomFrame = NSRect(x: 0, y: 0, width: frameRect.width, height: safeHeight / 2)
         
-        let labelFont = NSFont.systemFont(ofSize: 10)
-        let labelAttributes: [NSAttributedString.Key: Any] = [
-            .font: labelFont,
-            .foregroundColor: NSColor.secondaryLabelColor
-        ]
+        // Write chart is on top (topFrame), read chart is on bottom (bottomFrame)
+        self.writeChart = DiskLineChartView(frame: topFrame, num: maxHistoryCount, color: writeColor)
+        self.readChart = DiskLineChartView(frame: bottomFrame, num: maxHistoryCount, color: readColor)
         
-        let readLabelStr = NSAttributedString(string: readLabel, attributes: labelAttributes)
-        let writeLabelStr = NSAttributedString(string: writeLabel, attributes: labelAttributes)
+        super.init(frame: frameRect)
         
-        let readLabelSize = readLabelStr.size()
-        let writeLabelSize = writeLabelStr.size()
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
+        layer?.cornerRadius = 4
         
-        readLabelStr.draw(at: CGPoint(x: chartWidth - chartPadding - readLabelSize.width, y: chartHeight - chartPadding - readLabelSize.height))
-        writeLabelStr.draw(at: CGPoint(x: chartWidth - chartPadding - writeLabelSize.width, y: chartPadding))
+        // Write chart grows down from top (flipY = true)
+        self.writeChart.setFlipY(true)
+        // Read chart grows up from bottom (flipY = false)
+        self.readChart.setFlipY(false)
+        
+        addSubview(self.writeChart)
+        addSubview(self.readChart)
     }
     
-    private func calculatePoints(_ history: [Double], maxVal: Double, stepX: CGFloat, centerLineY: CGFloat, halfHeight: CGFloat, chartWidth: CGFloat, chartPadding: CGFloat, isRead: Bool) -> [CGPoint] {
-        return history.enumerated().map { index, value in
-            let x = chartWidth - chartPadding - CGFloat(history.count - 1 - index) * stepX
-            let y: CGFloat
-            if isRead {
-                y = centerLineY + min(value / maxVal, 1.0) * halfHeight
-            } else {
-                y = centerLineY - min(value / maxVal, 1.0) * halfHeight
-            }
-            return CGPoint(x: x, y: y)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func setReadHistory(_ read: [Double], writeHistory write: [Double]) {
+        // Store current speeds for display
+        currentReadSpeed = read.last ?? 0
+        currentWriteSpeed = write.last ?? 0
+        
+        // Clear and reinitialize charts
+        self.writeChart.reinit(maxHistoryCount)
+        self.readChart.reinit(maxHistoryCount)
+        
+        // Add all values
+        for i in 0..<min(read.count, write.count) {
+            self.readChart.addValue(read[i])
+            self.writeChart.addValue(write[i])
         }
+        
+        needsDisplay = true
+    }
+    
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        
+        // Draw speed labels
+        let padding: CGFloat = 6
+        let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
+        
+        // Write label (top right)
+        let writeLabel = "W \(formatSpeed(currentWriteSpeed))"
+        let writeAttrs: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: writeColor
+        ]
+        let writeStr = NSAttributedString(string: writeLabel, attributes: writeAttrs)
+        let writeSize = writeStr.size()
+        writeStr.draw(at: CGPoint(x: bounds.width - padding - writeSize.width, y: bounds.height - padding - writeSize.height))
+        
+        // Read label (bottom right)
+        let readLabel = "R \(formatSpeed(currentReadSpeed))"
+        let readAttrs: [NSAttributedString.Key: Any] = [
+            .font: labelFont,
+            .foregroundColor: readColor
+        ]
+        let readStr = NSAttributedString(string: readLabel, attributes: readAttrs)
+        let readSize = readStr.size()
+        readStr.draw(at: CGPoint(x: bounds.width - padding - readSize.width, y: padding))
+        
+        // Draw center separator line
+        let centerLineY = bounds.height / 2
+        let linePath = NSBezierPath()
+        linePath.move(to: CGPoint(x: padding, y: centerLineY))
+        linePath.line(to: CGPoint(x: bounds.width - padding, y: centerLineY))
+        linePath.lineWidth = 0.5
+        NSColor.separatorColor.withAlphaComponent(0.5).setStroke()
+        linePath.stroke()
+    }
+    
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        
+        let safeHeight = max(newSize.height, 2)
+        let halfHeight = safeHeight / 2
+        let topFrame = NSRect(x: 0, y: halfHeight, width: newSize.width, height: halfHeight)
+        let bottomFrame = NSRect(x: 0, y: 0, width: newSize.width, height: halfHeight)
+        
+        writeChart.frame = topFrame
+        readChart.frame = bottomFrame
     }
     
     private func formatSpeed(_ bytesPerSec: Double) -> String {
