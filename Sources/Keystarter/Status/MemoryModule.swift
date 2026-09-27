@@ -351,14 +351,13 @@ final class MemoryModule: NSObject, StatusModule {
 
     private func getMemoryUsage() -> (used: UInt64, total: UInt64) {
         var total: UInt64 = 0
-        var free: UInt64 = 0
 
         // Get total memory
         var mib: [Int32] = [CTL_HW, HW_MEMSIZE]
         var size = MemoryLayout<UInt64>.size
         sysctl(&mib, 2, &total, &size, nil, 0)
 
-        // Get free memory via vm_statistics
+        // Get detailed memory statistics
         var vmStats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size / MemoryLayout<integer_t>.size)
 
@@ -368,11 +367,22 @@ final class MemoryModule: NSObject, StatusModule {
             }
         }
 
+        var used: UInt64 = 0
         if result == KERN_SUCCESS {
-            free = UInt64(vmStats.free_count) * UInt64(vm_kernel_page_size)
+            // Use the same formula as Stats/Activity Monitor
+            // used = active + inactive + speculative + wired + compressed - purgeable - external
+            let pageSize = UInt64(vm_kernel_page_size)
+            let active = UInt64(vmStats.active_count) * pageSize
+            let inactive = UInt64(vmStats.inactive_count) * pageSize
+            let speculative = UInt64(vmStats.speculative_count) * pageSize
+            let wired = UInt64(vmStats.wire_count) * pageSize
+            let compressed = UInt64(vmStats.compressor_page_count) * pageSize
+            let purgeable = UInt64(vmStats.purgeable_count) * pageSize
+            let external = UInt64(vmStats.external_page_count) * pageSize
+
+            used = active + inactive + speculative + wired + compressed - purgeable - external
         }
 
-        let used = total > free ? total - free : 0
         return (used, total)
     }
 
