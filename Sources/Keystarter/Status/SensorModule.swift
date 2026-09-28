@@ -437,7 +437,7 @@ final class SensorModule: NSObject, StatusModule {
         case "fpe2", "FPE2":
             return Double(Int(output.getByte(0)) << 6 | Int(output.getByte(1)) >> 2)
         case "flt ", "FLT ":
-            let floatValue = output.withUnsafeBytes { $0.load(fromByteOffset: 44, as: Float.self) }
+            let floatValue = output.withUnsafeBytes { $0.load(fromByteOffset: 48, as: Float.self) }
             return Double(floatValue)
         default:
             return Double(Int(output.getByte(0)) << 6 | Int(output.getByte(1)) >> 2)
@@ -765,33 +765,33 @@ private class SMCKeyDataBuffer {
         set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, as: UInt32.self) } }
     }
     
-    // data8 at offset 38
+    // data8 at offset 40
     var data8: UInt8 {
-        get { buffer[38] }
-        set { buffer[38] = newValue }
+        get { buffer[40] }
+        set { buffer[40] = newValue }
     }
     
-    // data32 at offset 40
+    // data32 at offset 44
     var data32: UInt32 {
-        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 40, as: UInt32.self) } }
-        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 40, as: UInt32.self) } }
+        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 44, as: UInt32.self) } }
+        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 44, as: UInt32.self) } }
     }
     
-    // keyInfo.dataSize at offset 24 (4 bytes)
+    // keyInfo.dataSize at offset 26 (4 bytes)
     var dataSize: UInt32 {
-        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 24, as: UInt32.self) } }
-        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 24, as: UInt32.self) } }
+        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 26, as: UInt32.self) } }
+        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 26, as: UInt32.self) } }
     }
     
-    // keyInfo.dataType at offset 28 (4 bytes)
+    // keyInfo.dataType at offset 30 (4 bytes)
     var dataType: UInt32 {
-        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 28, as: UInt32.self) } }
-        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 28, as: UInt32.self) } }
+        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 30, as: UInt32.self) } }
+        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 30, as: UInt32.self) } }
     }
     
-    // bytes array at offset 44 (32 bytes)
+    // bytes array at offset 48 (32 bytes)
     func getByte(_ index: Int) -> UInt8 {
-        buffer[44 + index]
+        buffer[48 + index]
     }
     
     // For IOConnectCallStructMethod
