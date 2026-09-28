@@ -318,9 +318,18 @@ final class SensorModule: NSObject, StatusModule {
     private func readFanSpeeds() {
         fanLeft = 0
         fanRight = 0
+        
+        // Re-open connection if closed
+        if smcConnection == 0 {
+            openSMCConnection()
+        }
         guard smcConnection != 0 else { return }
         
-        guard let fanCount = readSMCValue(key: "FNum") else { return }
+        // Try to read fan count - if this fails, connection is bad
+        guard let fanCount = readSMCValue(key: "FNum") else {
+            closeSMCConnection()
+            return
+        }
         let count = Int(fanCount)
         
         if count >= 1 {
@@ -344,7 +353,12 @@ final class SensorModule: NSObject, StatusModule {
     
     private func readSMCPower() {
         smcPower = 0
+        
+        if smcConnection == 0 {
+            openSMCConnection()
+        }
         guard smcConnection != 0 else { return }
+        
         if let power = readSMCValue(key: "PSTR") {
             smcPower = power
         }
@@ -352,12 +366,12 @@ final class SensorModule: NSObject, StatusModule {
     
     private func readSMCValue(key: String) -> Double? {
         guard smcConnection != 0 else { return nil }
+        guard key.count == 4 else { return nil }
         
         var input = SMCKeyData()
         var output = SMCKeyData()
         
         let keyBytes = Array(key.utf8)
-        guard keyBytes.count == 4 else { return nil }
         input.key = UInt32(keyBytes[0]) << 24 |
                     UInt32(keyBytes[1]) << 16 |
                     UInt32(keyBytes[2]) << 8 |
@@ -402,8 +416,10 @@ final class SensorModule: NSObject, StatusModule {
         case "fpe2", "FPE2":
             return Double(Int(output.bytes.0) << 6 | Int(output.bytes.1) >> 2)
         case "flt ", "FLT ":
-            var bytes = [output.bytes.0, output.bytes.1, output.bytes.2, output.bytes.3]
-            return bytes.withUnsafeMutableBytes { Double($0.load(as: Float.self)) }
+            let floatValue = withUnsafePointer(to: output.bytes) {
+                $0.withMemoryRebound(to: Float.self, capacity: 1) { $0.pointee }
+            }
+            return Double(floatValue)
         default:
             return Double(Int(output.bytes.0) << 6 | Int(output.bytes.1) >> 2)
         }
