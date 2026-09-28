@@ -10,6 +10,7 @@ final class StatusItemController: NSObject {
 
     private var statusItems: [String: NSStatusItem] = [:]
     private var popover: NSPopover?
+    private var currentPopoverModule: String?
 
     private var modules: [StatusModule] = []
 
@@ -42,17 +43,9 @@ final class StatusItemController: NSObject {
             name: .moduleDataUpdated,
             object: nil
         )
-
-        // Monitor clicks to close popover
-        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.popover?.close()
-        }
     }
 
     deinit {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-        }
     }
 
     private func log(_ message: String) {
@@ -150,6 +143,15 @@ final class StatusItemController: NSObject {
         }
 
         log("Status item clicked: \(identifier)")
+
+        // Toggle: if same module's popover is open, close it
+        if currentPopoverModule == identifier {
+            popover?.close()
+            currentPopoverModule = nil
+            log("Popover closed (toggle)")
+            return
+        }
+
         guard let module = modules.first(where: { $0.identifier == identifier }) else {
             log("No module found: \(identifier)")
             return
@@ -449,6 +451,7 @@ final class StatusItemController: NSObject {
 
         let newPopover = NSPopover()
         newPopover.behavior = .transient
+        newPopover.delegate = self
         let viewController = NSViewController()
         let contentView = module.makeDetailView()
         viewController.view = contentView
@@ -457,6 +460,7 @@ final class StatusItemController: NSObject {
 
         newPopover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         self.popover = newPopover
+        self.currentPopoverModule = module.identifier
         log("Popover shown for: \(module.identifier)")
     }
 
@@ -503,4 +507,12 @@ final class StatusItemController: NSObject {
 extension Notification.Name {
     static let statusModuleSettingsChanged = Notification.Name("statusModuleSettingsChanged")
     static let moduleDataUpdated = Notification.Name("moduleDataUpdated")
+}
+
+// MARK: - NSPopoverDelegate
+
+extension StatusItemController: NSPopoverDelegate {
+    func popoverDidClose(_ notification: Notification) {
+        currentPopoverModule = nil
+    }
 }
