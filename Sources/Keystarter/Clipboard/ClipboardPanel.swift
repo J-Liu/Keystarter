@@ -182,6 +182,7 @@ final class ClipboardPanel: NSObject {
 
         // Move to front (update created_at)
         ClipboardManager.shared.db.touchEntry(id: entry.id)
+        NotificationCenter.default.post(name: .clipboardChanged, object: nil)
 
         hide()
 
