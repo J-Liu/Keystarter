@@ -38,6 +38,11 @@ final class SensorModule: NSObject, StatusModule {
     private var fanLeftMax: Int = 6000
     private var fanRightMax: Int = 6000
     
+    // Fan history for chart (last 60 samples = 2 minutes)
+    private var fanLeftHistory: [Int] = []
+    private var fanRightHistory: [Int] = []
+    private let maxFanHistoryCount = 60
+    
     // SMC connection
     private var smcConnection: io_connect_t = 0
     
@@ -108,7 +113,7 @@ final class SensorModule: NSObject, StatusModule {
     func makeDetailView() -> NSView {
         let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
-        let fanChartHeight: CGFloat = 120
+        let fanChartHeight: CGFloat = 160  // Increased for circles + line chart
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 30  // Increased for more sensors
@@ -129,7 +134,7 @@ final class SensorModule: NSObject, StatusModule {
         headerView.frame = NSRect(x: 12, y: totalHeight - toolbarHeight - 20, width: 200, height: 16)
         container.addSubview(headerView)
         
-        // Fan chart (two circles)
+        // Fan chart (two circles + line chart)
         let fanChartY = totalHeight - toolbarHeight - headerHeight - fanChartHeight
         let fanChart = createFanChart(frame: NSRect(x: 12, y: fanChartY, width: viewWidth - 24, height: fanChartHeight))
         chartView = fanChart
@@ -203,6 +208,16 @@ final class SensorModule: NSObject, StatusModule {
         // Read fan speeds
         readFanSpeeds()
         
+        // Add to history
+        fanLeftHistory.append(fanLeft)
+        fanRightHistory.append(fanRight)
+        if fanLeftHistory.count > maxFanHistoryCount {
+            fanLeftHistory.removeFirst()
+        }
+        if fanRightHistory.count > maxFanHistoryCount {
+            fanRightHistory.removeFirst()
+        }
+        
         // Update summary
         if totalPower > 0 {
             summaryText = String(format: "%.0fW", totalPower)
@@ -221,26 +236,36 @@ final class SensorModule: NSObject, StatusModule {
     private func updateFanChart() {
         guard let chart = chartView else { return }
         chart.subviews.forEach { $0.removeFromSuperview() }
+        chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
         
         let chartWidth = chart.bounds.width
         let chartHeight = chart.bounds.height
         
-        let radius: CGFloat = 35
-        let centerY = chartHeight / 2
+        // Fan circles at top (smaller radius = 25)
+        let circleRadius: CGFloat = 25
+        let circleAreaHeight: CGFloat = 80
+        let circleCenterY = circleAreaHeight / 2
         
         // Left fan (purple-ish)
-        let leftX = chartWidth / 2 - radius - 40
+        let leftX = chartWidth / 2 - circleRadius - 30
         let leftPercent = fanLeftMax > 0 ? Double(fanLeft) / Double(fanLeftMax) * 100 : 0
         let leftColor = NSColor(calibratedRed: 0.7, green: 0.5, blue: 0.8, alpha: 0.3)
-        createFanCircle(in: chart, center: NSPoint(x: leftX, y: centerY), radius: radius,
+        createFanCircle(in: chart, center: NSPoint(x: leftX, y: circleCenterY), radius: circleRadius,
                        percent: leftPercent, speed: fanLeft, color: leftColor, label: "L")
         
         // Right fan (blue-ish)
-        let rightX = chartWidth / 2 + radius + 40
+        let rightX = chartWidth / 2 + circleRadius + 30
         let rightPercent = fanRightMax > 0 ? Double(fanRight) / Double(fanRightMax) * 100 : 0
         let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 0.3)
-        createFanCircle(in: chart, center: NSPoint(x: rightX, y: centerY), radius: radius,
+        createFanCircle(in: chart, center: NSPoint(x: rightX, y: circleCenterY), radius: circleRadius,
                        percent: rightPercent, speed: fanRight, color: rightColor, label: "R")
+        
+        // Line chart below (height = 80)
+        let lineChartY: CGFloat = 0
+        let lineChartHeight: CGFloat = chartHeight - circleAreaHeight
+        let lineChart = FanLineChartView(frame: NSRect(x: 0, y: lineChartY, width: chartWidth, height: lineChartHeight))
+        lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
+        chart.addSubview(lineChart)
     }
     
     private func createFanCircle(in parent: NSView, center: NSPoint, radius: CGFloat,
@@ -765,4 +790,83 @@ private struct SMCKeyData {
                              UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
                              UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
                              UInt8(0), UInt8(0))
+}
+
+// MARK: - Fan Line Chart View
+
+/// Fan speed line chart with smooth curves, growing from right to left
+final class FanLineChartView: NSView {
+    private var leftHistory: [Int] = []
+    private var rightHistory: [Int] = []
+    private var maxSpeed: Int = 6000
+    
+    private let leftColor = NSColor(calibratedRed: 0.7, green: 0.5, blue: 0.8, alpha: 1.0)
+    private let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 1.0)
+    
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func setHistory(_ left: [Int], _ right: [Int], maxSpeed: Int) {
+        self.leftHistory = left
+        self.rightHistory = right
+        self.maxSpeed = maxSpeed > 0 ? maxSpeed : 6000
+        needsDisplay = true
+    }
+    
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        
+        guard leftHistory.count > 1 || rightHistory.count > 1 else { return }
+        guard let context = NSGraphicsContext.current?.cgContext else { return }
+        context.setShouldAntialias(true)
+        
+        let padding: CGFloat = 8
+        let height = bounds.height - padding * 2
+        let width = bounds.width - padding * 2
+        let xRatio = width / CGFloat(60 - 1)
+        
+        // Draw left fan line (purple)
+        if leftHistory.count > 1 {
+            drawLine(history: leftHistory, color: leftColor, padding: padding, height: height, xRatio: xRatio)
+        }
+        
+        // Draw right fan line (blue)
+        if rightHistory.count > 1 {
+            drawLine(history: rightHistory, color: rightColor, padding: padding, height: height, xRatio: xRatio)
+        }
+    }
+    
+    private func drawLine(history: [Int], color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat) {
+        var points: [CGPoint] = []
+        
+        for (i, speed) in history.enumerated() {
+            // Newest data on right edge, grows from right to left
+            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio
+            let y = padding + CGFloat(speed) / CGFloat(maxSpeed) * height
+            points.append(CGPoint(x: x, y: y))
+        }
+        
+        guard points.count > 1 else { return }
+        
+        // Draw smooth curve
+        let path = NSBezierPath()
+        path.move(to: points[0])
+        
+        for i in 1..<points.count {
+            let prev = points[i - 1]
+            let curr = points[i]
+            let midX = (prev.x + curr.x) / 2
+            path.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
+        }
+        
+        path.lineWidth = 1.5
+        color.setStroke()
+        path.stroke()
+    }
 }
