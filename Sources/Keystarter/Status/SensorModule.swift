@@ -368,8 +368,8 @@ final class SensorModule: NSObject, StatusModule {
         guard smcConnection != 0 else { return nil }
         guard key.count == 4 else { return nil }
         
-        var input = SMCKeyData()
-        var output = SMCKeyData()
+        let input = SMCKeyDataBuffer()
+        let output = SMCKeyDataBuffer()
         
         let keyBytes = Array(key.utf8)
         input.key = UInt32(keyBytes[0]) << 24 |
@@ -378,19 +378,40 @@ final class SensorModule: NSObject, StatusModule {
                     UInt32(keyBytes[3])
         input.data8 = UInt8(kSMCReadKeyInfo)
         
-        let inputSize = MemoryLayout<SMCKeyData>.stride
-        var outputSize = MemoryLayout<SMCKeyData>.stride
-        
-        var kr = IOConnectCallStructMethod(smcConnection, UInt32(kSMCKernelIndex), &input, inputSize, &output, &outputSize)
+        var outputSize = SMCKeyDataBuffer.size
+        var kr = input.withUnsafeMutableBytes { inputPtr in
+            output.withUnsafeMutableBytes { outputPtr in
+                IOConnectCallStructMethod(
+                    smcConnection,
+                    UInt32(kSMCKernelIndex),
+                    inputPtr.baseAddress,
+                    SMCKeyDataBuffer.size,
+                    outputPtr.baseAddress,
+                    &outputSize
+                )
+            }
+        }
         guard kr == KERN_SUCCESS else { return nil }
         
-        let dataSize = output.keyInfo.dataSize
-        let dataType = output.keyInfo.dataType
+        let dataSize = output.dataSize
+        let dataType = output.dataType
         
-        input.keyInfo.dataSize = dataSize
+        input.dataSize = dataSize
         input.data8 = UInt8(kSMCReadBytes)
         
-        kr = IOConnectCallStructMethod(smcConnection, UInt32(kSMCKernelIndex), &input, inputSize, &output, &outputSize)
+        outputSize = SMCKeyDataBuffer.size
+        kr = input.withUnsafeMutableBytes { inputPtr in
+            output.withUnsafeMutableBytes { outputPtr in
+                IOConnectCallStructMethod(
+                    smcConnection,
+                    UInt32(kSMCKernelIndex),
+                    inputPtr.baseAddress,
+                    SMCKeyDataBuffer.size,
+                    outputPtr.baseAddress,
+                    &outputSize
+                )
+            }
+        }
         guard kr == KERN_SUCCESS else { return nil }
         
         let typeStr = String(bytes: [
@@ -402,26 +423,24 @@ final class SensorModule: NSObject, StatusModule {
         
         switch typeStr {
         case "ui8 ", "UI8 ":
-            return Double(output.bytes.0)
+            return Double(output.getByte(0))
         case "ui16", "UI16":
-            return Double(UInt16(output.bytes.0) << 8 | UInt16(output.bytes.1))
+            return Double(UInt16(output.getByte(0)) << 8 | UInt16(output.getByte(1)))
         case "ui32", "UI32":
-            return Double(UInt32(output.bytes.0) << 24 | UInt32(output.bytes.1) << 16 | UInt32(output.bytes.2) << 8 | UInt32(output.bytes.3))
+            return Double(UInt32(output.getByte(0)) << 24 | UInt32(output.getByte(1)) << 16 | UInt32(output.getByte(2)) << 8 | UInt32(output.getByte(3)))
         case "sp78", "SP78":
-            let intValue = Double(Int16(output.bytes.0) << 8 | Int16(output.bytes.1))
+            let intValue = Double(Int16(output.getByte(0)) << 8 | Int16(output.getByte(1)))
             return intValue / 256.0
         case "sp96", "SP96":
-            let intValue = Double(Int16(output.bytes.0) << 8 | Int16(output.bytes.1))
+            let intValue = Double(Int16(output.getByte(0)) << 8 | Int16(output.getByte(1)))
             return intValue / 64.0
         case "fpe2", "FPE2":
-            return Double(Int(output.bytes.0) << 6 | Int(output.bytes.1) >> 2)
+            return Double(Int(output.getByte(0)) << 6 | Int(output.getByte(1)) >> 2)
         case "flt ", "FLT ":
-            let floatValue = withUnsafePointer(to: output.bytes) {
-                $0.withMemoryRebound(to: Float.self, capacity: 1) { $0.pointee }
-            }
+            let floatValue = output.withUnsafeBytes { $0.load(fromByteOffset: 44, as: Float.self) }
             return Double(floatValue)
         default:
-            return Double(Int(output.bytes.0) << 6 | Int(output.bytes.1) >> 2)
+            return Double(Int(output.getByte(0)) << 6 | Int(output.getByte(1)) >> 2)
         }
     }
     
@@ -442,24 +461,34 @@ final class SensorModule: NSObject, StatusModule {
         var keys: [String] = []
         
         for i in 0..<count {
-            var input = SMCKeyData()
-            var output = SMCKeyData()
+            let input = SMCKeyDataBuffer()
+            let output = SMCKeyDataBuffer()
             
             input.data8 = UInt8(kSMCGetKeyFromIndex)
             input.data32 = UInt32(i)
             
-            let inputSize = MemoryLayout<SMCKeyData>.stride
-            var outputSize = MemoryLayout<SMCKeyData>.stride
-            
-            let kr = IOConnectCallStructMethod(smcConnection, UInt32(kSMCKernelIndex), &input, inputSize, &output, &outputSize)
+            var outputSize = SMCKeyDataBuffer.size
+            let kr = input.withUnsafeMutableBytes { inputPtr in
+                output.withUnsafeMutableBytes { outputPtr in
+                    IOConnectCallStructMethod(
+                        smcConnection,
+                        UInt32(kSMCKernelIndex),
+                        inputPtr.baseAddress,
+                        SMCKeyDataBuffer.size,
+                        outputPtr.baseAddress,
+                        &outputSize
+                    )
+                }
+            }
             guard kr == KERN_SUCCESS else { continue }
             
             // Extract key from output.key
+            let keyVal = output.key
             let key = String(bytes: [
-                UInt8((output.key >> 24) & 0xFF),
-                UInt8((output.key >> 16) & 0xFF),
-                UInt8((output.key >> 8) & 0xFF),
-                UInt8(output.key & 0xFF)
+                UInt8((keyVal >> 24) & 0xFF),
+                UInt8((keyVal >> 16) & 0xFF),
+                UInt8((keyVal >> 8) & 0xFF),
+                UInt8(keyVal & 0xFF)
             ], encoding: .ascii) ?? ""
             
             if !key.isEmpty {
@@ -720,49 +749,57 @@ private let smcSensorNames: [String: String] = [
     "Tm0P": "Mainboard", "TL0P": "Display"
 ]
 
-private struct SMCKeyData {
-    // Exact copy from Stats SMC/smc.swift
-    typealias SMCBytes_t = (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
-                            UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
-                            UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
-                            UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
-                            UInt8, UInt8, UInt8, UInt8)
+// Use raw memory buffer for SMC calls to avoid struct layout issues
+// Total size must be 80 bytes to match kernel expectation
+private class SMCKeyDataBuffer {
+    static let size = 80
+    private var buffer: [UInt8]
     
-    struct vers_t {
-        var major: UInt8 = 0
-        var minor: UInt8 = 0
-        var build: UInt8 = 0
-        var reserved: UInt8 = 0
-        var release: UInt16 = 0
+    init() {
+        buffer = [UInt8](repeating: 0, count: SMCKeyDataBuffer.size)
     }
     
-    struct LimitData_t {
-        var version: UInt16 = 0
-        var length: UInt16 = 0
-        var cpuPLimit: UInt32 = 0
-        var gpuPLimit: UInt32 = 0
-        var memPLimit: UInt32 = 0
+    // Key at offset 0 (4 bytes)
+    var key: UInt32 {
+        get { buffer.withUnsafeBytes { $0.load(as: UInt32.self) } }
+        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, as: UInt32.self) } }
     }
     
-    struct keyInfo_t {
-        var dataSize: UInt32 = 0
-        var dataType: UInt32 = 0
-        var dataAttributes: UInt8 = 0
+    // data8 at offset 38
+    var data8: UInt8 {
+        get { buffer[38] }
+        set { buffer[38] = newValue }
     }
     
-    var key: UInt32 = 0
-    var vers = vers_t()
-    var pLimitData = LimitData_t()
-    var keyInfo = keyInfo_t()
-    var padding: UInt16 = 0
-    var result: UInt8 = 0
-    var status: UInt8 = 0
-    var data8: UInt8 = 0
-    var data32: UInt32 = 0
-    var bytes: SMCBytes_t = (UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
-                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
-                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
-                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
-                             UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(0),
-                             UInt8(0), UInt8(0))
+    // data32 at offset 40
+    var data32: UInt32 {
+        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 40, as: UInt32.self) } }
+        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 40, as: UInt32.self) } }
+    }
+    
+    // keyInfo.dataSize at offset 24 (4 bytes)
+    var dataSize: UInt32 {
+        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 24, as: UInt32.self) } }
+        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 24, as: UInt32.self) } }
+    }
+    
+    // keyInfo.dataType at offset 28 (4 bytes)
+    var dataType: UInt32 {
+        get { buffer.withUnsafeBytes { $0.load(fromByteOffset: 28, as: UInt32.self) } }
+        set { withUnsafeMutableBytes { $0.storeBytes(of: newValue, toByteOffset: 28, as: UInt32.self) } }
+    }
+    
+    // bytes array at offset 44 (32 bytes)
+    func getByte(_ index: Int) -> UInt8 {
+        buffer[44 + index]
+    }
+    
+    // For IOConnectCallStructMethod
+    func withUnsafeMutableBytes<T>(_ body: (UnsafeMutableRawBufferPointer) throws -> T) rethrows -> T {
+        try buffer.withUnsafeMutableBytes(body)
+    }
+    
+    func withUnsafeBytes<T>(_ body: (UnsafeRawBufferPointer) throws -> T) rethrows -> T {
+        try buffer.withUnsafeBytes(body)
+    }
 }
