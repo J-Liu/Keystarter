@@ -423,6 +423,13 @@ final class CPUChartView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
+        // Clear existing subviews (keep line charts)
+        subviews.forEach { subview in
+            if subview !== totalChart && subview !== systemChart && subview !== userChart {
+                subview.removeFromSuperview()
+            }
+        }
+
         let chartWidth = bounds.width
         let chartHeight = bounds.height
 
