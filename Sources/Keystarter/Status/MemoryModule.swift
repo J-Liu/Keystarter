@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import CoreVideo
 
 /// Memory process information.
 struct MemoryProcessInfo {
@@ -87,6 +88,7 @@ final class MemoryModule: NSObject, StatusModule {
         let chart = MemoryChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
         chart.setTotalMemory(totalMemory)
         chart.setHistory(memoryHistory, usedMemory: usedMemory)
+        chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
 
@@ -421,6 +423,11 @@ final class MemoryChartView: NSView {
     
     private let chartColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 1.0)
     
+    // Animation
+    private var displayLink: CVDisplayLink?
+    private var lastUpdateTime: Date = Date()
+    private let sampleInterval: TimeInterval = 2.0
+    
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
@@ -432,6 +439,41 @@ final class MemoryChartView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
     
+    deinit {
+        stopAnimation()
+    }
+    
+    func startAnimation() {
+        guard displayLink == nil else { return }
+        
+        var link: CVDisplayLink?
+        CVDisplayLinkCreateWithActiveCGDisplays(&link)
+        
+        guard let link = link else { return }
+        displayLink = link
+        
+        // Use weak reference to avoid retain cycle
+        let weakSelf = Unmanaged.passUnretained(self).toOpaque()
+        
+        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo in
+            guard let userInfo = userInfo else { return kCVReturnSuccess }
+            let view = Unmanaged<MemoryChartView>.fromOpaque(userInfo).takeUnretainedValue()
+            DispatchQueue.main.async {
+                view.needsDisplay = true
+            }
+            return kCVReturnSuccess
+        }, weakSelf)
+        
+        CVDisplayLinkStart(link)
+        lastUpdateTime = Date()
+    }
+    
+    func stopAnimation() {
+        guard let link = displayLink else { return }
+        CVDisplayLinkStop(link)
+        displayLink = nil
+    }
+    
     func setTotalMemory(_ total: UInt64) {
         self.totalMemory = total
     }
@@ -439,6 +481,7 @@ final class MemoryChartView: NSView {
     func setHistory(_ history: [Double], usedMemory: UInt64) {
         self.history = history
         self.usedMemory = usedMemory
+        lastUpdateTime = Date()
         needsDisplay = true
     }
     
@@ -458,13 +501,18 @@ final class MemoryChartView: NSView {
         let width = bounds.width - padding * 2
         let xRatio = width / CGFloat(maxHistoryCount - 1)
         
+        // Calculate smooth scroll offset
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / sampleInterval, 1.0)
+        let xOffset = progress * xRatio  // Smoothly scroll left
+        
         // Build line points - newest on right edge, grows from right to left
         var linePoints: [CGPoint] = []
         for (i, value) in history.enumerated() {
             // i=0 is oldest, i=count-1 is newest
             // Newest should be at right edge (bounds.width - padding)
             // Oldest moves left as more data comes in
-            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio
+            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio - xOffset
             let y = padding + min(value / totalGB, 1.0) * height
             linePoints.append(CGPoint(x: x, y: y))
         }
