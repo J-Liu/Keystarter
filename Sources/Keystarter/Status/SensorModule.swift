@@ -241,22 +241,10 @@ final class SensorModule: NSObject, StatusModule {
         let chartWidth = chart.bounds.width
         let chartHeight = chart.bounds.height
         
-        // Line chart at bottom (height = 70)
-        let lineChartHeight: CGFloat = 70
-        let lineChart = FanLineChartView(frame: NSRect(x: 12, y: 8, width: chartWidth - 24, height: lineChartHeight))
-        lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
-        chart.addSubview(lineChart)
-        
-        // Divider between circles and line chart (with space from L/R labels)
-        let dividerY = lineChartHeight + 20
-        let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: chartWidth - 24, height: 1))
-        divider.boxType = .separator
-        chart.addSubview(divider)
-        
-        // Fan circles at top (smaller radius = 25)
+        // Fan circles at top (radius = 25)
+        // Leave space for RPM label above circle (radius + 6 + 12 + padding = ~45 from top)
         let circleRadius: CGFloat = 25
-        // Center circles in remaining space with padding from top
-        let circleCenterY = lineChartHeight + 36 + (chartHeight - lineChartHeight - 36) / 2
+        let circleCenterY = chartHeight - 45 - circleRadius  // 45px from top for RPM label
         
         // Left fan (purple-ish)
         let leftX = chartWidth / 2 - circleRadius - 30
@@ -271,6 +259,19 @@ final class SensorModule: NSObject, StatusModule {
         let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 0.3)
         createFanCircle(in: chart, center: NSPoint(x: rightX, y: circleCenterY), radius: circleRadius,
                        percent: rightPercent, speed: fanRight, color: rightColor, label: "R")
+        
+        // Divider below circles (L/R label is at circleCenterY - radius - 20)
+        let lrLabelY = circleCenterY - circleRadius - 20
+        let dividerY = lrLabelY - 12  // 12px space between L/R and divider
+        let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: chartWidth - 24, height: 1))
+        divider.boxType = .separator
+        chart.addSubview(divider)
+        
+        // Line chart at bottom
+        let lineChartHeight = dividerY - 8
+        let lineChart = FanLineChartView(frame: NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight))
+        lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
+        chart.addSubview(lineChart)
     }
     
     private func createFanCircle(in parent: NSView, center: NSPoint, radius: CGFloat,
