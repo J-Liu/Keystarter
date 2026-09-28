@@ -69,9 +69,9 @@ fi
 # Add rpath for frameworks
 install_name_tool -add_rpath "@executable_path/../Frameworks" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
 
-# 3. Ad-hoc sign (required on Apple Silicon)
+# 3. Sign with local certificate (stable identity for TCC)
 echo "==> Signing..."
-codesign --force --deep --sign - --identifier com.jialiu.keystarter \
+codesign --force --deep --sign "Local Development Signing" \
     --entitlements "${ROOT_DIR}/Resources/Keystarter.entitlements" \
     "$APP_BUNDLE"
 echo ""
