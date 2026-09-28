@@ -241,10 +241,16 @@ final class SensorModule: NSObject, StatusModule {
         let chartWidth = chart.bounds.width
         let chartHeight = chart.bounds.height
         
+        // Line chart at bottom (height = 80)
+        let lineChartHeight: CGFloat = 80
+        let lineChart = FanLineChartView(frame: NSRect(x: 0, y: 0, width: chartWidth, height: lineChartHeight))
+        lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
+        chart.addSubview(lineChart)
+        
         // Fan circles at top (smaller radius = 25)
         let circleRadius: CGFloat = 25
-        let circleAreaHeight: CGFloat = 80
-        let circleCenterY = circleAreaHeight / 2
+        let circleAreaHeight: CGFloat = chartHeight - lineChartHeight
+        let circleCenterY = lineChartHeight + circleAreaHeight / 2
         
         // Left fan (purple-ish)
         let leftX = chartWidth / 2 - circleRadius - 30
@@ -259,13 +265,6 @@ final class SensorModule: NSObject, StatusModule {
         let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 0.3)
         createFanCircle(in: chart, center: NSPoint(x: rightX, y: circleCenterY), radius: circleRadius,
                        percent: rightPercent, speed: fanRight, color: rightColor, label: "R")
-        
-        // Line chart below (height = 80)
-        let lineChartY: CGFloat = 0
-        let lineChartHeight: CGFloat = chartHeight - circleAreaHeight
-        let lineChart = FanLineChartView(frame: NSRect(x: 0, y: lineChartY, width: chartWidth, height: lineChartHeight))
-        lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
-        chart.addSubview(lineChart)
     }
     
     private func createFanCircle(in parent: NSView, center: NSPoint, radius: CGFloat,
