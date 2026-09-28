@@ -243,20 +243,20 @@ final class SensorModule: NSObject, StatusModule {
         
         // Line chart at bottom (height = 70)
         let lineChartHeight: CGFloat = 70
-        let lineChart = FanLineChartView(frame: NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight))
+        let lineChart = FanLineChartView(frame: NSRect(x: 12, y: 8, width: chartWidth - 24, height: lineChartHeight))
         lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
         chart.addSubview(lineChart)
         
-        // Divider between circles and line chart
-        let dividerY = lineChartHeight + 8
+        // Divider between circles and line chart (with space from L/R labels)
+        let dividerY = lineChartHeight + 20
         let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: chartWidth - 24, height: 1))
         divider.boxType = .separator
         chart.addSubview(divider)
         
         // Fan circles at top (smaller radius = 25)
         let circleRadius: CGFloat = 25
-        let circleAreaHeight: CGFloat = chartHeight - lineChartHeight - 16  // 16 for divider + padding
-        let circleCenterY = lineChartHeight + 16 + circleAreaHeight / 2
+        // Center circles in remaining space with padding from top
+        let circleCenterY = lineChartHeight + 36 + (chartHeight - lineChartHeight - 36) / 2
         
         // Left fan (purple-ish)
         let leftX = chartWidth / 2 - circleRadius - 30
