@@ -12,9 +12,17 @@ final class SettingsWindow: NSWindow {
     private var generalTab: NSView!
     private var monitorTab: NSView!
     private var clipboardTab: NSView!
+    private var indexTab: NSView!
+    private var contentIndexTab: NSView!
     private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
+    private var dirsTableView: NSTableView!
+    private var ignoredTableView: NSTableView!
+    private var extTableView: NSTableView!
+    private var dirs: [String] = []
+    private var ignoredDirs: [String] = []
+    private var contentExts: [String] = []
 
     // Layout constants
     private let labelWidth: CGFloat = 120
@@ -66,6 +74,18 @@ final class SettingsWindow: NSWindow {
         clipboardItem.label = L("settings.tab.clipboard")
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
+
+        indexTab = createIndexTab()
+        let indexItem = NSTabViewItem(identifier: "index")
+        indexItem.label = L("settings.tab.index")
+        indexItem.view = indexTab
+        tabView.addTabViewItem(indexItem)
+
+        contentIndexTab = createContentIndexTab()
+        let contentIndexItem = NSTabViewItem(identifier: "contentIndex")
+        contentIndexItem.label = L("settings.tab.contentIndex")
+        contentIndexItem.view = contentIndexTab
+        tabView.addTabViewItem(contentIndexItem)
 
         advancedTab = createAdvancedTab()
         let advancedItem = NSTabViewItem(identifier: "advanced")
@@ -216,11 +236,6 @@ final class SettingsWindow: NSWindow {
         let dockIconCheckbox = NSButton(checkboxWithTitle: L("settings.dockIcon.checkbox"), target: self, action: #selector(dockIconChanged(_:)))
         dockIconCheckbox.state = UserDefaults.standard.bool(forKey: "showDockIcon") ? .on : .off
         stack.addArrangedSubview(makeRow(label: L("settings.dockIcon"), control: dockIconCheckbox))
-
-        // Row: File Content Index
-        let contentIndexCheckbox = NSButton(checkboxWithTitle: L("settings.contentIndex.checkbox"), target: self, action: #selector(contentIndexChanged(_:)))
-        contentIndexCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
-        stack.addArrangedSubview(makeRow(label: L("settings.contentIndex"), control: contentIndexCheckbox))
 
         // Row: Update
         let updateFrequencyPopup = NSPopUpButton()
@@ -389,6 +404,165 @@ final class SettingsWindow: NSWindow {
         clipboardLogPath.bezelStyle = .roundedBezel
         clipboardLogPath.widthAnchor.constraint(equalToConstant: 400).isActive = true
         stack.addArrangedSubview(makeRow(label: L("settings.log.path"), control: clipboardLogPath))
+
+        return wrapInTopAlignedContainer(stack)
+    }
+
+    // MARK: - Index Tab
+
+    private func createIndexTab() -> NSView {
+        let stack = makeVerticalStack()
+
+        // Index directories
+        let dirsLabel = NSTextField(labelWithString: L("settings.index.directories"))
+        stack.addArrangedSubview(dirsLabel)
+
+        // Load saved directories
+        dirs = UserDefaults.standard.stringArray(forKey: "index.directories") ?? ["~/Desktop", "~/Documents"]
+
+        let dirsScrollView = NSScrollView()
+        dirsScrollView.hasVerticalScroller = true
+        dirsScrollView.borderType = .bezelBorder
+        dirsScrollView.translatesAutoresizingMaskIntoConstraints = false
+        dirsScrollView.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        dirsScrollView.heightAnchor.constraint(equalToConstant: 120).isActive = true
+
+        dirsTableView = NSTableView()
+        dirsTableView.identifier = NSUserInterfaceItemIdentifier("dirsTable")
+        dirsTableView.headerView = nil
+        let dirsColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("path"))
+        dirsColumn.width = 380
+        dirsTableView.addTableColumn(dirsColumn)
+        dirsTableView.delegate = self
+        dirsTableView.dataSource = self
+        dirsScrollView.documentView = dirsTableView
+        stack.addArrangedSubview(dirsScrollView)
+
+        // Dirs buttons
+        let addDirButton = NSButton(title: L("settings.index.add"), target: self, action: #selector(addIndexDirectory))
+        addDirButton.bezelStyle = .rounded
+        let removeDirButton = NSButton(title: L("settings.index.remove"), target: self, action: #selector(removeIndexDirectory))
+        removeDirButton.bezelStyle = .rounded
+
+        let dirsButtonRow = NSStackView(views: [addDirButton, removeDirButton])
+        dirsButtonRow.orientation = .horizontal
+        dirsButtonRow.spacing = 12
+        dirsButtonRow.alignment = .centerY
+        stack.addArrangedSubview(dirsButtonRow)
+
+        // Ignored directories
+        let ignoredLabel = NSTextField(labelWithString: L("settings.index.ignored"))
+        stack.addArrangedSubview(ignoredLabel)
+
+        // Load saved ignored directories
+        ignoredDirs = UserDefaults.standard.stringArray(forKey: "index.ignoredDirs") ?? [
+            "node_modules", "target", ".git", "Library", "DerivedData", "Pods", ".venv", "build", "dist"
+        ]
+
+        let ignoredScrollView = NSScrollView()
+        ignoredScrollView.hasVerticalScroller = true
+        ignoredScrollView.borderType = .bezelBorder
+        ignoredScrollView.translatesAutoresizingMaskIntoConstraints = false
+        ignoredScrollView.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        ignoredScrollView.heightAnchor.constraint(equalToConstant: 120).isActive = true
+
+        ignoredTableView = NSTableView()
+        ignoredTableView.identifier = NSUserInterfaceItemIdentifier("ignoredTable")
+        ignoredTableView.headerView = nil
+        let ignoredColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
+        ignoredColumn.width = 380
+        ignoredTableView.addTableColumn(ignoredColumn)
+        ignoredTableView.delegate = self
+        ignoredTableView.dataSource = self
+        ignoredScrollView.documentView = ignoredTableView
+        stack.addArrangedSubview(ignoredScrollView)
+
+        // Ignored buttons
+        let addIgnoredButton = NSButton(title: L("settings.index.add"), target: self, action: #selector(addIgnoredDirectory))
+        addIgnoredButton.bezelStyle = .rounded
+        let removeIgnoredButton = NSButton(title: L("settings.index.remove"), target: self, action: #selector(removeIgnoredDirectory))
+        removeIgnoredButton.bezelStyle = .rounded
+
+        let ignoredButtonRow = NSStackView(views: [addIgnoredButton, removeIgnoredButton])
+        ignoredButtonRow.orientation = .horizontal
+        ignoredButtonRow.spacing = 12
+        ignoredButtonRow.alignment = .centerY
+        stack.addArrangedSubview(ignoredButtonRow)
+
+        // Max depth
+        let depthField = NSTextField()
+        let currentDepth = UserDefaults.standard.integer(forKey: "index.maxDepth")
+        depthField.stringValue = currentDepth > 0 ? String(currentDepth) : "∞"
+        depthField.placeholderString = "0 = unlimited"
+        depthField.target = self
+        depthField.action = #selector(indexDepthChanged(_:))
+        depthField.widthAnchor.constraint(equalToConstant: 60).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.index.maxDepth"), control: depthField))
+
+        return wrapInTopAlignedContainer(stack)
+    }
+
+    // MARK: - Content Index Tab
+
+    private func createContentIndexTab() -> NSView {
+        let stack = makeVerticalStack()
+
+        // Content index checkbox
+        let contentCheckbox = NSButton(checkboxWithTitle: L("settings.index.content.enable"), target: self, action: #selector(contentIndexChanged(_:)))
+        contentCheckbox.state = UserDefaults.standard.bool(forKey: "index.fileContent") ? .on : .off
+        stack.addArrangedSubview(makeRow(label: L("settings.index.content"), control: contentCheckbox))
+
+        // Content file extensions
+        let extLabel = NSTextField(labelWithString: L("settings.index.extensions"))
+        stack.addArrangedSubview(extLabel)
+
+        // Load saved extensions
+        contentExts = UserDefaults.standard.stringArray(forKey: "index.contentExtensions") ?? ["md", "txt", "swift", "py", "js", "json"]
+
+        let extScrollView = NSScrollView()
+        extScrollView.hasVerticalScroller = true
+        extScrollView.borderType = .bezelBorder
+        extScrollView.translatesAutoresizingMaskIntoConstraints = false
+        extScrollView.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        extScrollView.heightAnchor.constraint(equalToConstant: 150).isActive = true
+
+        extTableView = NSTableView()
+        extTableView.identifier = NSUserInterfaceItemIdentifier("extTable")
+        extTableView.headerView = nil
+        let extColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("ext"))
+        extColumn.width = 380
+        extTableView.addTableColumn(extColumn)
+        extTableView.delegate = self
+        extTableView.dataSource = self
+        extScrollView.documentView = extTableView
+        stack.addArrangedSubview(extScrollView)
+
+        // Extension buttons
+        let addExtButton = NSButton(title: L("settings.index.add"), target: self, action: #selector(addContentExtension))
+        addExtButton.bezelStyle = .rounded
+        let removeExtButton = NSButton(title: L("settings.index.remove"), target: self, action: #selector(removeContentExtension))
+        removeExtButton.bezelStyle = .rounded
+
+        let extButtonRow = NSStackView(views: [addExtButton, removeExtButton])
+        extButtonRow.orientation = .horizontal
+        extButtonRow.spacing = 12
+        extButtonRow.alignment = .centerY
+        stack.addArrangedSubview(extButtonRow)
+
+        // Rebuild button
+        let rebuildButton = NSButton(title: L("settings.index.rebuild"), target: self, action: #selector(rebuildIndex))
+        rebuildButton.bezelStyle = .rounded
+        stack.addArrangedSubview(makeRow(label: "", control: rebuildButton))
+
+        // Index status
+        let statusLabel = NSTextField(labelWithString: "")
+        statusLabel.font = .systemFont(ofSize: 11)
+        statusLabel.textColor = .secondaryLabelColor
+        statusLabel.identifier = NSUserInterfaceItemIdentifier("indexStatus")
+        if let count = (NSApp.delegate as? AppDelegate)?.indexDB?.fileCount() {
+            statusLabel.stringValue = String(format: L("settings.index.status"), count)
+        }
+        stack.addArrangedSubview(makeRow(label: "", control: statusLabel))
 
         return wrapInTopAlignedContainer(stack)
     }
@@ -635,6 +809,18 @@ final class SettingsWindow: NSWindow {
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
 
+        indexTab = createIndexTab()
+        let indexItem = NSTabViewItem(identifier: "index")
+        indexItem.label = L("settings.tab.index")
+        indexItem.view = indexTab
+        tabView.addTabViewItem(indexItem)
+
+        contentIndexTab = createContentIndexTab()
+        let contentIndexItem = NSTabViewItem(identifier: "contentIndex")
+        contentIndexItem.label = L("settings.tab.contentIndex")
+        contentIndexItem.view = contentIndexTab
+        tabView.addTabViewItem(contentIndexItem)
+
         advancedTab = createAdvancedTab()
         let advancedItem = NSTabViewItem(identifier: "advanced")
         advancedItem.label = L("settings.tab.advanced")
@@ -755,6 +941,105 @@ final class SettingsWindow: NSWindow {
         }
     }
 
+    @objc private func rebuildIndex() {
+        (NSApp.delegate as? AppDelegate)?.rebuildFileIndex()
+    }
+
+    @objc private func indexDepthChanged(_ sender: NSTextField) {
+        let depth = Int(sender.stringValue) ?? 0
+        UserDefaults.standard.set(depth, forKey: "index.maxDepth")
+    }
+
+    @objc private func addIndexDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.message = L("settings.index.selectDirectory")
+
+        if panel.runModal() == .OK, let url = panel.url {
+            let path = abbreviatePath(url.path)
+            if !dirs.contains(path) {
+                dirs.append(path)
+                UserDefaults.standard.set(dirs, forKey: "index.directories")
+                dirsTableView.reloadData()
+            }
+        }
+    }
+
+    /// Convert absolute path to ~ format if in home directory
+    private func abbreviatePath(_ path: String) -> String {
+        let home = NSHomeDirectory()
+        if path.hasPrefix(home) {
+            return "~" + path.dropFirst(home.count)
+        }
+        return path
+    }
+
+    @objc private func removeIndexDirectory() {
+        let selectedRow = dirsTableView.selectedRow
+        guard selectedRow >= 0 && selectedRow < dirs.count else { return }
+        dirs.remove(at: selectedRow)
+        UserDefaults.standard.set(dirs, forKey: "index.directories")
+        dirsTableView.reloadData()
+    }
+
+    @objc private func addIgnoredDirectory() {
+        let alert = NSAlert()
+        alert.messageText = L("settings.index.ignored.addTitle")
+        alert.informativeText = L("settings.index.ignored.addMessage")
+        alert.addButton(withTitle: L("settings.index.add"))
+        alert.addButton(withTitle: L("settings.index.cancel"))
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+        alert.accessoryView = textField
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            let name = textField.stringValue.trimmingCharacters(in: .whitespaces)
+            if !name.isEmpty && !ignoredDirs.contains(name) {
+                ignoredDirs.append(name)
+                UserDefaults.standard.set(ignoredDirs, forKey: "index.ignoredDirs")
+                ignoredTableView.reloadData()
+            }
+        }
+    }
+
+    @objc private func removeIgnoredDirectory() {
+        let selectedRow = ignoredTableView.selectedRow
+        guard selectedRow >= 0 && selectedRow < ignoredDirs.count else { return }
+        ignoredDirs.remove(at: selectedRow)
+        UserDefaults.standard.set(ignoredDirs, forKey: "index.ignoredDirs")
+        ignoredTableView.reloadData()
+    }
+
+    @objc private func addContentExtension() {
+        let alert = NSAlert()
+        alert.messageText = L("settings.index.ext.addTitle")
+        alert.informativeText = L("settings.index.ext.addMessage")
+        alert.addButton(withTitle: L("settings.index.add"))
+        alert.addButton(withTitle: L("settings.index.cancel"))
+
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+        alert.accessoryView = textField
+
+        if alert.runModal() == .alertFirstButtonReturn {
+            let ext = textField.stringValue.trimmingCharacters(in: .whitespaces)
+            if !ext.isEmpty && !contentExts.contains(ext) {
+                contentExts.append(ext)
+                UserDefaults.standard.set(contentExts, forKey: "index.contentExtensions")
+                extTableView.reloadData()
+            }
+        }
+    }
+
+    @objc private func removeContentExtension() {
+        let selectedRow = extTableView.selectedRow
+        guard selectedRow >= 0 && selectedRow < contentExts.count else { return }
+        contentExts.remove(at: selectedRow)
+        UserDefaults.standard.set(contentExts, forKey: "index.contentExtensions")
+        extTableView.reloadData()
+    }
+
     @objc private func updateFrequencyChanged(_ sender: NSPopUpButton) {
         let frequency = UpdateManager.CheckFrequency.allCases.first { $0.displayName == sender.title } ?? .weekly
         UpdateManager.shared.checkFrequency = frequency
@@ -870,14 +1155,23 @@ final class SettingsWindow: NSWindow {
 
 extension SettingsWindow: NSTableViewDelegate, NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int {
-        if tableView.identifier?.rawValue == "ignoredAppsTable" {
+        switch tableView.identifier?.rawValue {
+        case "ignoredAppsTable":
             return IgnoredAppsManager.shared.getAllIgnored().count
+        case "dirsTable":
+            return dirs.count
+        case "ignoredTable":
+            return ignoredDirs.count
+        case "extTable":
+            return contentExts.count
+        default:
+            return 0
         }
-        return 0
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        if tableView.identifier?.rawValue == "ignoredAppsTable" {
+        switch tableView.identifier?.rawValue {
+        case "ignoredAppsTable":
             let ignoredApps = IgnoredAppsManager.shared.getAllIgnored()
             guard row < ignoredApps.count else { return nil }
 
@@ -890,7 +1184,33 @@ extension SettingsWindow: NSTableViewDelegate, NSTableViewDataSource {
             cell.stringValue = name
             cell.toolTip = path
             return cell
+
+        case "dirsTable":
+            guard row < dirs.count else { return nil }
+            let cellIdentifier = NSUserInterfaceItemIdentifier("dirCell")
+            let cell = tableView.makeView(withIdentifier: cellIdentifier, owner: self) as? NSTextField ?? NSTextField(labelWithString: "")
+            cell.identifier = cellIdentifier
+            cell.stringValue = dirs[row]
+            return cell
+
+        case "ignoredTable":
+            guard row < ignoredDirs.count else { return nil }
+            let cellIdentifier = NSUserInterfaceItemIdentifier("ignoredCell")
+            let cell = tableView.makeView(withIdentifier: cellIdentifier, owner: self) as? NSTextField ?? NSTextField(labelWithString: "")
+            cell.identifier = cellIdentifier
+            cell.stringValue = ignoredDirs[row]
+            return cell
+
+        case "extTable":
+            guard row < contentExts.count else { return nil }
+            let cellIdentifier = NSUserInterfaceItemIdentifier("extCell")
+            let cell = tableView.makeView(withIdentifier: cellIdentifier, owner: self) as? NSTextField ?? NSTextField(labelWithString: "")
+            cell.identifier = cellIdentifier
+            cell.stringValue = contentExts[row]
+            return cell
+
+        default:
+            return nil
         }
-        return nil
     }
 }

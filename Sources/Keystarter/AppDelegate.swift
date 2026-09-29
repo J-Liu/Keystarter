@@ -342,10 +342,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.indexDB = db
             }
 
-            let roots = [
-                NSHomeDirectory() + "/Desktop",
-                NSHomeDirectory() + "/Documents"
-            ]
+            let roots = UserDefaults.standard.stringArray(forKey: "index.directories")?.compactMap { path in
+                    path.hasPrefix("/") ? path : NSHomeDirectory() + "/" + path
+                } ?? [
+                    NSHomeDirectory() + "/Desktop",
+                    NSHomeDirectory() + "/Documents"
+                ]
             
             // Only scan if index is empty
             if !db.hasIndex() {
@@ -379,10 +381,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         isIndexReady = false
 
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let roots = [
-                NSHomeDirectory() + "/Desktop",
-                NSHomeDirectory() + "/Documents"
-            ]
+            let roots = UserDefaults.standard.stringArray(forKey: "index.directories")?.compactMap { path in
+                    path.hasPrefix("/") ? path : NSHomeDirectory() + "/" + path
+                } ?? [
+                    NSHomeDirectory() + "/Desktop",
+                    NSHomeDirectory() + "/Documents"
+                ]
 
             print("[Index] Rebuilding index...")
             let scanner = IndexScanner(db: db)

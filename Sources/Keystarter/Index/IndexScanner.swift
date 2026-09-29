@@ -10,18 +10,51 @@ final class IndexScanner {
     private let db: IndexDatabase
 
     /// Directory names to skip entirely.
-    private let ignoredDirs: Set<String> = [
-        "node_modules", "target", ".venv", "venv", "env",
-        "__pycache__", ".git", ".pytest_cache", ".mypy_cache",
-        ".ruff_cache", "dist", "build", ".build", ".next", ".nuxt",
-        "DerivedData", "Pods", "Carthage", ".Trash",
-        "Library"
-    ]
+    private var ignoredDirs: Set<String> {
+        let defaults: Set<String> = [
+            // Build outputs
+            "node_modules", "target", "dist", "build", ".build", "out",
+            // Python
+            ".venv", "venv", "env", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+            // Git/VCS
+            ".git", ".hg", ".svn",
+            // IDE
+            ".idea", ".vscode", "*.xcodeproj", "*.xcworkspace",
+            // iOS/macOS build
+            "DerivedData", "Build", "Intermediates", "Archives",
+            // Cocoa package managers
+            "Pods", "Carthage", "Build", ".swiftpm",
+            // JS/TS
+            ".next", ".nuxt", ".output", "bower_components",
+            // Java/Kotlin
+            ".gradle", "gradle", ".mvn",
+            // Rust
+            "target",
+            // Go
+            "vendor",
+            // System
+            "Library", ".Trash", "Trash", "Caches"
+        ]
+        if let custom = UserDefaults.standard.stringArray(forKey: "index.ignoredDirs") {
+            return defaults.union(custom)
+        }
+        return defaults
+    }
+
+    /// Max recursion depth (0 = unlimited).
+    private var maxDepth: Int {
+        let depth = UserDefaults.standard.integer(forKey: "index.maxDepth")
+        return depth > 0 ? depth : Int.max
+    }
 
     /// File extensions to index content for.
-    private let contentExtensions: Set<String> = [
-        "md", "txt", "swift", "py", "js", "json"
-    ]
+    private var contentExtensions: Set<String> {
+        let defaults: Set<String> = ["md", "txt", "swift", "py", "js", "json"]
+        if let custom = UserDefaults.standard.stringArray(forKey: "index.contentExtensions") {
+            return defaults.union(custom)
+        }
+        return defaults
+    }
 
     /// Max file size for content indexing (100KB).
     private let maxContentFileSize: UInt64 = 100 * 1024
@@ -58,7 +91,7 @@ final class IndexScanner {
     }
 
     private func scanDirectory(_ path: String, depth: Int = 0, indexContent: Bool, count: inout Int) {
-        if depth > 2 { return }
+        if depth > maxDepth { return }
         if count > maxFileCount { return }
 
         let fm = FileManager.default

@@ -9,13 +9,38 @@ final class IndexWatcher {
     private let db: IndexDatabase
     private var stream: FSEventStreamRef?
     private let queue = DispatchQueue(label: "com.keystarter.index.watcher", qos: .utility)
-    private let ignoredDirs: Set<String> = [
-        "node_modules", "target", ".venv", "venv", "env",
-        "__pycache__", ".git", ".pytest_cache", ".mypy_cache",
-        ".ruff_cache", "dist", "build", ".build", ".next", ".nuxt",
-        "DerivedData", "Pods", "Carthage", ".Trash", "Library"
-    ]
-    
+
+    private var ignoredDirs: Set<String> {
+        let defaults: Set<String> = [
+            // Build outputs
+            "node_modules", "target", "dist", "build", ".build", "out",
+            // Python
+            ".venv", "venv", "env", "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
+            // Git/VCS
+            ".git", ".hg", ".svn",
+            // IDE
+            ".idea", ".vscode", "*.xcodeproj", "*.xcworkspace",
+            // iOS/macOS build
+            "DerivedData", "Build", "Intermediates", "Archives",
+            // Cocoa package managers
+            "Pods", "Carthage", "Build", ".swiftpm",
+            // JS/TS
+            ".next", ".nuxt", ".output", "bower_components",
+            // Java/Kotlin
+            ".gradle", "gradle", ".mvn",
+            // Rust
+            "target",
+            // Go
+            "vendor",
+            // System
+            "Library", ".Trash", "Trash", "Caches"
+        ]
+        if let custom = UserDefaults.standard.stringArray(forKey: "index.ignoredDirs") {
+            return defaults.union(custom)
+        }
+        return defaults
+    }
+
     // Debounce: collect events and process in batch
     private var pendingEvents: [(path: String, flag: FSEventStreamEventFlags)] = []
     private var debounceWorkItem: DispatchWorkItem?
