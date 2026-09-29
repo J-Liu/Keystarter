@@ -646,11 +646,20 @@ final class LauncherWindow: NSWindow {
             var appResults: [LaunchItem] = []
             appResults = self.results.filter { item in
                 let name = item.name.lowercased()
+                // 1. Direct match
                 if name.contains(lowered) { return true }
+                // 2. Acronym match (English)
                 let acronym = item.name.components(separatedBy: " ")
                     .compactMap { $0.first?.lowercased() }
                     .joined()
-                return acronym.contains(lowered)
+                if acronym.contains(lowered) { return true }
+                // 3. Pinyin initials match (Chinese: "微信" -> "wx")
+                if PinyinConverter.shared.matchesInitials(query: query, text: item.name) { return true }
+                // 4. Full pinyin match (Chinese: "微信" -> "weixin")
+                if PinyinConverter.shared.matchesFullPinyin(query: query, text: item.name) { return true }
+                // 5. Fuzzy match (typo tolerance)
+                if FuzzyMatcher.shared.matches(query: query, text: item.name) { return true }
+                return false
             }
             appResults.sort { a, b in
                 let aName = a.name.lowercased()
