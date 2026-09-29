@@ -43,9 +43,17 @@ final class StatusItemController: NSObject {
             name: .moduleDataUpdated,
             object: nil
         )
+
+        // Monitor clicks outside to close popover
+        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.popover?.close()
+        }
     }
 
     deinit {
+        if let monitor = eventMonitor {
+            NSEvent.removeMonitor(monitor)
+        }
     }
 
     private func log(_ message: String) {

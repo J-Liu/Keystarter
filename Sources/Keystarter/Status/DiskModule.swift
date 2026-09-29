@@ -114,7 +114,7 @@ final class DiskModule: NSObject, StatusModule {
         let chartHeight: CGFloat = 100
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
-        let rowCount = 30
+        let rowCount = 20
         let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 450  // Increased from 400 to show all columns
         

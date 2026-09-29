@@ -10,8 +10,8 @@ final class CPUModule: NSObject, StatusModule {
     var displayName: String { L("status.cpu.displayName") }
     var shortName: String { "CPU" }
 
-    private(set) var summaryText: String = "0%"
-    private(set) var summaryValue: String = "0%"
+    private(set) var summaryText: String = "0"
+    private(set) var summaryValue: String = "0"
 
     var refreshInterval: TimeInterval { 2.0 }
 
@@ -30,7 +30,7 @@ final class CPUModule: NSObject, StatusModule {
 
     func refreshSummary() {
         let usage = ProcessInfoProvider.shared.getTotalCPUUsage()
-        let value = String(format: "%.0f%%", usage)
+        let value = String(format: "%.0f", usage)
         summaryText = value
         summaryValue = value
 
@@ -62,10 +62,10 @@ final class CPUModule: NSObject, StatusModule {
     func makeDetailView() -> NSView {
         let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
-        let chartHeight: CGFloat = 140
+        let chartHeight: CGFloat = 120
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
-        let rowCount = 30
+        let rowCount = 20
         let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 400
 

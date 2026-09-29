@@ -123,13 +123,13 @@ final class SensorModule: NSObject, StatusModule {
     func makeDetailView() -> NSView {
         let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
-        let fanChartHeight: CGFloat = 160  // Increased for circles + line chart
+        let fanChartHeight: CGFloat = 160
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
-        let rowCount = 30  // Increased for more sensors
-        let tableHeight: CGFloat = 300  // Fixed height for scrollable area
+        let rowCount = 20
+        let tableHeight: CGFloat = 280
         let totalHeight = toolbarHeight + headerHeight + fanChartHeight + dividerHeight + tableHeight + 16
-        let viewWidth: CGFloat = 400
+        let viewWidth: CGFloat = 280
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
 
@@ -169,7 +169,7 @@ final class SensorModule: NSObject, StatusModule {
         table.intercellSpacing = NSSize(width: 0, height: 0)
 
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        nameColumn.width = 200
+        nameColumn.width = 160
         nameColumn.headerCell.title = "Component"
         table.addTableColumn(nameColumn)
 

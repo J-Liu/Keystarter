@@ -24,8 +24,8 @@ final class GPUModule: NSObject, StatusModule {
     var displayName: String { L("status.gpu.displayName") }
     var shortName: String { "GPU" }
 
-    private(set) var summaryText: String = "0%"
-    private(set) var summaryValue: String = "0%"
+    private(set) var summaryText: String = "0"
+    private(set) var summaryValue: String = "0"
 
     var refreshInterval: TimeInterval { 2.0 }
 
@@ -61,7 +61,7 @@ final class GPUModule: NSObject, StatusModule {
 
         processes = getGPUProcesses(limit: 100)
 
-        let value = String(format: "%.0f%%", info.device)
+        let value = String(format: "%.0f", info.device)
         summaryText = value
         summaryValue = value
 
@@ -79,10 +79,10 @@ final class GPUModule: NSObject, StatusModule {
     func makeDetailView() -> NSView {
         let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
-        let chartHeight: CGFloat = 160
+        let chartHeight: CGFloat = 140
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
-        let rowCount = 30
+        let rowCount = 20
         let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 400
 
@@ -176,7 +176,7 @@ final class GPUModule: NSObject, StatusModule {
         self.vramUsed = info.vramUsed
         self.vramTotal = info.vramTotal
 
-        let value = String(format: "%.0f%%", info.device)
+        let value = String(format: "%.0f", info.device)
         summaryText = value
         summaryValue = value
 
@@ -268,6 +268,8 @@ final class GPUModule: NSObject, StatusModule {
 
     private func getGPUProcesses(limit: Int) -> [GPUProcessInfo] {
         let gpuTimes = getProcessGPUTimesFromIORegistry()
+        let gpuInfo = getGPUInfo()
+        let deviceUtil = gpuInfo.device // Device utilization percentage
 
         let runningApps = NSWorkspace.shared.runningApplications
         var appPIDs = Set<Int32>()
@@ -285,10 +287,21 @@ final class GPUModule: NSObject, StatusModule {
             }
         }
 
+        // Calculate total raw percentage to normalize
+        let totalRaw = gpuTimes.values.reduce(0, +)
+
         var processes: [GPUProcessInfo] = []
 
         for (pid, gpuTime) in gpuTimes {
             guard pid > 0 else { continue }
+
+            // Normalize to device utilization
+            let normalizedGPUTime: Double
+            if totalRaw > 0 && deviceUtil > 0 {
+                normalizedGPUTime = (gpuTime / totalRaw) * deviceUtil
+            } else {
+                normalizedGPUTime = gpuTime
+            }
 
             var name: String
             if let appName = appNames[pid] {
@@ -324,7 +337,7 @@ final class GPUModule: NSObject, StatusModule {
             processes.append(GPUProcessInfo(
                 pid: pid,
                 name: name,
-                gpuUsage: gpuTime,
+                gpuUsage: normalizedGPUTime,
                 memoryUsage: memory,
                 isApp: isApp,
                 icon: appIcons[pid],

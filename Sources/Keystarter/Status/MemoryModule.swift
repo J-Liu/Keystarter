@@ -66,7 +66,7 @@ final class MemoryModule: NSObject, StatusModule {
         let chartHeight: CGFloat = 80
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
-        let rowCount = 30
+        let rowCount = 20
         let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
         let viewWidth: CGFloat = 400
 
