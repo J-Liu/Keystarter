@@ -803,8 +803,11 @@ final class LauncherWindow: NSWindow {
         let row = tableView.clickedRow
         guard row >= 0 && row < filteredResults.count else { return }
         let item = filteredResults[row]
-        LaunchHistory.shared.record(identifier: item.path)
+        let path = item.path
         hide()
+        DispatchQueue.global(qos: .utility).async {
+            LaunchHistory.shared.record(identifier: path)
+        }
         item.execute()
     }
 
@@ -813,8 +816,11 @@ final class LauncherWindow: NSWindow {
         let row = tableView.selectedRow
         guard row >= 0 && row < filteredResults.count else { return }
         let item = filteredResults[row]
-        LaunchHistory.shared.record(identifier: item.path)
+        let path = item.path
         hide()
+        DispatchQueue.global(qos: .utility).async {
+            LaunchHistory.shared.record(identifier: path)
+        }
         item.execute()
     }
 
@@ -829,15 +835,20 @@ final class LauncherWindow: NSWindow {
 
         guard row >= 0 && row < filteredResults.count else { return }
         let item = filteredResults[row]
-        // Record launch history
-        LaunchHistory.shared.record(identifier: item.path)
+        let path = item.path
         hide()
+        DispatchQueue.global(qos: .utility).async {
+            LaunchHistory.shared.record(identifier: path)
+        }
         item.execute()
     }
 
     private func executeItem(_ item: LaunchItem) {
-        LaunchHistory.shared.record(identifier: item.path)
         hide()
+        // Record history asynchronously to avoid blocking UI
+        DispatchQueue.global(qos: .utility).async {
+            LaunchHistory.shared.record(identifier: item.path)
+        }
         item.execute()
     }
 
