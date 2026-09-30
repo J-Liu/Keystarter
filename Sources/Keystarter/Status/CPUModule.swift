@@ -358,7 +358,6 @@ private final class CPULineChartView: NSView {
 // MARK: - CPU Chart View (bar chart + line charts)
 
 final class CPUChartView: NSView {
-    private let totalChart: CPULineChartView
     private let systemChart: CPULineChartView
     private let userChart: CPULineChartView
 
@@ -372,7 +371,6 @@ final class CPUChartView: NSView {
 
         let lineFrame = NSRect(x: 0, y: 4, width: frameRect.width, height: lineChartHeight)
 
-        self.totalChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemPurple.withAlphaComponent(0.8))
         self.systemChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemRed.withAlphaComponent(0.6))
         self.userChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemBlue.withAlphaComponent(0.6))
 
@@ -382,7 +380,6 @@ final class CPUChartView: NSView {
         layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         layer?.cornerRadius = 4
 
-        addSubview(totalChart)
         addSubview(systemChart)
         addSubview(userChart)
     }
@@ -392,7 +389,6 @@ final class CPUChartView: NSView {
     }
 
     deinit {
-        totalChart.stopAnimation()
         systemChart.stopAnimation()
         userChart.stopAnimation()
     }
@@ -403,19 +399,16 @@ final class CPUChartView: NSView {
     }
 
     func setHistory(total: [Double], system: [Double], user: [Double]) {
-        totalChart.reinit(maxHistoryCount)
         systemChart.reinit(maxHistoryCount)
         userChart.reinit(maxHistoryCount)
 
-        for i in 0..<min(total.count, min(system.count, user.count)) {
-            totalChart.addValue(total[i])
+        for i in 0..<min(system.count, user.count) {
             systemChart.addValue(system[i])
             userChart.addValue(user[i])
         }
     }
 
     func startAnimation() {
-        totalChart.startAnimation()
         systemChart.startAnimation()
         userChart.startAnimation()
     }
@@ -425,7 +418,7 @@ final class CPUChartView: NSView {
 
         // Clear existing subviews (keep line charts)
         subviews.forEach { subview in
-            if subview !== totalChart && subview !== systemChart && subview !== userChart {
+            if subview !== systemChart && subview !== userChart {
                 subview.removeFromSuperview()
             }
         }

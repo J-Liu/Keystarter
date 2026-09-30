@@ -832,21 +832,50 @@ final class LauncherWindow: NSWindow {
 
         guard row >= 0 && row < filteredResults.count else { return }
         let item = filteredResults[row]
-        let path = item.path
-        hide()
-        DispatchQueue.global(qos: .utility).async {
-            LaunchHistory.shared.record(identifier: path)
+
+        // 1. Hide window immediately
+        orderOut(nil)
+        isHandlingDockClick = true
+        log("LauncherWindow hidden (executeSelected)")
+
+        // 2. Async: restore input source + cleanup
+        DispatchQueue.main.async { [weak self] in
+            self?.restoreInputSource()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self?.isHandlingDockClick = false
+            }
         }
-        item.execute()
+
+        // 3. Async: record history + launch app
+        DispatchQueue.global(qos: .userInitiated).async {
+            LaunchHistory.shared.record(identifier: item.path)
+            DispatchQueue.main.async {
+                item.execute()
+            }
+        }
     }
 
     private func executeItem(_ item: LaunchItem) {
-        hide()
-        // Record history asynchronously to avoid blocking UI
-        DispatchQueue.global(qos: .utility).async {
-            LaunchHistory.shared.record(identifier: item.path)
+        // 1. Hide window immediately (visual feedback)
+        orderOut(nil)
+        isHandlingDockClick = true
+        log("LauncherWindow hidden (execute)")
+
+        // 2. Async: restore input source + cleanup
+        DispatchQueue.main.async { [weak self] in
+            self?.restoreInputSource()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                self?.isHandlingDockClick = false
+            }
         }
-        item.execute()
+
+        // 3. Async: record history + launch app
+        DispatchQueue.global(qos: .userInitiated).async {
+            LaunchHistory.shared.record(identifier: item.path)
+            DispatchQueue.main.async {
+                item.execute()
+            }
+        }
     }
 
     private func updatePreview() {
