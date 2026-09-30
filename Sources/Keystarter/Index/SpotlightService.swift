@@ -114,8 +114,9 @@ final class SpotlightService {
             results.append((match.path, match.name, match.isDir, score))
         }
 
-        // 2. Content matches (lower score)
-        if UserDefaults.standard.bool(forKey: "index.fileContent") {
+        // 2. Content matches (lower score) - enabled by default
+        let contentEnabled = UserDefaults.standard.object(forKey: "index.fileContent") as? Bool ?? true
+        if contentEnabled {
             let contentMatches = searchContent(query: query, limit: limit)
             for match in contentMatches {
                 guard seenPaths.insert(match.path).inserted else { continue }
@@ -134,22 +135,8 @@ final class SpotlightService {
     // MARK: - Helpers
 
     private func getSearchScopes() -> [URL] {
-        var scopes: [URL] = []
-
-        // User-configured directories
-        if let dirs = UserDefaults.standard.stringArray(forKey: "index.directories") {
-            for dir in dirs {
-                let expanded = (dir as NSString).expandingTildeInPath
-                scopes.append(URL(fileURLWithPath: expanded))
-            }
-        }
-
-        // Default to home if not configured
-        if scopes.isEmpty {
-            scopes.append(URL(fileURLWithPath: NSHomeDirectory()))
-        }
-
-        return scopes
+        // Search entire home directory
+        return [URL(fileURLWithPath: NSHomeDirectory())]
     }
 
     private func scoreFor(path: String, name: String, isFileName: Bool) -> Double {
