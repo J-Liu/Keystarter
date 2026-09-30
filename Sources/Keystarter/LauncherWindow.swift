@@ -684,37 +684,16 @@ final class LauncherWindow: NSWindow {
                 return a.name.count < b.name.count
             }
 
-            // 3. File search with fuzzy/pinyin
+            // 3. File search using Spotlight
             var fileResults: [LaunchItem] = []
-            if (NSApp.delegate as? AppDelegate)?.isIndexReady == true,
-               let db = (NSApp.delegate as? AppDelegate)?.indexDB {
-                let files = db.search(query)
-                var fileSet = Set(files.map { $0.path })
-
-                let allFiles = db.getAllFiles(limit: 5000)
-                for file in allFiles {
-                    if fileSet.contains(file.path) { continue }
-
-                    if PinyinConverter.shared.matchesInitials(query: query, text: file.name) ||
-                       PinyinConverter.shared.matchesFullPinyin(query: query, text: file.name) {
-                        fileSet.insert(file.path)
-                        continue
-                    }
-
-                    if FuzzyMatcher.shared.matches(query: query, text: file.name) {
-                        fileSet.insert(file.path)
-                    }
-                }
-
-                let matchedFiles = files + allFiles.filter { fileSet.contains($0.path) && !files.contains(where: { $0.path == $0.path }) }
-                fileResults = matchedFiles.prefix(20).map { file in
-                    LaunchItem(
-                        name: file.name,
-                        path: file.path,
-                        type: .file,
-                        category: nil
-                    )
-                }
+            let spotlightResults = SpotlightService.shared.search(query: query, limit: 20)
+            fileResults = spotlightResults.map { file in
+                LaunchItem(
+                    name: file.name,
+                    path: file.path,
+                    type: .file,
+                    category: nil
+                )
             }
 
             // 4. Browser bookmarks

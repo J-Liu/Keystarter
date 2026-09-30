@@ -9,9 +9,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clipboardPanel: ClipboardPanel?
     private var statusBarController: StatusBarController?
     private var settingsWindow: SettingsWindow?
-    var indexDB: IndexDatabase?
-    private var indexScanner: IndexScanner?
-    private var indexWatcher: IndexWatcher?
     var isIndexReady = false
 
     // Hotkey key codes for tracking
@@ -312,92 +309,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func rebuildIndex() {
-        guard let db = indexDB else { return }
-        indexWatcher?.stop()
-
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let scanner = IndexScanner(db: db)
-            let roots = [
-                NSHomeDirectory() + "/Documents",
-                NSHomeDirectory() + "/Desktop",
-                NSHomeDirectory() + "/Downloads"
-            ]
-            print("[Index] Rebuilding...")
-            scanner.scan(roots: roots)
-            print("[Index] Rebuild complete.")
-
-            DispatchQueue.main.async {
-                self?.indexWatcher?.start(roots: roots)
-            }
-        }
-    }
-
     private func setupIndex() {
+        // Check if Spotlight is enabled
         DispatchQueue.global(qos: .utility).async { [weak self] in
-            let db = IndexDatabase()
-            guard db.open() else { return }
-
+            let enabled = SpotlightService.isSpotlightEnabled()
             DispatchQueue.main.async {
-                self?.indexDB = db
-            }
-
-            let roots = UserDefaults.standard.stringArray(forKey: "index.directories")?.compactMap { path in
-                    path.hasPrefix("/") ? path : NSHomeDirectory() + "/" + path
-                } ?? [
-                    NSHomeDirectory() + "/Desktop",
-                    NSHomeDirectory() + "/Documents"
-                ]
-            
-            // Only scan if index is empty
-            if !db.hasIndex() {
-                print("[Index] Starting full scan...")
-                let scanner = IndexScanner(db: db)
-                scanner.onLimitExceeded = { [weak self] count in
-                    self?.showIndexLimitWarning(count: count)
+                self?.isIndexReady = enabled
+                if !enabled {
+                    print("[Index] Spotlight is not available. File search disabled.")
+                } else {
+                    print("[Index] Spotlight is available. File search enabled.")
                 }
-                scanner.scan(roots: roots)
-                print("[Index] Full scan complete.")
-            } else {
-                print("[Index] Index already exists, skipping full scan.")
-            }
-
-            // Start watching for changes
-            let watcher = IndexWatcher(db: db)
-            watcher.start(roots: roots)
-            DispatchQueue.main.async {
-                self?.indexWatcher = watcher
-            }
-
-            DispatchQueue.main.async {
-                self?.isIndexReady = true
-            }
-        }
-    }
-
-    /// Rebuild the file index when content indexing setting changes.
-    func rebuildFileIndex() {
-        guard let db = indexDB else { return }
-        isIndexReady = false
-
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let roots = UserDefaults.standard.stringArray(forKey: "index.directories")?.compactMap { path in
-                    path.hasPrefix("/") ? path : NSHomeDirectory() + "/" + path
-                } ?? [
-                    NSHomeDirectory() + "/Desktop",
-                    NSHomeDirectory() + "/Documents"
-                ]
-
-            print("[Index] Rebuilding index...")
-            let scanner = IndexScanner(db: db)
-            scanner.onLimitExceeded = { [weak self] count in
-                self?.showIndexLimitWarning(count: count)
-            }
-            scanner.scan(roots: roots)
-            print("[Index] Rebuild complete.")
-
-            DispatchQueue.main.async {
-                self?.isIndexReady = true
             }
         }
     }

@@ -178,8 +178,8 @@ final class ProcessInfoProvider {
             guard let url = app.bundleURL else { continue }
             let name = url.deletingPathExtension().lastPathComponent
             let pid = app.processIdentifier
-            // Only mark regular apps as user-facing
-            if app.activationPolicy == .regular {
+            // Include both regular apps and accessory apps (like Keystarter itself)
+            if app.activationPolicy == .regular || app.activationPolicy == .accessory {
                 appPIDs.insert(pid)
             }
             appNames[pid] = name
@@ -332,8 +332,8 @@ final class ProcessInfoProvider {
             guard let url = app.bundleURL else { continue }
             let name = url.deletingPathExtension().lastPathComponent
             let pid = app.processIdentifier
-            // Only mark regular apps as user-facing
-            if app.activationPolicy == .regular {
+            // Include both regular apps and accessory apps (like Keystarter itself)
+            if app.activationPolicy == .regular || app.activationPolicy == .accessory {
                 appPIDs.insert(pid)
             }
             appNames[pid] = name

@@ -549,18 +549,16 @@ final class SettingsWindow: NSWindow {
         extButtonRow.alignment = .centerY
         stack.addArrangedSubview(extButtonRow)
 
-        // Rebuild button
-        let rebuildButton = NSButton(title: L("settings.index.rebuild"), target: self, action: #selector(rebuildIndex))
-        rebuildButton.bezelStyle = .rounded
-        stack.addArrangedSubview(makeRow(label: "", control: rebuildButton))
-
-        // Index status
+        // Spotlight status
         let statusLabel = NSTextField(labelWithString: "")
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.identifier = NSUserInterfaceItemIdentifier("indexStatus")
-        if let count = (NSApp.delegate as? AppDelegate)?.indexDB?.fileCount() {
-            statusLabel.stringValue = String(format: L("settings.index.status"), count)
+        if SpotlightService.isSpotlightEnabled() {
+            statusLabel.stringValue = "Spotlight: Enabled"
+        } else {
+            statusLabel.stringValue = "Spotlight: Disabled"
+            statusLabel.textColor = .systemRed
         }
         stack.addArrangedSubview(makeRow(label: "", control: statusLabel))
 
@@ -932,17 +930,7 @@ final class SettingsWindow: NSWindow {
 
     @objc private func contentIndexChanged(_ sender: NSButton) {
         let enabled = sender.state == .on
-        let wasEnabled = UserDefaults.standard.bool(forKey: "index.fileContent")
         UserDefaults.standard.set(enabled, forKey: "index.fileContent")
-
-        // Rebuild index if setting changed
-        if enabled != wasEnabled {
-            (NSApp.delegate as? AppDelegate)?.rebuildFileIndex()
-        }
-    }
-
-    @objc private func rebuildIndex() {
-        (NSApp.delegate as? AppDelegate)?.rebuildFileIndex()
     }
 
     @objc private func indexDepthChanged(_ sender: NSTextField) {
