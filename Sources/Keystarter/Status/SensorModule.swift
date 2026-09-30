@@ -809,6 +809,7 @@ final class FanLineChartView: NSView {
     private var displayLink: CVDisplayLink?
     private var lastUpdateTime: Date = Date()
     private let sampleInterval: TimeInterval = 2.0
+    private var isRunning = false
 
     private let leftColor = NSColor(calibratedRed: 0.7, green: 0.5, blue: 0.8, alpha: 1.0)
     private let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 1.0)
@@ -823,6 +824,7 @@ final class FanLineChartView: NSView {
     }
 
     deinit {
+        isRunning = false
         stopAnimation()
     }
 
@@ -836,25 +838,30 @@ final class FanLineChartView: NSView {
 
     func startAnimation() {
         guard displayLink == nil else { return }
+        isRunning = true
 
         var link: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else { return }
 
-        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
+        let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo -> CVReturn in
             guard let userInfo else { return kCVReturnSuccess }
             let view = Unmanaged<FanLineChartView>.fromOpaque(userInfo).takeUnretainedValue()
+            guard view.isRunning else { return kCVReturnSuccess }
             DispatchQueue.main.async {
+                guard view.isRunning else { return }
                 view.needsDisplay = true
             }
             return kCVReturnSuccess
-        }, Unmanaged.passUnretained(self).toOpaque())
+        }
 
+        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(self).toOpaque())
         CVDisplayLinkStart(link)
         displayLink = link
     }
 
     func stopAnimation() {
+        isRunning = false
         if let link = displayLink {
             CVDisplayLinkStop(link)
             displayLink = nil
