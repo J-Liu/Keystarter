@@ -476,6 +476,9 @@ final class LauncherWindow: NSWindow {
     }
 
     func show() {
+        // Refresh app list to detect new/uninstalled apps
+        loadApplications()
+
         // Save current input source immediately before any async operations
         saveCurrentInputSource()
         
@@ -677,6 +680,12 @@ final class LauncherWindow: NSWindow {
                     .compactMap { $0.first?.lowercased() }.joined()
                 let aAcronymMatch = aAcronym.hasPrefix(lowered)
                 let bAcronymMatch = bAcronym.hasPrefix(lowered)
+
+                // New apps first (within 7 days)
+                let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
+                let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
+                if aIsNew != bIsNew { return aIsNew }
+
                 if aPrefix != bPrefix { return aPrefix }
                 if aAcronymMatch != bAcronymMatch { return aAcronymMatch }
                 if aRunning != bRunning { return aRunning }
@@ -1037,6 +1046,12 @@ final class LauncherWindow: NSWindow {
 
         // Filter out ignored apps
         items = items.filter { !IgnoredAppsManager.shared.isIgnored(path: $0.path) }
+
+        // Sync with install tracker (detects new/uninstalled apps)
+        let newApps = AppInstallTracker.shared.syncWithApps(paths: items.map { $0.path })
+        if !newApps.isEmpty {
+            print("[LauncherWindow] Detected \(newApps.count) newly installed apps")
+        }
 
         // Sort alphabetically
         items.sort { $0.name.lowercased() < $1.name.lowercased() }
