@@ -436,23 +436,46 @@ final class LauncherWindow: NSWindow {
 
     /// Switch to English input source
     private func switchToEnglishInput() {
-        // Find English input source
+        // Find English input source (ASCII-capable keyboard layout)
         guard let inputSources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
+            print("[Input] Failed to get input source list")
             return
         }
 
-        // Try to find ABC or US keyboard
+        // Priority: ABC > US > any ASCII-capable layout
+        var abcSource: TISInputSource?
+        var usSource: TISInputSource?
+        var asciiSource: TISInputSource?
+
         for source in inputSources {
             guard let sourceID = TISGetInputSourceProperty(source, kTISPropertyInputSourceID) else { continue }
             let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
 
-            if sourceIDString.contains("com.apple.keylayout.ABC") ||
-               sourceIDString.contains("com.apple.keylayout.US") ||
-               sourceIDString == "com.apple.keylayout.ABC" {
-                print("[Input] Switching to English: \(sourceIDString)")
-                TISSelectInputSource(source)
-                break
+            // Check if it's a keyboard layout (not IME)
+            guard let category = TISGetInputSourceProperty(source, kTISPropertyInputSourceCategory) else { continue }
+            let categoryString = Unmanaged<CFString>.fromOpaque(category).takeUnretainedValue() as String
+            guard categoryString == kTISCategoryKeyboardInputSource as String else { continue }
+
+            // Check if ASCII-capable (English)
+            let isASCIICapable = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsASCIICapable) != nil
+
+            if sourceIDString == "com.apple.keylayout.ABC" {
+                abcSource = source
+            } else if sourceIDString == "com.apple.keylayout.US" {
+                usSource = source
+            } else if isASCIICapable && asciiSource == nil {
+                asciiSource = source
             }
+        }
+
+        // Select the best available English input
+        if let source = abcSource ?? usSource ?? asciiSource {
+            let sourceID = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
+            let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID!).takeUnretainedValue() as String
+            print("[Input] Switching to English: \(sourceIDString)")
+            TISSelectInputSource(source)
+        } else {
+            print("[Input] No English input source found")
         }
     }
 
@@ -519,15 +542,14 @@ final class LauncherWindow: NSWindow {
         NSApp.activate(ignoringOtherApps: true)
         makeFirstResponder(searchField)
 
+        // Switch to English input after window gains focus
+        DispatchQueue.main.async {
+            self.switchToEnglishInput()
+        }
+
         // Clear the flag after a short delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.isHandlingDockClick = false
-        }
-
-        // Switch to English input AFTER window has focus
-        // Use async to ensure focus is fully transferred
-        DispatchQueue.main.async {
-            self.switchToEnglishInput()
         }
     }
 
