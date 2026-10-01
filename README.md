@@ -22,7 +22,7 @@ I use it every day. It combines three things I need in the menu bar: an app laun
 
 ## Status
 
-**Early development.** Core features work, but things are still moving. Alfred workflow compatibility is planned but not yet implemented.
+**Early development.** Core features work, but things are still moving.
 
 Feedback and feature requests are welcome. Open an issue if something is broken or missing.
 
@@ -77,8 +77,8 @@ Requires Xcode command line tools and macOS 13+.
 - [x] Translation
 - [x] Clipboard history
 - [x] Status bar monitor (CPU/GPU/Memory/Disk/Network/Sensors)
-- [ ] SQLite file index
-- [ ] Alfred workflow compatibility
+- [x] File search via Spotlight
+- [ ] Alfred workflow compatibility (implemented, untested)
 - [x] Auto-update via Sparkle
 
 ## License
