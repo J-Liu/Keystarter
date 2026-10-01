@@ -111,40 +111,50 @@ jobs:
         BUILD="${{ steps.sign.outputs.build }}"
         DATE=$(date -u +"%a, %d %b %Y %H:%M:%S +0000")
 
-        # Build the new item block
-        NEW_ITEM=$(cat <<EOF
-        <item>
-            <title>Version ${VERSION}</title>
-            <pubDate>${DATE}</pubDate>
-            <sparkle:version>${BUILD}</sparkle:version>
-            <sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>
+        # Update appcast.xml using Python with proper formatting
+        python3 << 'PYEOF'
+        import re
+        from datetime import datetime
+
+        version = "${{ steps.sign.outputs.version }}"
+        signature = "${{ steps.sign.outputs.signature }}"
+        length = "${{ steps.sign.outputs.length }}"
+        build = "${{ steps.sign.outputs.build }}"
+        date_str = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S +0000")
+
+        # Build the new item with proper formatting
+        new_item = f'''        <item>
+            <title>Version {version}</title>
+            <pubDate>{date_str}</pubDate>
+            <sparkle:version>{build}</sparkle:version>
+            <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
             <enclosure
-                url="https://github.com/J-Liu/Keystarter/releases/download/v${VERSION}/Keystarter-${VERSION}.zip"
-                sparkle:edSignature="${SIGNATURE}"
-                length="${LENGTH}"
+                url="https://github.com/J-Liu/Keystarter/releases/download/v{version}/Keystarter-{version}.zip"
+                sparkle:edSignature="{signature}"
+                length="{length}"
                 type="application/octet-stream"/>
-        </item>
-        EOF
-        )
+        </item>'''
 
-        # Insert the new item right after <language>en</language>
-        python3 - <<PYEOF
-        import re
-        path = "docs/appcast.xml"
-        with open(path) as f:
+        # Read existing file
+        with open("docs/appcast.xml") as f:
             content = f.read()
 
-        new_item = """${NEW_ITEM}"""
+        # Find the first <item> and insert before it
+        match = re.search(r'<item>', content)
+        if match:
+            pos = match.start()
+            content = content[:pos] + new_item + '\n        ' + content[pos:]
+        else:
+            # No existing items, insert after <language>
+            content = re.sub(
+                r'(<language>en</language>)',
+                r'\1\n' + new_item,
+                content,
+                count=1
+            )
 
-        content = re.sub(
-            r'(<language>en</language>)',
-            r'\1\n    ' + new_item,
-            content,
-            count=1
-        )
-
-        with open(path, "w") as f:
+        with open("docs/appcast.xml", "w") as f:
             f.write(content)
         PYEOF
 
