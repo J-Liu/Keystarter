@@ -45,6 +45,9 @@ final class LauncherWindow: NSWindow {
     private var cachedRunningAppPaths: Set<String> = []
     private var runningAppsCacheTimer: Timer?
 
+    /// File system monitors for app directories
+    private var appDirectoryMonitors: [DispatchSourceFileSystemObject] = []
+
     private func log(_ message: String) {
         guard LogSettings.shared.launcherLogEnabled else { return }
         LogSettings.write(message, to: LogSettings.shared.launcherLogPath)
@@ -81,6 +84,9 @@ final class LauncherWindow: NSWindow {
         runningAppsCacheTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.refreshRunningAppsCache()
         }
+
+        // Monitor app directories for changes (new/uninstalled apps)
+        setupAppDirectoryMonitoring()
 
         // Monitor for clicks outside window to auto-hide
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
@@ -476,8 +482,8 @@ final class LauncherWindow: NSWindow {
     }
 
     func show() {
-        // Refresh app list to detect new/uninstalled apps
-        loadApplications()
+        // App list is refreshed periodically in background (see init)
+        // No synchronous scan here to avoid UI delay
 
         // Save current input source immediately before any async operations
         saveCurrentInputSource()
@@ -616,7 +622,8 @@ final class LauncherWindow: NSWindow {
         searchQueue.async { [weak self] in
             guard let self = self else { return }
 
-            var merged: [LaunchItem] = []
+            // MARK: - Fast results (plugins + apps)
+            var fastResults: [LaunchItem] = []
 
             // 1. Plugin results
             var nonStockPluginResults: [LaunchItem] = []
@@ -693,6 +700,18 @@ final class LauncherWindow: NSWindow {
                 return a.name.count < b.name.count
             }
 
+            // Merge fast results and show immediately
+            fastResults += nonStockPluginResults
+            fastResults += appResults
+            fastResults += stockPluginResults
+
+            // Show fast results immediately
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self, self.currentSearchId == thisSearchId else { return }
+                self.applyFilterResults(query: query, merged: fastResults)
+            }
+
+            // MARK: - Slow results (Spotlight, bookmarks, history, clipboard)
             // 3. File search using Spotlight
             var fileResults: [LaunchItem] = []
             let spotlightResults = SpotlightService.shared.search(query: query, limit: 20)
@@ -742,15 +761,14 @@ final class LauncherWindow: NSWindow {
                 )
             }
 
-            // 7. Merge
-            merged += nonStockPluginResults
-            merged += appResults
-            merged += stockPluginResults
+            // Merge all results
+            var merged = fastResults
             merged += fileResults
             merged += bookmarkResults
             merged += historyResults
             merged += clipboardResults
 
+            // Update with complete results
             DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.currentSearchId == thisSearchId else { return }
                 self.applyFilterResults(query: query, merged: merged)
@@ -1051,6 +1069,41 @@ final class LauncherWindow: NSWindow {
 
     // MARK: - Load Applications
 
+    /// Monitor app directories for changes (new/uninstalled apps)
+    private func setupAppDirectoryMonitoring() {
+        let monitoredDirs = [
+            "/Applications",
+            NSHomeDirectory() + "/Applications"
+        ]
+
+        for dirPath in monitoredDirs {
+            let fd = open(dirPath, O_EVTONLY)
+            guard fd >= 0 else { continue }
+            let source = DispatchSource.makeFileSystemObjectSource(
+                fileDescriptor: fd,
+                eventMask: [.write, .delete, .rename],
+                queue: DispatchQueue.global(qos: .utility)
+            )
+
+            source.setEventHandler { [weak self] in
+                print("[LauncherWindow] App directory changed: \(dirPath)")
+                // Debounce: wait a moment for batch changes to complete
+                DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.0) {
+                    self?.loadApplications()
+                }
+            }
+
+            source.setCancelHandler {
+                Darwin.close(fd)
+            }
+
+            source.resume()
+            appDirectoryMonitors.append(source)
+        }
+
+        print("[LauncherWindow] Monitoring \(appDirectoryMonitors.count) app directories")
+    }
+
     private func loadApplications() {
         let fileManager = FileManager.default
         let appDirs = [
@@ -1084,8 +1137,12 @@ final class LauncherWindow: NSWindow {
 
         // Sort alphabetically
         items.sort { $0.name.lowercased() < $1.name.lowercased() }
-        results = items
-        filteredResults = items
+
+        // Update on main thread for thread safety
+        DispatchQueue.main.async { [weak self] in
+            self?.results = items
+            self?.filteredResults = items
+        }
 
         // Debug log
         print("[LauncherWindow] Loaded \(items.count) applications")
