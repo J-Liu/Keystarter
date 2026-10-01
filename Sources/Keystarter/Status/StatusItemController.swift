@@ -63,13 +63,22 @@ final class StatusItemController: NSObject {
 
     /// Perform initial refresh immediately on all modules.
     private func initialRefresh() {
+        // First call: initialize baseline values
         dataQueue.async { [weak self] in
             guard let self = self else { return }
             for module in self.modules {
                 module.refreshSummary()
-                DispatchQueue.main.async {
-                    self.updateModuleLabel(module)
-                    self.lastRefreshTimes[module.identifier] = Date()
+            }
+            
+            // Second call after 0.5s: get actual data (needed for disk/network speed)
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self else { return }
+                for module in self.modules {
+                    module.refreshSummary()
+                    DispatchQueue.main.async {
+                        self.updateModuleLabel(module)
+                        self.lastRefreshTimes[module.identifier] = Date()
+                    }
                 }
             }
         }
