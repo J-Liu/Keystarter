@@ -46,9 +46,13 @@ final class ProcessInfoProvider {
     private var prevCoreTotal: [UInt64] = []
     private var prevCoreUser: [UInt64] = []
     private var prevCoreSystem: [UInt64] = []
+    private let coreCPULock = NSLock()
     
     /// Get total CPU usage percentage.
     func getTotalCPUUsage() -> Double {
+        coreCPULock.lock()
+        defer { coreCPULock.unlock() }
+        
         var cpuLoad = host_cpu_load_info()
         var count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.size / MemoryLayout<integer_t>.size)
         
@@ -78,6 +82,9 @@ final class ProcessInfoProvider {
     
     /// Get per-core CPU usage with user/system breakdown.
     func getPerCoreCPUUsage() -> [CoreUsage] {
+        coreCPULock.lock()
+        defer { coreCPULock.unlock() }
+        
         var numCPUs: natural_t = 0
         var cpuInfo: processor_info_array_t?
         var numCPUInfo: mach_msg_type_number_t = 0
