@@ -13,7 +13,7 @@ final class AppInstallTracker {
     private let lock = NSLock()
 
     /// Apps installed within this many days are considered "new".
-    let newAppDays: Double = 0.3
+    let newAppDays: Double = 7.0
 
     init() {
         load()
@@ -27,8 +27,8 @@ final class AppInstallTracker {
         defer { lock.unlock() }
 
         guard let installDate = installTimes[path] else {
-            // No record = newly discovered, record it
-            return false
+            // No record = treat as new (newly discovered)
+            return true
         }
 
         let daysSinceInstall = Date().timeIntervalSince(installDate) / 86400

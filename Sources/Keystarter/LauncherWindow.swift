@@ -335,6 +335,7 @@ final class LauncherWindow: NSWindow {
         settingsButton.autoresizingMask = [.minXMargin, .minYMargin]
         settingsButton.target = self
         settingsButton.action = #selector(openSettings)
+        settingsButton.toolTip = "Settings"
         container.addSubview(settingsButton)
 
         // Grid view (default view)
