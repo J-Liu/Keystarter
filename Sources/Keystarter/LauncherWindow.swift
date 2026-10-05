@@ -41,6 +41,16 @@ final class LauncherWindow: NSWindow {
     /// Flag to prevent global click from interfering with Dock click
     var isHandlingDockClick = false
 
+    /// File search session for auto-triggered file search
+    private var fileSearchSession = FileSearchSession()
+    private var fileSearchRevision = 0
+    private var fileSearchResults: [LaunchItem] = []
+
+    /// File content search session
+    private var fileContentSearchSession = FileSearchSession()
+    private var fileContentSearchRevision = 0
+    private var fileContentSearchResults: [LaunchItem] = []
+
     /// Cached running app paths for faster sorting
     private var cachedRunningAppPaths: Set<String> = []
     private var runningAppsCacheTimer: Timer?
@@ -674,50 +684,37 @@ final class LauncherWindow: NSWindow {
                 }
             }
 
-            // 2. App filtering
-            let lowered = query.lowercased()
-            var appResults: [LaunchItem] = []
-            appResults = self.results.filter { item in
-                let name = item.name.lowercased()
-                // 1. Direct match
-                if name.contains(lowered) { return true }
-                // 2. Acronym match (English)
-                let acronym = item.name.components(separatedBy: " ")
-                    .compactMap { $0.first?.lowercased() }
-                    .joined()
-                if acronym.contains(lowered) { return true }
-                // 3. Pinyin initials match (Chinese: "微信" -> "wx")
-                if PinyinConverter.shared.matchesInitials(query: query, text: item.name) { return true }
-                // 4. Full pinyin match (Chinese: "微信" -> "weixin")
-                if PinyinConverter.shared.matchesFullPinyin(query: query, text: item.name) { return true }
-                // 5. Fuzzy match (typo tolerance)
-                if FuzzyMatcher.shared.matches(query: query, text: item.name) { return true }
-                return false
+            // 2. App filtering using LauncherIndex (pre-built aliases, memoized)
+            // Call on main thread (LauncherIndex is @MainActor isolated)
+            var indexResults: [IndexEntry] = []
+            DispatchQueue.main.sync {
+                indexResults = LauncherIndex.shared.search(query, limit: 100)
             }
+            var appResults: [LaunchItem] = []
+            let runningPaths = self.getRunningAppPaths()
+            
+            for entry in indexResults {
+                // Find matching LaunchItem
+                if let item = self.results.first(where: { $0.path == entry.path }) {
+                    appResults.append(item)
+                } else {
+                    // Create new LaunchItem if not found
+                    appResults.append(LaunchItem(name: entry.name, path: entry.path, type: .application, category: nil))
+                }
+            }
+            
+            // Secondary sort: running apps and frequency
             appResults.sort { a, b in
-                let aName = a.name.lowercased()
-                let bName = b.name.lowercased()
-                let runningPaths = self.getRunningAppPaths()
                 let aRunning = runningPaths.contains(a.path)
                 let bRunning = runningPaths.contains(b.path)
                 let aFreq = LaunchHistory.shared.count(for: a.path)
                 let bFreq = LaunchHistory.shared.count(for: b.path)
-                let aPrefix = aName.hasPrefix(lowered)
-                let bPrefix = bName.hasPrefix(lowered)
-                let aAcronym = a.name.components(separatedBy: " ")
-                    .compactMap { $0.first?.lowercased() }.joined()
-                let bAcronym = b.name.components(separatedBy: " ")
-                    .compactMap { $0.first?.lowercased() }.joined()
-                let aAcronymMatch = aAcronym.hasPrefix(lowered)
-                let bAcronymMatch = bAcronym.hasPrefix(lowered)
-
-                // New apps first (within 7 days)
+                
+                // New apps first
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
                 if aIsNew != bIsNew { return aIsNew }
-
-                if aPrefix != bPrefix { return aPrefix }
-                if aAcronymMatch != bAcronymMatch { return aAcronymMatch }
+                
                 if aRunning != bRunning { return aRunning }
                 if aFreq != bFreq { return aFreq > bFreq }
                 return a.name.count < b.name.count
@@ -732,22 +729,17 @@ final class LauncherWindow: NSWindow {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self, self.currentSearchId == thisSearchId else { return }
                 self.applyFilterResults(query: query, merged: fastResults)
+
+                // Auto-trigger file search if results are sparse
+                if fastResults.count < 5 {
+                    self.triggerFileSearch(query: query, baseResults: fastResults)
+                }
             }
 
-            // MARK: - Slow results (Spotlight, bookmarks, history, clipboard)
-            // 3. File search using Spotlight
-            var fileResults: [LaunchItem] = []
-            let spotlightResults = SpotlightService.shared.search(query: query, limit: 20)
-            fileResults = spotlightResults.map { file in
-                LaunchItem(
-                    name: file.name,
-                    path: file.path,
-                    type: .file,
-                    category: nil
-                )
-            }
-
-            // 4. Browser bookmarks
+            // MARK: - Background results (bookmarks, history, clipboard - no Spotlight)
+            // Spotlight removed from main search path for performance
+            
+            // 3. Browser bookmarks
             var bookmarkResults: [LaunchItem] = []
             let bookmarkMatches = BrowserBookmarksManager.shared.search(query)
             bookmarkResults = bookmarkMatches.map { bookmark in
@@ -759,7 +751,7 @@ final class LauncherWindow: NSWindow {
                 )
             }
 
-            // 5. Browser history
+            // 4. Browser history
             var historyResults: [LaunchItem] = []
             let historyMatches = BrowserHistoryManager.shared.search(query, limit: 10)
             historyResults = historyMatches.map { history in
@@ -771,7 +763,7 @@ final class LauncherWindow: NSWindow {
                 )
             }
 
-            // 6. Clipboard history
+            // 5. Clipboard history
             var clipboardResults: [LaunchItem] = []
             let clipboardMatches = ClipboardManager.shared.db.search(query, limit: 5)
             clipboardResults = clipboardMatches.filter { $0.type == "text" }.map { item in
@@ -784,11 +776,19 @@ final class LauncherWindow: NSWindow {
                 )
             }
 
-            // Merge all results
+            // Merge all results: plugins/apps > files > bookmarks/history > clipboard
             var merged = fastResults
-            merged += fileResults
+
+            // File results are updated asynchronously by triggerFileSearch
+            // Include current state (may be empty if search hasn't completed yet)
+            merged += self.fileSearchResults
+            merged += self.fileContentSearchResults
+
+            // Browser bookmarks and history
             merged += bookmarkResults
             merged += historyResults
+
+            // Clipboard (lowest priority)
             merged += clipboardResults
 
             // Update with complete results
@@ -821,6 +821,124 @@ final class LauncherWindow: NSWindow {
             tableView.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         }
         updatePreview()
+    }
+
+    /// Auto-trigger file search when app results are sparse.
+    private func triggerFileSearch(query: String, baseResults: [LaunchItem]) {
+        fileSearchRevision &+= 1
+        let thisRevision = fileSearchRevision
+
+        // Clear previous results
+        fileSearchResults = []
+        fileContentSearchResults = []
+
+        fileSearchSession.search(query: query, mode: .fileName) { [weak self] fileResults in
+            guard let self = self, self.fileSearchRevision == thisRevision else { return }
+
+            // Convert file results to LaunchItems
+            let fileItems = fileResults.map { result -> LaunchItem in
+                let name = result.url.lastPathComponent
+                return LaunchItem(
+                    name: name,
+                    path: result.url.path,
+                    type: result.isDirectory ? .folder : .file,
+                    category: nil
+                )
+            }
+
+            // Store file results
+            self.fileSearchResults = fileItems
+
+            // Merge and update UI
+            self.mergeAllResults(query: query, baseResults: baseResults)
+
+            // If file name results are sparse, trigger content search
+            if fileItems.count < 5 {
+                self.triggerFileContentSearch(query: query, baseResults: baseResults)
+            }
+        }
+    }
+
+    /// Auto-trigger file content search when file name results are sparse.
+    private func triggerFileContentSearch(query: String, baseResults: [LaunchItem]) {
+        fileContentSearchRevision &+= 1
+        let thisRevision = fileContentSearchRevision
+
+        fileContentSearchSession.search(query: query, mode: .content) { [weak self] contentResults in
+            guard let self = self, self.fileContentSearchRevision == thisRevision else { return }
+
+            // Convert content results to LaunchItems
+            let contentItems = contentResults.map { result -> LaunchItem in
+                let name = result.url.lastPathComponent
+                return LaunchItem(
+                    name: name,
+                    path: result.url.path,
+                    type: result.isDirectory ? .folder : .file,
+                    category: nil
+                )
+            }
+
+            // Store content results
+            self.fileContentSearchResults = contentItems
+
+            // Merge and update UI
+            self.mergeAllResults(query: query, baseResults: baseResults)
+        }
+    }
+
+    /// Merge all results with correct priority order.
+    private func mergeAllResults(query: String, baseResults: [LaunchItem]) {
+        var merged = baseResults
+
+        // File name results (higher priority)
+        let existingPaths = Set(baseResults.map(\.path))
+        for item in fileSearchResults where !existingPaths.contains(item.path) {
+            merged.append(item)
+        }
+
+        // File content results (lower priority than file name)
+        let allExistingPaths = Set(merged.map(\.path))
+        for item in fileContentSearchResults where !allExistingPaths.contains(item.path) {
+            merged.append(item)
+        }
+
+        // Browser bookmarks (load asynchronously on main thread)
+        let bookmarkMatches = BrowserBookmarksManager.shared.search(query)
+        let bookmarkResults = bookmarkMatches.map { bookmark in
+            LaunchItem(name: bookmark.title, path: bookmark.url, type: .bookmark, category: nil)
+        }
+        let fileAndAppPaths = Set(merged.map(\.path))
+        for item in bookmarkResults where !fileAndAppPaths.contains(item.path) {
+            merged.append(item)
+        }
+
+        // Browser history
+        let historyMatches = BrowserHistoryManager.shared.search(query, limit: 10)
+        let historyResults = historyMatches.map { history in
+            LaunchItem(
+                name: history.title.isEmpty ? history.url : history.title,
+                path: history.url,
+                type: .history,
+                category: nil
+            )
+        }
+        let withBookmarks = Set(merged.map(\.path))
+        for item in historyResults where !withBookmarks.contains(item.path) {
+            merged.append(item)
+        }
+
+        // Clipboard (lowest priority)
+        let clipboardMatches = ClipboardManager.shared.db.search(query, limit: 5)
+        let clipboardResults = clipboardMatches.filter { $0.type == "text" }.map { item in
+            let preview = item.content.count > 50 ? String(item.content.prefix(50)) + "..." : item.content
+            return LaunchItem(name: preview, path: item.content, type: .clipboard, category: nil)
+        }
+        let withHistory = Set(merged.map(\.path))
+        for item in clipboardResults where !withHistory.contains(item.path) {
+            merged.append(item)
+        }
+
+        applyFilterResults(query: query, merged: merged)
     }
 
     private func filterResults(with query: String) {
@@ -1165,6 +1283,8 @@ final class LauncherWindow: NSWindow {
         DispatchQueue.main.async { [weak self] in
             self?.results = items
             self?.filteredResults = items
+            // Update LauncherIndex with pre-built aliases
+            LauncherIndex.shared.update(apps: items.map { ($0.name, $0.path, nil) })
         }
 
         // Debug log

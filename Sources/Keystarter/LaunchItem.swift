@@ -9,6 +9,7 @@ struct LaunchItem {
         case application
         case command
         case file
+        case folder
         case bookmark
         case history
         case clipboard
@@ -29,8 +30,12 @@ struct LaunchItem {
     var icon: NSImage? {
         if let pluginIcon = pluginIcon { return pluginIcon }
         switch type {
-        case .application, .file:
+        case .application:
             return NSWorkspace.shared.icon(forFile: path)
+        case .file:
+            return NSImage(systemSymbolName: "doc", accessibilityDescription: nil)
+        case .folder:
+            return NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
         case .command:
             return NSImage(systemSymbolName: "terminal", accessibilityDescription: nil)
         case .bookmark, .history:
@@ -46,7 +51,7 @@ struct LaunchItem {
             return
         }
         switch type {
-        case .application, .file:
+        case .application, .file, .folder:
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
         case .command:
             break
@@ -63,7 +68,7 @@ struct LaunchItem {
     /// Show in Finder instead of opening.
     func showInFinder() {
         switch type {
-        case .application, .file:
+        case .application, .file, .folder:
             NSWorkspace.shared.selectFile(path, inFileViewerRootedAtPath: "")
         case .bookmark, .history:
             if let url = URL(string: path) {
