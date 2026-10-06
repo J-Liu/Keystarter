@@ -20,12 +20,6 @@ I use it every day. It combines three things I need in the menu bar: an app laun
 - **Local-first** — everything runs on your machine, no network required for core features
 - **No AI** — deterministic operations stay deterministic
 
-## Status
-
-**Early development.** Core features work, but things are still moving.
-
-Feedback and feature requests are welcome. Open an issue if something is broken or missing.
-
 ## Install
 
 Download the latest `.app` from [GitHub Releases](../../releases).
