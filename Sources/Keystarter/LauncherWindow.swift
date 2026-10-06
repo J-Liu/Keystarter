@@ -692,7 +692,7 @@ final class LauncherWindow: NSWindow {
             }
             var appResults: [LaunchItem] = []
             let runningPaths = self.getRunningAppPaths()
-            
+
             for entry in indexResults {
                 // Find matching LaunchItem
                 if let item = self.results.first(where: { $0.path == entry.path }) {
@@ -702,21 +702,31 @@ final class LauncherWindow: NSWindow {
                     appResults.append(LaunchItem(name: entry.name, path: entry.path, type: .application, category: nil))
                 }
             }
-            
-            // Secondary sort: running apps and frequency
+
+            // Sort with match score as primary factor
             appResults.sort { a, b in
-                let aRunning = runningPaths.contains(a.path)
-                let bRunning = runningPaths.contains(b.path)
-                let aFreq = LaunchHistory.shared.count(for: a.path)
-                let bFreq = LaunchHistory.shared.count(for: b.path)
-                
-                // New apps first
+                let aScore = indexResults.first(where: { $0.path == a.path })?.matchScore ?? 0
+                let bScore = indexResults.first(where: { $0.path == b.path })?.matchScore ?? 0
+
+                // Primary: match score (exact/prefix > fuzzy)
+                if aScore != bScore { return aScore > bScore }
+
+                // Secondary: new apps first (within same score tier)
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
                 if aIsNew != bIsNew { return aIsNew }
-                
+
+                // Tertiary: running apps (within same score tier)
+                let aRunning = runningPaths.contains(a.path)
+                let bRunning = runningPaths.contains(b.path)
                 if aRunning != bRunning { return aRunning }
+
+                // Quaternary: usage frequency (within same score tier)
+                let aFreq = LaunchHistory.shared.count(for: a.path)
+                let bFreq = LaunchHistory.shared.count(for: b.path)
                 if aFreq != bFreq { return aFreq > bFreq }
+
+                // Final: name length
                 return a.name.count < b.name.count
             }
 

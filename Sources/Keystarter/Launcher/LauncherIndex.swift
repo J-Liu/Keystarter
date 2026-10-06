@@ -32,6 +32,9 @@ struct IndexEntry: Hashable {
     /// Pre-built alias texts for fast matching.
     let aliasTexts: [String]
     
+    /// Match score (set during search, 0 = not matched)
+    var matchScore: Int = 0
+    
     init(name: String, path: String, bundleID: String? = nil) {
         self.name = name
         self.path = path
@@ -137,32 +140,35 @@ final class LauncherIndex {
     func search(_ query: String, limit: Int = 100) -> [IndexEntry] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return entries }
-        
+
         // Check memo
         if let cached = memo.get(query: q, revision: revision) {
             return cached
         }
-        
+
         // Fuzzy match query (pre-fold)
         let queryChars = Array(q)
-        
-        var scored: [(entry: IndexEntry, score: Int)] = []
+
+        var scored: [(entry: IndexEntry, score: Int, freq: Int)] = []
         scored.reserveCapacity(min(entries.count, limit * 2))
-        
+
         for entry in entries {
             guard let score = match(queryChars: queryChars, aliases: entry.aliasTexts) else { continue }
-            scored.append((entry, score))
+            let freq = LaunchHistory.shared.count(for: entry.path)
+            var entryWithScore = entry
+            entryWithScore.matchScore = score
+            scored.append((entryWithScore, score, freq))
         }
-        
-        // Sort by score
+
+        // Sort by: score (primary), then frequency (secondary)
         let results = scored
-            .sorted { $0.score > $1.score }
+            .sorted { ($0.score, $0.freq) > ($1.score, $1.freq) }
             .prefix(limit)
             .map(\.entry)
-        
+
         // Cache results
         memo.set(query: q, revision: revision, results: Array(results))
-        
+
         return Array(results)
     }
     
@@ -177,12 +183,13 @@ final class LauncherIndex {
 
             if alias == queryString {
                 // Exact match - highest priority
-                score = 10000
+                score = 100000
             } else if alias.hasPrefix(queryString) {
                 // Prefix match - very high priority
-                score = 5000 + (1000 - alias.count) // Shorter name = higher score
+                // All prefix matches get similar base score, sorted by name length and frequency
+                score = 50000 + (1000 - alias.count) // Shorter name = higher score
             } else if let idx = alias.range(of: queryString, options: .caseInsensitive)?.lowerBound {
-                // Substring match
+                // Substring match - much lower priority
                 let offset = alias.distance(from: alias.startIndex, to: idx)
                 if offset == 0 {
                     score = 3000
@@ -193,7 +200,7 @@ final class LauncherIndex {
                         score = 2000
                     } else {
                         // Middle of word
-                        score = 1000 - offset // Earlier = higher score
+                        score = max(1, 1000 - offset * 10) // Earlier = higher score
                     }
                 }
             } else {
