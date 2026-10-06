@@ -169,31 +169,62 @@ final class LauncherIndex {
     /// Match query against alias texts, return score or nil if no match.
     private nonisolated func match(queryChars: [Character], aliases: [String]) -> Int? {
         var best: Int?
-        
+        let queryString = String(queryChars)
+
         for alias in aliases {
-            guard let score = fuzzyMatch(query: queryChars, candidate: alias) else { continue }
-            best = max(best ?? Int.min, score)
+            // Check match type and calculate score
+            let score: Int?
+
+            if alias == queryString {
+                // Exact match - highest priority
+                score = 10000
+            } else if alias.hasPrefix(queryString) {
+                // Prefix match - very high priority
+                score = 5000 + (1000 - alias.count) // Shorter name = higher score
+            } else if let idx = alias.range(of: queryString, options: .caseInsensitive)?.lowerBound {
+                // Substring match
+                let offset = alias.distance(from: alias.startIndex, to: idx)
+                if offset == 0 {
+                    score = 3000
+                } else {
+                    let prevChar = alias[alias.index(alias.startIndex, offsetBy: offset - 1)]
+                    if !prevChar.isLetter {
+                        // Word boundary match
+                        score = 2000
+                    } else {
+                        // Middle of word
+                        score = 1000 - offset // Earlier = higher score
+                    }
+                }
+            } else {
+                // Fuzzy match - lowest priority
+                score = fuzzyMatch(query: queryChars, candidate: alias)
+            }
+
+            if let score = score {
+                best = max(best ?? Int.min, score)
+            }
         }
-        
+
         return best
     }
-    
+
     /// Fuzzy match with scoring. Returns nil if no match.
     private nonisolated func fuzzyMatch(query: [Character], candidate: String) -> Int? {
         guard !query.isEmpty else { return 0 }
-        
+
         let candidateChars = Array(candidate)
         var qi = 0
         var score = 0
         var run = 0
         var prev = -2
-        
+
         for (ci, ch) in candidateChars.enumerated() {
             guard qi < query.count else { break }
-            
+
             if ch == query[qi] {
                 var bonus = 1
-                
+
                 // Consecutive bonus
                 if ci == prev + 1 {
                     run += 1
@@ -201,7 +232,7 @@ final class LauncherIndex {
                 } else {
                     run = 0
                 }
-                
+
                 // Start bonus
                 if ci == 0 {
                     bonus += 12
@@ -209,14 +240,15 @@ final class LauncherIndex {
                     // Word boundary bonus
                     bonus += 8
                 }
-                
+
                 score += bonus
                 prev = ci
                 qi += 1
             }
         }
-        
+
         guard qi == query.count else { return nil }
-        return score
+        // Fuzzy matches get negative scores to rank below exact/prefix/substring matches
+        return score - 500
     }
 }
