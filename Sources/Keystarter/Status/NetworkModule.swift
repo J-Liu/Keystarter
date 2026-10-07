@@ -110,25 +110,26 @@ final class NetworkModule: NSObject, StatusModule {
         let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
         let chartHeight: CGFloat = 100
+        let ipInfoHeight: CGFloat = 48  // IP info section
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 20
-        let totalHeight = toolbarHeight + headerHeight + chartHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
-        let viewWidth: CGFloat = 450  // Increased from 400 to show all columns
-        
+        let totalHeight = toolbarHeight + headerHeight + chartHeight + ipInfoHeight + dividerHeight + CGFloat(rowCount) * rowHeight + 16
+        let viewWidth: CGFloat = 450
+
         let container = NSView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: totalHeight))
-        
+
         // Toolbar
         let toolbar = PopoverToolbar.create(title: displayName, width: viewWidth)
         toolbar.frame = NSRect(x: 0, y: totalHeight - toolbarHeight, width: viewWidth, height: toolbarHeight)
         container.addSubview(toolbar)
-        
+
         // Header
         let headerView = NSTextField(labelWithString: "Network I/O")
         headerView.font = .systemFont(ofSize: 12, weight: .semibold)
         headerView.frame = NSRect(x: 12, y: totalHeight - toolbarHeight - 20, width: 200, height: 16)
         container.addSubview(headerView)
-        
+
         // Network chart (mirrored download/upload)
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = NetworkChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
@@ -137,61 +138,117 @@ final class NetworkModule: NSObject, StatusModule {
         chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
-        
+
+        // IP Info Section (between chart and divider)
+        let ipY = chartY - ipInfoHeight
+        let ipContainer = NSView(frame: NSRect(x: 12, y: ipY, width: viewWidth - 24, height: ipInfoHeight))
+        ipContainer.wantsLayer = true
+        ipContainer.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
+        ipContainer.layer?.cornerRadius = 4
+
+        // Get local IPs
+        let (localIPv4, localIPv6) = getLocalIPAddresses()
+
+        // Local IP label
+        let localLabel = NSTextField(labelWithString: "Local IP:")
+        localLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        localLabel.textColor = .labelColor
+        localLabel.frame = NSRect(x: 8, y: ipInfoHeight - 18, width: 70, height: 14)
+        ipContainer.addSubview(localLabel)
+
+        let localValue = NSTextField(labelWithString: localIPv4 ?? "N/A")
+        localValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        localValue.frame = NSRect(x: 82, y: ipInfoHeight - 18, width: viewWidth - 110, height: 14)
+        localValue.lineBreakMode = .byTruncatingMiddle
+        ipContainer.addSubview(localValue)
+
+        // Public IP label
+        let publicLabel = NSTextField(labelWithString: "Public IP:")
+        publicLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        publicLabel.textColor = .labelColor
+        publicLabel.frame = NSRect(x: 8, y: ipInfoHeight - 33, width: 70, height: 14)
+        ipContainer.addSubview(publicLabel)
+
+        let publicValue = NSTextField(labelWithString: "Loading...")
+        publicValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        publicValue.frame = NSRect(x: 82, y: ipInfoHeight - 33, width: viewWidth - 110, height: 14)
+        publicValue.lineBreakMode = .byTruncatingMiddle
+        ipContainer.addSubview(publicValue)
+
+        // IPv6 label
+        let ipv6Label = NSTextField(labelWithString: "IPv6:")
+        ipv6Label.font = .systemFont(ofSize: 11, weight: .medium)
+        ipv6Label.textColor = .labelColor
+        ipv6Label.frame = NSRect(x: 8, y: ipInfoHeight - 48, width: 70, height: 14)
+        ipContainer.addSubview(ipv6Label)
+
+        let ipv6Value = NSTextField(labelWithString: localIPv6 ?? "N/A")
+        ipv6Value.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        ipv6Value.frame = NSRect(x: 82, y: ipInfoHeight - 48, width: viewWidth - 110, height: 14)
+        ipv6Value.lineBreakMode = .byTruncatingMiddle
+        ipContainer.addSubview(ipv6Value)
+
+        container.addSubview(ipContainer)
+
+        // Async fetch public IP
+        getPublicIP { [weak publicValue] ip in
+            publicValue?.stringValue = ip ?? "N/A"
+        }
+
         // Divider
-        let dividerY = chartY - dividerHeight + 4
+        let dividerY = ipY - dividerHeight + 4
         let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: viewWidth - 24, height: 1))
         divider.boxType = .separator
         container.addSubview(divider)
-        
+
         // Process list: Name, PID, User, Upload Speed, Download Speed
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: viewWidth, height: dividerY))
         scrollView.hasVerticalScroller = true
         scrollView.drawsBackground = false
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
-        
+
         let table = NSTableView(frame: NSRect(x: 0, y: 0, width: viewWidth - 16, height: CGFloat(rowCount) * rowHeight * 2))
         table.backgroundColor = .clear
         table.rowHeight = rowHeight
         table.intercellSpacing = NSSize(width: 0, height: 0)
-        
+
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         nameColumn.width = 150
         nameColumn.headerCell.title = "Name"
         table.addTableColumn(nameColumn)
-        
+
         let pidColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("pid"))
         pidColumn.width = 55
         pidColumn.headerCell.title = "PID"
         table.addTableColumn(pidColumn)
-        
+
         let userColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("user"))
         userColumn.width = 48
         userColumn.headerCell.title = "User"
         table.addTableColumn(userColumn)
-        
+
         let uploadColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("upload"))
         uploadColumn.width = 65
         uploadColumn.headerCell.title = "Upload"
         table.addTableColumn(uploadColumn)
-        
+
         let downloadColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("download"))
         downloadColumn.width = 65
         downloadColumn.headerCell.title = "Download"
         table.addTableColumn(downloadColumn)
-        
+
         table.dataSource = self
         table.delegate = self
-        
+
         scrollView.documentView = table
         tableView = table
         container.addSubview(scrollView)
-        
+
         // Refresh immediately on open
         refreshDetail()
         startDetailTimer()
-        
+
         return container
     }
     
@@ -207,7 +264,106 @@ final class NetworkModule: NSObject, StatusModule {
     }
     
     // MARK: - Network Data
-    
+
+    /// Get local IP addresses (IPv4 and IPv6)
+    func getLocalIPAddresses() -> (ipv4: String?, ipv6: String?) {
+        var ipv4: String?
+        var ipv6: String?
+
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
+            return (nil, nil)
+        }
+
+        var ptr = firstAddr
+        while true {
+            let addr = ptr.pointee
+
+            if let name = addr.ifa_name {
+                let ifaName = String(cString: name)
+                // Skip loopback and down interfaces
+                let flags = addr.ifa_flags
+                if (flags & UInt32(IFF_LOOPBACK)) != 0 || (flags & UInt32(IFF_UP)) == 0 {
+                    guard let next = addr.ifa_next else { break }
+                    ptr = next
+                    continue
+                }
+
+                if let sa = addr.ifa_addr {
+                    let family = sa.pointee.sa_family
+
+                    if family == UInt8(AF_INET) {
+                        // IPv4
+                        var addrStr = [CChar](repeating: 0, count: Int(INET_ADDRSTRLEN))
+                        var addrIn = sa.withMemoryRebound(to: sockaddr_in.self, capacity: 1) { $0.pointee }
+                        inet_ntop(AF_INET, &addrIn.sin_addr, &addrStr, socklen_t(INET_ADDRSTRLEN))
+                        let ip = String(cString: addrStr)
+                        if ipv4 == nil && ifaName.hasPrefix("en") {
+                            ipv4 = ip
+                        }
+                    } else if family == UInt8(AF_INET6) {
+                        // IPv6
+                        var addrStr = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+                        var addrIn6 = sa.withMemoryRebound(to: sockaddr_in6.self, capacity: 1) { $0.pointee }
+                        inet_ntop(AF_INET6, &addrIn6.sin6_addr, &addrStr, socklen_t(INET6_ADDRSTRLEN))
+                        let ip = String(cString: addrStr)
+                        // Accept any non-link-local IPv6 on en interfaces
+                        if ipv6 == nil && ifaName.hasPrefix("en") && !ip.hasPrefix("fe80::") {
+                            ipv6 = ip
+                        } else if ipv6 == nil && (ifaName.hasPrefix("awdl") || ifaName.hasPrefix("llw")) {
+                            // Also check awdl/llw interfaces as fallback
+                            ipv6 = ip
+                        }
+                    }
+                }
+            }
+
+            guard let next = addr.ifa_next else { break }
+            ptr = next
+        }
+
+        freeifaddrs(ifaddr)
+        return (ipv4, ipv6)
+    }
+
+    /// Get public IP address (async)
+    func getPublicIP(completion: @escaping (String?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            // Try multiple services for reliability
+            let services = [
+                "https://api.ipify.org",
+                "https://icanhazip.com",
+                "https://ifconfig.me/ip"
+            ]
+
+            for service in services {
+                guard let url = URL(string: service) else { continue }
+                var request = URLRequest(url: url)
+                request.timeoutInterval = 3.0
+                request.setValue("Keystarter/1.0", forHTTPHeaderField: "User-Agent")
+
+                do {
+                    let data = try Data(contentsOf: url, options: [])
+                    if let ip = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                        // Validate IP format
+                        if ip.contains(".") || ip.contains(":") {
+                            DispatchQueue.main.async {
+                                completion(ip)
+                            }
+                            return
+                        }
+                    }
+                } catch {
+                    continue
+                }
+            }
+
+            DispatchQueue.main.async {
+                completion(nil)
+            }
+        }
+    }
+
     private func getNetworkBytes() -> (in: UInt64, out: UInt64) {
         var bytesIn: UInt64 = 0
         var bytesOut: UInt64 = 0
