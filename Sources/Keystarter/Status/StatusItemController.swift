@@ -132,7 +132,7 @@ final class StatusItemController: NSObject {
                     paraStyle.paragraphSpacing = 0
 
                     let valueAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .font: NSFont(name: "Tahoma", size: 10)!,
                         .foregroundColor: NSColor.labelColor,
                         .paragraphStyle: paraStyle
                     ]
@@ -150,7 +150,7 @@ final class StatusItemController: NSObject {
                         .paragraphStyle: paraStyle
                     ]
                     let valueAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .font: NSFont(name: "Tahoma", size: 10)!,
                         .foregroundColor: NSColor.labelColor,
                         .paragraphStyle: paraStyle
                     ]
@@ -216,15 +216,15 @@ final class StatusItemController: NSObject {
             let itemWidth: CGFloat
             switch module.identifier {
             case "cpu", "gpu":
-                itemWidth = 22  // 2 digits, narrow
+                itemWidth = 16  // 2 digits, narrow
             case "sensor":
-                itemWidth = 24  // 2 digits + unit
+                itemWidth = 15  // 2 digits + unit
             case "memory":
-                itemWidth = 14  // Segmented bar
+                itemWidth = 7  // Segmented bar
             case "network", "disk":
                 itemWidth = 50  // Speed format like "123.4K"
             default:
-                itemWidth = 28
+                itemWidth = 16
             }
 
             let item = NSStatusBar.system.statusItem(withLength: itemWidth)
@@ -254,7 +254,7 @@ final class StatusItemController: NSObject {
                     paraStyle.paragraphSpacing = 0
 
                     let valueAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .font: NSFont(name: "Tahoma", size: 10)!,
                         .foregroundColor: NSColor.labelColor,
                         .paragraphStyle: paraStyle
                     ]
@@ -272,7 +272,7 @@ final class StatusItemController: NSObject {
                         .paragraphStyle: paraStyle
                     ]
                     let valueAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .font: NSFont(name: "Tahoma", size: 10)!,
                         .foregroundColor: NSColor.labelColor,
                         .paragraphStyle: paraStyle
                     ]
@@ -436,7 +436,7 @@ final class StatusItemController: NSObject {
             paraStyle.paragraphSpacing = 0
 
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont(name: "Tahoma", size: 11)!,
+                .font: NSFont(name: "Tahoma", size: 10)!,
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
@@ -453,7 +453,7 @@ final class StatusItemController: NSObject {
             let readColor = NSColor.systemBlue
 
             // Write line: ● + speed (smaller dot)
-            let dotFont = NSFont.systemFont(ofSize: 6, weight: .regular)
+            let dotFont = NSFont.systemFont(ofSize: 5, weight: .regular)
             let writeAttrs: [NSAttributedString.Key: Any] = [
                 .font: dotFont,
                 .foregroundColor: writeColor,
@@ -498,7 +498,7 @@ final class StatusItemController: NSObject {
             let downloadColor = NSColor.systemBlue
 
             // Upload line: colored ↑ + speed (bolder arrow)
-            let arrowFont = NSFont.systemFont(ofSize: 9, weight: .bold)
+            let arrowFont = NSFont.systemFont(ofSize: 10, weight: .bold)
             let uploadAttrs: [NSAttributedString.Key: Any] = [
                 .font: arrowFont,
                 .foregroundColor: uploadColor,
