@@ -278,12 +278,10 @@ final class SettingsWindow: NSWindow {
         cpuCheckbox.state = UserDefaults.standard.bool(forKey: "status.cpu.enabled") ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: cpuCheckbox))
 
-        // Row: Memory Module
+        // Row: Memory Module + Bar Color (same row)
         let memoryCheckbox = NSButton(checkboxWithTitle: L("status.memory.displayName"), target: self, action: #selector(memoryModuleChanged(_:)))
         memoryCheckbox.state = UserDefaults.standard.bool(forKey: "status.memory.enabled") ? .on : .off
-        stack.addArrangedSubview(makeRow(label: "", control: memoryCheckbox))
         
-        // Row: Memory Bar Color
         let memoryColorPopup = NSPopUpButton()
         let savedMemoryColor = UserDefaults.standard.string(forKey: "status.memory.barColor") ?? "White"
         for (name, color) in MemoryModule.availableColors {
@@ -302,7 +300,13 @@ final class SettingsWindow: NSWindow {
         memoryColorPopup.selectItem(withTitle: savedMemoryColor)
         memoryColorPopup.target = self
         memoryColorPopup.action = #selector(memoryBarColorChanged(_:))
-        stack.addArrangedSubview(makeRow(label: L("settings.memory.barColor"), control: memoryColorPopup))
+        memoryColorPopup.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        
+        let memoryRow = NSStackView(views: [memoryCheckbox, memoryColorPopup])
+        memoryRow.orientation = .horizontal
+        memoryRow.spacing = 12
+        memoryRow.alignment = .centerY
+        stack.addArrangedSubview(makeRow(label: "", control: memoryRow))
 
         // Row: Network Module
         let networkCheckbox = NSButton(checkboxWithTitle: L("status.network.displayName"), target: self, action: #selector(networkModuleChanged(_:)))
