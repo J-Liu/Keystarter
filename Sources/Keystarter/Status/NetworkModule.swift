@@ -3,6 +3,7 @@
 
 import AppKit
 import CoreVideo
+import SystemConfiguration
 
 /// Network process information.
 struct NetworkProcessInfo {
@@ -110,7 +111,7 @@ final class NetworkModule: NSObject, StatusModule {
         let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
         let chartHeight: CGFloat = 100
-        let ipInfoHeight: CGFloat = 48  // IP info section
+        let ipInfoHeight: CGFloat = 63  // IP info section (4 rows)
         let dividerHeight: CGFloat = 12
         let rowHeight: CGFloat = 20
         let rowCount = 20
@@ -148,30 +149,44 @@ final class NetworkModule: NSObject, StatusModule {
 
         // Get local IPs
         let (localIPv4, localIPv6) = getLocalIPAddresses()
+        let macAddress = getMACAddress()
 
         // Local IP label
         let localLabel = NSTextField(labelWithString: "Local IP:")
         localLabel.font = .systemFont(ofSize: 11, weight: .medium)
         localLabel.textColor = .labelColor
-        localLabel.frame = NSRect(x: 8, y: ipInfoHeight - 18, width: 70, height: 14)
+        localLabel.frame = NSRect(x: 8, y: ipInfoHeight - 15, width: 70, height: 14)
         ipContainer.addSubview(localLabel)
 
         let localValue = NSTextField(labelWithString: localIPv4 ?? "N/A")
         localValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        localValue.frame = NSRect(x: 82, y: ipInfoHeight - 18, width: viewWidth - 110, height: 14)
+        localValue.frame = NSRect(x: 82, y: ipInfoHeight - 15, width: viewWidth - 110, height: 14)
         localValue.lineBreakMode = .byTruncatingMiddle
         ipContainer.addSubview(localValue)
+
+        // MAC address label
+        let macLabel = NSTextField(labelWithString: "MAC:")
+        macLabel.font = .systemFont(ofSize: 11, weight: .medium)
+        macLabel.textColor = .labelColor
+        macLabel.frame = NSRect(x: 8, y: ipInfoHeight - 30, width: 70, height: 14)
+        ipContainer.addSubview(macLabel)
+
+        let macValue = NSTextField(labelWithString: macAddress ?? "N/A")
+        macValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        macValue.frame = NSRect(x: 82, y: ipInfoHeight - 30, width: viewWidth - 110, height: 14)
+        macValue.lineBreakMode = .byTruncatingMiddle
+        ipContainer.addSubview(macValue)
 
         // Public IP label
         let publicLabel = NSTextField(labelWithString: "Public IP:")
         publicLabel.font = .systemFont(ofSize: 11, weight: .medium)
         publicLabel.textColor = .labelColor
-        publicLabel.frame = NSRect(x: 8, y: ipInfoHeight - 33, width: 70, height: 14)
+        publicLabel.frame = NSRect(x: 8, y: ipInfoHeight - 45, width: 70, height: 14)
         ipContainer.addSubview(publicLabel)
 
         let publicValue = NSTextField(labelWithString: "Loading...")
         publicValue.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        publicValue.frame = NSRect(x: 82, y: ipInfoHeight - 33, width: viewWidth - 110, height: 14)
+        publicValue.frame = NSRect(x: 82, y: ipInfoHeight - 45, width: viewWidth - 110, height: 14)
         publicValue.lineBreakMode = .byTruncatingMiddle
         ipContainer.addSubview(publicValue)
 
@@ -179,12 +194,12 @@ final class NetworkModule: NSObject, StatusModule {
         let ipv6Label = NSTextField(labelWithString: "IPv6:")
         ipv6Label.font = .systemFont(ofSize: 11, weight: .medium)
         ipv6Label.textColor = .labelColor
-        ipv6Label.frame = NSRect(x: 8, y: ipInfoHeight - 48, width: 70, height: 14)
+        ipv6Label.frame = NSRect(x: 8, y: ipInfoHeight - 60, width: 70, height: 14)
         ipContainer.addSubview(ipv6Label)
 
         let ipv6Value = NSTextField(labelWithString: localIPv6 ?? "N/A")
         ipv6Value.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
-        ipv6Value.frame = NSRect(x: 82, y: ipInfoHeight - 48, width: viewWidth - 110, height: 14)
+        ipv6Value.frame = NSRect(x: 82, y: ipInfoHeight - 60, width: viewWidth - 110, height: 14)
         ipv6Value.lineBreakMode = .byTruncatingMiddle
         ipContainer.addSubview(ipv6Value)
 
@@ -324,6 +339,30 @@ final class NetworkModule: NSObject, StatusModule {
 
         freeifaddrs(ifaddr)
         return (ipv4, ipv6)
+    }
+
+    /// Get MAC address of primary network interface using SystemConfiguration
+    func getMACAddress() -> String? {
+        let primaryInterface: String? = {
+            guard let global = SCDynamicStoreCopyValue(nil, "State:/Network/Global/IPv4" as CFString) as? [String: Any],
+                  let name = global["PrimaryInterface"] as? String else {
+                return nil
+            }
+            return name
+        }()
+
+        let targetInterface = primaryInterface ?? "en0"
+
+        for interface in SCNetworkInterfaceCopyAll() as NSArray {
+            guard let bsdName = SCNetworkInterfaceGetBSDName(interface as! SCNetworkInterface),
+                  bsdName as String == targetInterface else { continue }
+
+            if let address = SCNetworkInterfaceGetHardwareAddressString(interface as! SCNetworkInterface) {
+                return address as String
+            }
+        }
+
+        return nil
     }
 
     /// Get public IP address (async)

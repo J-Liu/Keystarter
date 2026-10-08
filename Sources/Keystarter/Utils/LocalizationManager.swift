@@ -197,6 +197,7 @@ final class LocalizationManager {
             // Status Modules
             "status.cpu.displayName": "CPU Usage",
             "status.memory.displayName": "Memory Usage",
+            "settings.memory.barColor": "Bar Color:",
             "status.network.displayName": "Network",
             "status.disk.displayName": "Disk",
             "status.gpu.displayName": "GPU",
@@ -389,6 +390,7 @@ final class LocalizationManager {
             // Status Modules
             "status.cpu.displayName": "CPU 使用率",
             "status.memory.displayName": "内存使用",
+            "settings.memory.barColor": "柱状图颜色：",
             "status.network.displayName": "网络",
             "status.disk.displayName": "硬盘",
             "status.gpu.displayName": "GPU",
@@ -571,6 +573,7 @@ final class LocalizationManager {
             // Status Modules
             "status.cpu.displayName": "CPU 使用率",
             "status.memory.displayName": "記憶體使用",
+            "settings.memory.barColor": "柱狀圖顏色：",
             "status.network.displayName": "網路",
             "status.disk.displayName": "硬碟",
             "status.gpu.displayName": "GPU",

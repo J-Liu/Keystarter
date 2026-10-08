@@ -520,7 +520,7 @@ final class SensorModule: NSObject, StatusModule {
             }
         }
 
-        // Read from SMC for additional sensors
+        // Read from SMC for additional sensors (GPU temps are more reliable via SMC)
         if smcConnection != 0 {
             let allKeys = readAllSMCKeys()
 
@@ -548,6 +548,11 @@ final class SensorModule: NSObject, StatusModule {
                 "Tm0C": "sensor.memory",
                 "Tm0D": "sensor.memory",
                 "Tm0E": "sensor.memory",
+                // M1 GPU temperatures (SMC keys, more reliable than HID)
+                "Tg05": "GPU 1",
+                "Tg0D": "GPU 2",
+                "Tg0L": "GPU 3",
+                "Tg0T": "GPU 4",
             ]
 
             for key in tempKeys {
@@ -627,14 +632,10 @@ final class SensorModule: NSObject, StatusModule {
             return ""
         }
 
-        // GPU temperatures (TP*g pattern)
+        // GPU temperatures (TP*g pattern) - Skip these, use SMC instead (Tg05, Tg0D, Tg0L, Tg0T)
+        // HID only shows 3 GPUs, SMC shows all 4
         if key.hasPrefix("PMU TP") && key.hasSuffix("g") {
-            let suffix = key.replacingOccurrences(of: "PMU TP", with: "").replacingOccurrences(of: "g", with: "")
-            if let num = Int(suffix) {
-                // Use the sensor number directly (TP1g -> GPU 1)
-                return "GPU \(num)"
-            }
-            return L("sensor.gpu")
+            return ""
         }
 
         // Memory temperatures (TP*s pattern)

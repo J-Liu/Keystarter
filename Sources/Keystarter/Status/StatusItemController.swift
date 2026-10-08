@@ -11,8 +11,9 @@ final class StatusItemController: NSObject {
     private var statusItems: [String: NSStatusItem] = [:]
     private var popover: NSPopover?
     private var currentPopoverModule: String?
+    private var memoryBarView: MemoryBarView?  // Custom view for memory bar
 
-    private var modules: [StatusModule] = []
+    var modules: [StatusModule] = []
 
     private var refreshTimer: Timer?
     private var lastRefreshTimes: [String: Date] = [:]
@@ -69,7 +70,7 @@ final class StatusItemController: NSObject {
             for module in self.modules {
                 module.refreshSummary()
             }
-            
+
             // Second call after 0.5s: get actual data (needed for disk/network speed)
             DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self = self else { return }
@@ -89,65 +90,81 @@ final class StatusItemController: NSObject {
     private func setupStatusItem() {
         // Create separate status item for each module (reverse order so first module appears leftmost)
         for module in modules.reversed() {
-            // Width based on module type
+            // Default width: tighter for CPU/GPU/Sensor, wider for network/disk
             let itemWidth: CGFloat
             switch module.identifier {
-            case "network":
-                itemWidth = 42
-            case "disk":
-                itemWidth = 46
+            case "cpu", "gpu":
+                itemWidth = 16  // 2 digits, narrow
             case "sensor":
-                itemWidth = 23
+                itemWidth = 15  // 2 digits + unit
             case "memory":
-                itemWidth = 23
+                itemWidth = 7   // Segmented bar
+            case "network", "disk":
+                itemWidth = 50  // Speed format like "123.4K"
             default:
-                itemWidth = 23
+                itemWidth = 16
             }
+
             let item = NSStatusBar.system.statusItem(withLength: itemWidth)
 
-            // Sensor module: single line, others: two lines
-            let attrString = NSMutableAttributedString()
+            // Memory module: custom segmented bar view
+            if module.identifier == "memory", let memoryModule = module as? MemoryModule {
+                let barView = MemoryBarView(color: memoryModule.barColor)
+                barView.setPercentage(memoryModule.usedPercentage)
 
-            if module.identifier == "sensor" {
-                // Single line for sensor
-                let paraStyle = NSMutableParagraphStyle()
-                paraStyle.alignment = .center
-                paraStyle.lineSpacing = 0
-                paraStyle.paragraphSpacing = 0
+                // Add to button as subview
+                item.button?.addSubview(barView)
+                item.button?.target = self
+                item.button?.action = #selector(statusItemClicked(_:))
+                item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
+                item.button?.toolTip = module.displayName
 
-                let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11)!,
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paraStyle
-                ]
-                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                memoryBarView = barView
             } else {
-                // Two lines for others
-                let paraStyle = NSMutableParagraphStyle()
-                paraStyle.alignment = .center
-                paraStyle.lineSpacing = -3
-                paraStyle.paragraphSpacing = -3
+                // Other modules: use attributed text
+                let attrString = NSMutableAttributedString()
 
-                let nameAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: 7, weight: .light),
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paraStyle
-                ]
-                let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11)!,
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paraStyle
-                ]
+                if module.identifier == "sensor" {
+                    // Single line for sensor
+                    let paraStyle = NSMutableParagraphStyle()
+                    paraStyle.alignment = .center
+                    paraStyle.lineSpacing = 0
+                    paraStyle.paragraphSpacing = 0
 
-                attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
-                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                    let valueAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+                    attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                } else {
+                    // Two lines for others
+                    let paraStyle = NSMutableParagraphStyle()
+                    paraStyle.alignment = .center
+                    paraStyle.lineSpacing = -3
+                    paraStyle.paragraphSpacing = -3
+
+                    let nameAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont.systemFont(ofSize: 7, weight: .light),
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+                    let valueAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+
+                    attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+                    attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                }
+
+                item.button?.attributedTitle = attrString
+                item.button?.target = self
+                item.button?.action = #selector(statusItemClicked(_:))
+                item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
+                item.button?.toolTip = module.displayName
             }
-
-            item.button?.attributedTitle = attrString
-            item.button?.target = self
-            item.button?.action = #selector(statusItemClicked(_:))
-            item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
-            item.button?.toolTip = module.displayName
 
             statusItems[module.identifier] = item
         }
@@ -191,68 +208,85 @@ final class StatusItemController: NSObject {
             NSStatusBar.system.removeStatusItem(item)
         }
         statusItems.removeAll()
+        memoryBarView = nil
 
         // Recreate status items for current modules (reverse order so first module appears leftmost)
         for module in modules.reversed() {
-            // Width based on module type
+            // Default width: tighter for CPU/GPU/Sensor, wider for network/disk
             let itemWidth: CGFloat
             switch module.identifier {
-            case "network":
-                itemWidth = 42
-            case "disk":
-                itemWidth = 46
+            case "cpu", "gpu":
+                itemWidth = 22  // 2 digits, narrow
             case "sensor":
-                itemWidth = 23
+                itemWidth = 24  // 2 digits + unit
             case "memory":
-                itemWidth = 23
+                itemWidth = 14  // Segmented bar
+            case "network", "disk":
+                itemWidth = 50  // Speed format like "123.4K"
             default:
-                itemWidth = 23
+                itemWidth = 28
             }
+
             let item = NSStatusBar.system.statusItem(withLength: itemWidth)
 
-            // Sensor module: single line, others: two lines
-            let attrString = NSMutableAttributedString()
+            // Memory module: custom segmented bar view
+            if module.identifier == "memory", let memoryModule = module as? MemoryModule {
+                let barView = MemoryBarView(color: memoryModule.barColor)
+                barView.setPercentage(memoryModule.usedPercentage)
 
-            if module.identifier == "sensor" {
-                // Single line for sensor
-                let paraStyle = NSMutableParagraphStyle()
-                paraStyle.alignment = .center
-                paraStyle.lineSpacing = 0
-                paraStyle.paragraphSpacing = 0
+                // Add to button as subview
+                item.button?.addSubview(barView)
+                item.button?.target = self
+                item.button?.action = #selector(statusItemClicked(_:))
+                item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
+                item.button?.toolTip = module.displayName
 
-                let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11)!,
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paraStyle
-                ]
-                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                memoryBarView = barView
             } else {
-                // Two lines for others
-                let paraStyle = NSMutableParagraphStyle()
-                paraStyle.alignment = .center
-                paraStyle.lineSpacing = -3
-                paraStyle.paragraphSpacing = -3
+                // Other modules: use attributed text
+                let attrString = NSMutableAttributedString()
 
-                let nameAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont.systemFont(ofSize: 7, weight: .light),
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paraStyle
-                ]
-                let valueAttrs: [NSAttributedString.Key: Any] = [
-                    .font: NSFont(name: "Tahoma", size: 11)!,
-                    .foregroundColor: NSColor.labelColor,
-                    .paragraphStyle: paraStyle
-                ]
+                if module.identifier == "sensor" {
+                    // Single line for sensor
+                    let paraStyle = NSMutableParagraphStyle()
+                    paraStyle.alignment = .center
+                    paraStyle.lineSpacing = 0
+                    paraStyle.paragraphSpacing = 0
 
-                attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
-                attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                    let valueAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+                    attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                } else {
+                    // Two lines for others
+                    let paraStyle = NSMutableParagraphStyle()
+                    paraStyle.alignment = .center
+                    paraStyle.lineSpacing = -3
+                    paraStyle.paragraphSpacing = -3
+
+                    let nameAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont.systemFont(ofSize: 7, weight: .light),
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+                    let valueAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont(name: "Tahoma", size: 11)!,
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+
+                    attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
+                    attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                }
+
+                item.button?.attributedTitle = attrString
+                item.button?.target = self
+                item.button?.action = #selector(statusItemClicked(_:))
+                item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
+                item.button?.toolTip = module.displayName
             }
-
-            item.button?.attributedTitle = attrString
-            item.button?.target = self
-            item.button?.action = #selector(statusItemClicked(_:))
-            item.button?.identifier = NSUserInterfaceItemIdentifier(module.identifier)
-            item.button?.toolTip = module.displayName
 
             statusItems[module.identifier] = item
         }
@@ -381,7 +415,18 @@ final class StatusItemController: NSObject {
         guard let item = statusItems[module.identifier],
               let button = item.button else { return }
 
+        // Memory module: update segmented bar view
+        if module.identifier == "memory", let memoryModule = module as? MemoryModule {
+            memoryBarView?.setPercentage(memoryModule.usedPercentage)
+            memoryBarView?.setColor(memoryModule.barColor)
+            return
+        }
+
         let attrString = NSMutableAttributedString()
+        let font = NSFont.systemFont(ofSize: 9, weight: .light)
+
+        // Calculate adaptive width
+        var calculatedWidth: CGFloat = 28  // Default width for CPU/GPU/Sensor
 
         // Sensor module: single line
         if module.identifier == "sensor" {
@@ -397,45 +442,95 @@ final class StatusItemController: NSObject {
             ]
             attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
         } else if module.identifier == "disk", let diskModule = module as? DiskModule {
-            // Disk: two-line speed display
+            // Disk: two colored dots + speed values
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
             paraStyle.lineSpacing = -3
             paraStyle.paragraphSpacing = -3
 
-            let topAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .light),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
-            let bottomAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .light),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
+            // Colors: orange for write (top), blue for read (bottom)
+            let writeColor = NSColor.systemOrange
+            let readColor = NSColor.systemBlue
 
-            attrString.append(NSAttributedString(string: "W " + diskModule.writeSpeedText + "\n", attributes: topAttrs))
-            attrString.append(NSAttributedString(string: "R " + diskModule.readSpeedText, attributes: bottomAttrs))
+            // Write line: ● + speed (smaller dot)
+            let dotFont = NSFont.systemFont(ofSize: 6, weight: .regular)
+            let writeAttrs: [NSAttributedString.Key: Any] = [
+                .font: dotFont,
+                .foregroundColor: writeColor,
+                .paragraphStyle: paraStyle
+            ]
+            let writeValueAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            attrString.append(NSAttributedString(string: "● ", attributes: writeAttrs))
+            attrString.append(NSAttributedString(string: diskModule.writeSpeedText + "\n", attributes: writeValueAttrs))
+
+            // Read line: ● + speed (smaller dot)
+            let readAttrs: [NSAttributedString.Key: Any] = [
+                .font: dotFont,
+                .foregroundColor: readColor,
+                .paragraphStyle: paraStyle
+            ]
+            let readValueAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            attrString.append(NSAttributedString(string: "● ", attributes: readAttrs))
+            attrString.append(NSAttributedString(string: diskModule.readSpeedText, attributes: readValueAttrs))
+
+            // Calculate adaptive width for disk (similar to Stats Speed widget)
+            let writeWidth = ("● " + diskModule.writeSpeedText).size(withAttributes: [.font: font]).width
+            let readWidth = ("● " + diskModule.readSpeedText).size(withAttributes: [.font: font]).width
+            calculatedWidth = max(writeWidth, readWidth) + 8  // Add padding
+            calculatedWidth = max(calculatedWidth, 50)  // Minimum width for "123.4K" format
         } else if module.identifier == "network", let networkModule = module as? NetworkModule {
-            // Network: two-line speed display
+            // Network: colored arrows + speed values
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
             paraStyle.lineSpacing = -3
             paraStyle.paragraphSpacing = -3
 
-            let topAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .light),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
-            let bottomAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9, weight: .light),
-                .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
-            ]
+            // Colors: red for upload, blue for download
+            let uploadColor = NSColor.systemRed
+            let downloadColor = NSColor.systemBlue
 
-            attrString.append(NSAttributedString(string: "↑ " + networkModule.uploadSpeedText + "\n", attributes: topAttrs))
-            attrString.append(NSAttributedString(string: "↓ " + networkModule.downloadSpeedText, attributes: bottomAttrs))
+            // Upload line: colored ↑ + speed (bolder arrow)
+            let arrowFont = NSFont.systemFont(ofSize: 9, weight: .bold)
+            let uploadAttrs: [NSAttributedString.Key: Any] = [
+                .font: arrowFont,
+                .foregroundColor: uploadColor,
+                .paragraphStyle: paraStyle
+            ]
+            let uploadValueAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            attrString.append(NSAttributedString(string: "↑ ", attributes: uploadAttrs))
+            attrString.append(NSAttributedString(string: networkModule.uploadSpeedText + "\n", attributes: uploadValueAttrs))
+
+            // Download line: colored ↓ + speed (bolder arrow)
+            let downloadAttrs: [NSAttributedString.Key: Any] = [
+                .font: arrowFont,
+                .foregroundColor: downloadColor,
+                .paragraphStyle: paraStyle
+            ]
+            let downloadValueAttrs: [NSAttributedString.Key: Any] = [
+                .font: font,
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            attrString.append(NSAttributedString(string: "↓ ", attributes: downloadAttrs))
+            attrString.append(NSAttributedString(string: networkModule.downloadSpeedText, attributes: downloadValueAttrs))
+
+            // Calculate adaptive width for network (similar to Stats Speed widget)
+            let uploadWidth = ("↑ " + networkModule.uploadSpeedText).size(withAttributes: [.font: font]).width
+            let downloadWidth = ("↓ " + networkModule.downloadSpeedText).size(withAttributes: [.font: font]).width
+            calculatedWidth = max(uploadWidth, downloadWidth) + 8  // Add padding
+            calculatedWidth = max(calculatedWidth, 50)  // Minimum width for "123.4K" format
         } else {
             // Other modules: two lines (name + value)
             let paraStyle = NSMutableParagraphStyle()
@@ -459,6 +554,14 @@ final class StatusItemController: NSObject {
         }
 
         button.attributedTitle = attrString
+
+        // Update width if needed (adaptive for network/disk)
+        if module.identifier == "network" || module.identifier == "disk" {
+            let roundedWidth = (calculatedWidth * 2).rounded() / 2  // Round to nearest 0.5
+            if item.length != roundedWidth {
+                item.length = roundedWidth
+            }
+        }
     }
 
     // MARK: - Actions

@@ -282,6 +282,27 @@ final class SettingsWindow: NSWindow {
         let memoryCheckbox = NSButton(checkboxWithTitle: L("status.memory.displayName"), target: self, action: #selector(memoryModuleChanged(_:)))
         memoryCheckbox.state = UserDefaults.standard.bool(forKey: "status.memory.enabled") ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: memoryCheckbox))
+        
+        // Row: Memory Bar Color
+        let memoryColorPopup = NSPopUpButton()
+        let savedMemoryColor = UserDefaults.standard.string(forKey: "status.memory.barColor") ?? "White"
+        for (name, color) in MemoryModule.availableColors {
+            let item = memoryColorPopup.menu?.addItem(withTitle: name, action: nil, keyEquivalent: "")
+            // Create a simple colored square image
+            let size = NSSize(width: 12, height: 12)
+            let image = NSImage(size: size)
+            image.lockFocus()
+            color.set()
+            let rect = NSRect(origin: .zero, size: size).insetBy(dx: 1, dy: 1)
+            let path = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
+            path.fill()
+            image.unlockFocus()
+            item?.image = image
+        }
+        memoryColorPopup.selectItem(withTitle: savedMemoryColor)
+        memoryColorPopup.target = self
+        memoryColorPopup.action = #selector(memoryBarColorChanged(_:))
+        stack.addArrangedSubview(makeRow(label: L("settings.memory.barColor"), control: memoryColorPopup))
 
         // Row: Network Module
         let networkCheckbox = NSButton(checkboxWithTitle: L("status.network.displayName"), target: self, action: #selector(networkModuleChanged(_:)))
@@ -702,6 +723,14 @@ final class SettingsWindow: NSWindow {
             StatusItemController.shared.enableModule("memory")
         } else {
             StatusItemController.shared.disableModule("memory")
+        }
+    }
+    
+    @objc private func memoryBarColorChanged(_ sender: NSPopUpButton) {
+        guard let colorName = sender.selectedItem?.title else { return }
+        // Find memory module and update its color
+        if let memoryModule = StatusItemController.shared.modules.first(where: { $0.identifier == "memory" }) as? MemoryModule {
+            memoryModule.setBarColor(colorName)
         }
     }
 

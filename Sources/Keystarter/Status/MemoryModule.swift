@@ -25,8 +25,43 @@ final class MemoryModule: NSObject, StatusModule {
 
     private(set) var summaryText: String = "8.2"
     private(set) var summaryValue: String = "8.2"
+    private(set) var usedPercentage: Double = 0.5
+    private(set) var barColor: NSColor = .white
 
     var refreshInterval: TimeInterval { 2.0 }
+    
+    // Available colors for the bar
+    static let availableColors: [(name: String, color: NSColor)] = [
+        ("White", .white),
+        ("Orange", .systemOrange),
+        ("Red", .systemRed),
+        ("Blue", .systemBlue),
+        ("Green", .systemGreen),
+        ("Purple", .systemPurple),
+        ("Pink", .systemPink),
+        ("Teal", .systemTeal),
+        ("Yellow", .systemYellow)
+    ]
+    
+    override init() {
+        super.init()
+        loadColorSetting()
+    }
+    
+    private func loadColorSetting() {
+        let defaults = UserDefaults.standard
+        let colorName = defaults.string(forKey: "status.memory.barColor") ?? "White"
+        if let color = Self.availableColors.first(where: { $0.name == colorName })?.color {
+            barColor = color
+        }
+    }
+    
+    func setBarColor(_ colorName: String) {
+        guard let color = Self.availableColors.first(where: { $0.name == colorName })?.color else { return }
+        barColor = color
+        UserDefaults.standard.set(colorName, forKey: "status.memory.barColor")
+        NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": identifier])
+    }
 
     private var processes: [MemoryProcessInfo] = []
     private var usedMemory: UInt64 = 0
@@ -55,6 +90,11 @@ final class MemoryModule: NSObject, StatusModule {
         let value = String(format: "%.1f", usedGB)
         summaryText = value
         summaryValue = value
+        
+        // Calculate percentage for segmented bar
+        if total > 0 {
+            usedPercentage = Double(used) / Double(total)
+        }
 
         processes = getProcessesByMemory(limit: 100)
     }
@@ -409,6 +449,90 @@ extension MemoryModule: NSTableViewDataSource, NSTableViewDelegate {
         }
 
         return cell
+    }
+}
+
+// MARK: - Memory Segmented Bar View for Status Bar
+
+/// Segmented vertical bar for memory usage in status bar.
+/// Shows grid count instead of numbers, similar to Stats but with visible segments.
+final class MemoryBarView: NSView {
+    private var percentage: Double = 0
+    private let segmentCount: Int = 10  // 10 segments
+    private let segmentSpacing: CGFloat = 1.5
+    private let barWidth: CGFloat = 6
+    private let cornerRadius: CGFloat = 2
+
+    // Base color: selected by user
+    private var baseColor: NSColor = NSColor.systemOrange
+
+    // Empty segments (top, free memory) = base color
+    private var emptyColor: NSColor {
+        return baseColor
+    }
+
+    // Filled segments (bottom, used memory) = base color darkened
+    private var filledColor: NSColor {
+        // Darken the color by 40%
+        var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
+        baseColor.usingColorSpace(.sRGB)?.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        return NSColor(
+            red: max(red * 0.6, 0),
+            green: max(green * 0.6, 0),
+            blue: max(blue * 0.6, 0),
+            alpha: alpha
+        )
+    }
+
+    init(color: NSColor = .white) {
+        self.baseColor = color
+        super.init(frame: NSRect(x: 0, y: 2, width: 10, height: 18))
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setPercentage(_ value: Double) {
+        guard abs(percentage - value) > 0.01 else { return }
+        percentage = value
+        needsDisplay = true
+    }
+
+    func setColor(_ color: NSColor) {
+        baseColor = color
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+
+        let totalHeight = bounds.height
+        let segmentHeight = (totalHeight - CGFloat(segmentCount - 1) * segmentSpacing) / CGFloat(segmentCount)
+
+        // Number of filled segments (from bottom up)
+        let filledSegments = Int((percentage * Double(segmentCount)).rounded())
+
+        for i in 0..<segmentCount {
+            let y = totalHeight - CGFloat(i + 1) * segmentHeight - CGFloat(i) * segmentSpacing
+            let rect = CGRect(x: (bounds.width - barWidth) / 2, y: y, width: barWidth, height: segmentHeight)
+
+            let segmentPath = NSBezierPath(roundedRect: rect, xRadius: cornerRadius, yRadius: cornerRadius)
+
+            // Bottom segments (high i) are filled (darker), top segments (low i) are empty (lighter)
+            // i=0 is top, i=segmentCount-1 is bottom
+            if i >= segmentCount - filledSegments {
+                filledColor.set()  // darker, used memory at bottom
+            } else {
+                emptyColor.set()   // lighter, free memory at top
+            }
+            segmentPath.fill()
+        }
+    }
+
+    override var intrinsicContentSize: NSSize {
+        return NSSize(width: 10, height: 18)
     }
 }
 
