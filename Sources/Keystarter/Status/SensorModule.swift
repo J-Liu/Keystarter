@@ -23,7 +23,6 @@ final class SensorModule: NSObject, StatusModule {
     private var gpuTemp: Double = 0
     private var dramTemp: Double = 0
     private var aneTemp: Double = 0
-    private var pciTemp: Double = 0
     private var storageTemp: Double = 0
     private var batteryTemp: Double = 0
 
@@ -71,15 +70,21 @@ final class SensorModule: NSObject, StatusModule {
             totalPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
         }
 
-        // Read temperatures
+        // Read temperatures using correct HID sensor keys
         let temps = SensorReaderSwift.readTemperatures()
-        cpuPcoreTemp = getAverageTemp(for: temps, keys: ["tdie0", "tdie1", "tdie2", "tdie3"])
-        cpuEcoreTemp = getAverageTemp(for: temps, keys: ["tdie4", "tdie5", "tdie6", "tdie7"])
-        gpuTemp = getAverageTemp(for: temps, keys: ["TP1g", "TP2g", "TP3g"])
+        // CPU Performance cores: pACC MTR Temp Sensor
+        cpuPcoreTemp = getAverageTemp(for: temps, keys: ["pACC MTR Temp Sensor"])
+        // CPU Efficiency cores: eACC MTR Temp Sensor
+        cpuEcoreTemp = getAverageTemp(for: temps, keys: ["eACC MTR Temp Sensor"])
+        // GPU: GPU MTR Temp Sensor
+        gpuTemp = getAverageTemp(for: temps, keys: ["GPU MTR Temp Sensor"])
+        // Memory: TP*s sensors
         dramTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s", "TP2s"])
-        aneTemp = getAverageTemp(for: temps, keys: ["TP0s", "TP1s"])
-        pciTemp = getAverageTemp(for: temps, keys: ["tdev"])
+        // ANE: ANE MTR Temp Sensor
+        aneTemp = getAverageTemp(for: temps, keys: ["ANE MTR Temp Sensor"])
+        // Storage
         storageTemp = getAverageTemp(for: temps, keys: ["NAND"])
+        // Battery
         batteryTemp = getAverageTemp(for: temps, keys: ["gas gauge battery"])
 
         // Read fan speeds
@@ -577,8 +582,8 @@ final class SensorModule: NSObject, StatusModule {
         // Sort by name, CPU first, then GPU, Memory, etc.
         allSensors.sort { a, b in
             let order = [
-                L("sensor.cpu.pcore"),
                 L("sensor.cpu.ecore"),
+                L("sensor.cpu.pcore"),
                 L("sensor.cpu.core"),
                 L("sensor.gpu"),
                 L("sensor.memory"),
@@ -599,49 +604,49 @@ final class SensorModule: NSObject, StatusModule {
     }
 
     private func mapHIDSensorName(_ key: String) -> String {
-        // Remove "PMU " prefix if present
-        let cleanKey = key.hasPrefix("PMU ") ? String(key.dropFirst(4)) : key
-
-        // CPU核心温度 (tdie = die temperature)
-        // M3/M4 MacBook Pro: 通常是 8个性能核 + 2个能效核
-        // tdie0-7 = 性能核, tdie8-9 = 能效核 (具体取决于芯片型号)
-        if cleanKey.hasPrefix("tdie") {
-            let numStr = cleanKey.replacingOccurrences(of: "tdie", with: "")
-            if let num = Int(numStr) {
-                // 假设前8个是性能核，后2个是能效核（M3 Pro典型配置）
-                if num < 8 {
-                    return "\(L("sensor.cpu.pcore")) \(num + 1)"
-                } else if num < 10 {
-                    return "\(L("sensor.cpu.ecore")) \(num - 7)"
+        // M1 Max actual HID sensor keys from log:
+        // - PMU tdie0-10: CPU die temperatures (11 sensors, but M1 Max has 10 cores)
+        // - PMU TP0g-3g: GPU temperatures (4 sensors)
+        // - PMU TP0s-2s: Memory temperatures
+        
+        // CPU die temperatures (tdie = die temperature)
+        // M1 Max: 8 P-cores + 2 E-cores = 10 cores
+        // tdie0-3: E-cores, tdie4-11: P-cores (based on temperature pattern in log)
+        if key.hasPrefix("PMU tdie") {
+            let suffix = key.replacingOccurrences(of: "PMU tdie", with: "")
+            if let num = Int(suffix), num < 10 {
+                // M1 Max: E-cores first (tdie0-1), then P-cores (tdie2-9)
+                // Based on typical Apple Silicon layout
+                if num < 2 {
+                    return "\(L("sensor.cpu.ecore")) \(num + 1)"
                 } else {
-                    return "\(L("sensor.cpu.core")) \(num + 1)"
+                    return "\(L("sensor.cpu.pcore")) \(num - 1)"
                 }
             }
-            return L("sensor.cpu.core")
+            // tdie10 and beyond are extra sensors, skip
+            return ""
         }
 
-        // GPU温度 (TP*g = GPU temperature point)
-        if cleanKey.hasPrefix("TP") && cleanKey.hasSuffix("g") {
+        // GPU temperatures (TP*g pattern)
+        if key.hasPrefix("PMU TP") && key.hasSuffix("g") {
+            let suffix = key.replacingOccurrences(of: "PMU TP", with: "").replacingOccurrences(of: "g", with: "")
+            if let num = Int(suffix) {
+                // Use the sensor number directly (TP1g -> GPU 1)
+                return "GPU \(num)"
+            }
             return L("sensor.gpu")
         }
 
-        // 内存温度 (TP*s = DRAM temperature)
-        if cleanKey.hasPrefix("TP") && cleanKey.hasSuffix("s") {
+        // Memory temperatures (TP*s pattern)
+        if key.hasPrefix("PMU TP") && key.hasSuffix("s") {
             return L("sensor.memory")
         }
 
-        // 设备温度 (tdev = device temperature)
-        // 这些是各种外设的温度，但无法确定具体是哪个设备
-        if cleanKey.hasPrefix("tdev") {
-            return "" // 跳过，无实际意义
-        }
+        // Other known sensors
+        if key.contains("NAND") { return L("sensor.storage") }
+        if key.contains("gas gauge") { return L("sensor.battery") }
 
-        // 其他已知传感器
-        if cleanKey == "tcal" { return "" }  // 校准温度，跳过
-        if cleanKey.contains("NAND") { return L("sensor.storage") }
-        if cleanKey.contains("gas gauge") { return L("sensor.battery") }
-
-        // 未知传感器不显示
+        // Skip PMU tdev, tcal and other unknown sensors
         return ""
     }
 
@@ -659,7 +664,6 @@ final class SensorModule: NSObject, StatusModule {
             ("GPU", gpuTemp),
             ("DRAM", dramTemp),
             ("ANE", aneTemp),
-            ("PCI", pciTemp),
             ("Storage", storageTemp),
             ("Battery", batteryTemp)
         ]

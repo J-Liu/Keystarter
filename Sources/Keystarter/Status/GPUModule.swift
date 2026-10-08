@@ -3,6 +3,37 @@
 
 import AppKit
 import IOKit
+import Darwin
+
+// IOReport types (private APIs, loaded via dlsym)
+typealias IOReportSubscriptionRef = CFTypeRef
+
+// IOReport function pointers (private APIs)
+private var _IOReportCreateSubscription: (@convention(c) (CFAllocator?, CFMutableDictionary?, UnsafeMutablePointer<CFMutableDictionary?>?, UInt64, CFTypeRef?) -> IOReportSubscriptionRef?)?
+private var _IOReportCopyChannelsInGroup: (@convention(c) (CFString?, CFString?, UInt64, UInt64, UInt64) -> CFMutableDictionary?)?
+private var _IOReportCreateSamples: (@convention(c) (IOReportSubscriptionRef?, CFMutableDictionary?, CFDictionary?) -> CFDictionary?)?
+private var _IOReportSimpleGetIntegerValue: (@convention(c) (CFDictionary, Int32) -> Int64)?
+private var _IOReportChannelGetGroup: (@convention(c) (CFDictionary) -> CFString?)?
+private var _IOReportChannelGetChannelName: (@convention(c) (CFDictionary) -> CFString?)?
+private var _IOReportChannelGetUnitLabel: (@convention(c) (CFDictionary) -> CFString?)?
+private var _IOReportReleaseSubscription: (@convention(c) (IOReportSubscriptionRef?, CFDictionary?, UnsafeMutablePointer<CFMutableDictionary?>?, UInt64) -> Void)?
+private var _ioReportFunctionsLoaded = false
+
+private func loadIOReportFunctions() {
+    guard !_ioReportFunctionsLoaded else { return }
+    _ioReportFunctionsLoaded = true
+    
+    guard let handle = dlopen(nil, RTLD_LAZY) else { return }
+    
+    _IOReportCreateSubscription = unsafeBitCast(dlsym(handle, "IOReportCreateSubscription"), to: type(of: _IOReportCreateSubscription))
+    _IOReportCopyChannelsInGroup = unsafeBitCast(dlsym(handle, "IOReportCopyChannelsInGroup"), to: type(of: _IOReportCopyChannelsInGroup))
+    _IOReportCreateSamples = unsafeBitCast(dlsym(handle, "IOReportCreateSamples"), to: type(of: _IOReportCreateSamples))
+    _IOReportSimpleGetIntegerValue = unsafeBitCast(dlsym(handle, "IOReportSimpleGetIntegerValue"), to: type(of: _IOReportSimpleGetIntegerValue))
+    _IOReportChannelGetGroup = unsafeBitCast(dlsym(handle, "IOReportChannelGetGroup"), to: type(of: _IOReportChannelGetGroup))
+    _IOReportChannelGetChannelName = unsafeBitCast(dlsym(handle, "IOReportChannelGetChannelName"), to: type(of: _IOReportChannelGetChannelName))
+    _IOReportChannelGetUnitLabel = unsafeBitCast(dlsym(handle, "IOReportChannelGetUnitLabel"), to: type(of: _IOReportChannelGetUnitLabel))
+    _IOReportReleaseSubscription = unsafeBitCast(dlsym(handle, "IOReportReleaseSubscription"), to: type(of: _IOReportReleaseSubscription))
+}
 
 /// GPU process information.
 struct GPUProcessInfo {
@@ -36,10 +67,20 @@ final class GPUModule: NSObject, StatusModule {
     private var vramUsed: UInt64 = 0
     private var vramTotal: UInt64 = 0
 
+    // ANE monitoring
+    private var aneUtilization: Double = 0
+    private var anePower: Double = 0
+    private var aneMaxPower: Double = 8.0  // Default, will be updated based on chip
+    private var aneChannels: CFMutableDictionary?
+    private var aneSubscription: IOReportSubscriptionRef?
+    private var prevANEEnergy: Double = 0
+    private var prevANETime: Date?
+
     // History for charts
     private var deviceHistory: [Double] = []
     private var rendererHistory: [Double] = []
     private var tilerHistory: [Double] = []
+    private var aneHistory: [Double] = []
     private let maxHistoryCount = 60
 
     // GPU time tracking for per-process usage
@@ -51,6 +92,124 @@ final class GPUModule: NSObject, StatusModule {
     private weak var tableView: NSTableView?
     private var detailTimer: Timer?
 
+    override init() {
+        super.init()
+        setupANE()
+    }
+
+    deinit {
+        if let sub = aneSubscription, let _IOReportReleaseSubscription {
+            _IOReportReleaseSubscription(sub, nil, nil, 0)
+        }
+    }
+
+    private func setupANE() {
+        loadIOReportFunctions()
+        
+        // Detect chip and set max ANE power
+        let chipName = getChipName()
+        aneMaxPower = maxANEPower(for: chipName)
+
+        // Setup IOReport subscription for ANE
+        guard let _IOReportCopyChannelsInGroup else { return }
+        guard let channel = _IOReportCopyChannelsInGroup("Energy Model" as CFString, nil, 0, 0, 0) else {
+            return
+        }
+        aneChannels = channel
+
+        guard let _IOReportCreateSubscription else { return }
+        var sub: CFMutableDictionary?
+        aneSubscription = _IOReportCreateSubscription(nil, channel, &sub, 0, nil)
+    }
+
+    private func getChipName() -> String {
+        var size = 0
+        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
+        var chip = [CChar](repeating: 0, count: size)
+        sysctlbyname("machdep.cpu.brand_string", &chip, &size, nil, 0)
+        return String(cString: chip)
+    }
+
+    private func maxANEPower(for chip: String) -> Double {
+        let lower = chip.lowercased()
+        if lower.contains("m1 ultra") { return 4.0 }
+        if lower.contains("m1 max") { return 2.0 }
+        if lower.contains("m1 pro") { return 2.0 }
+        if lower.contains("m1") { return 2.0 }
+        if lower.contains("m2 ultra") { return 5.0 }
+        if lower.contains("m2 max") { return 2.5 }
+        if lower.contains("m2 pro") { return 2.5 }
+        if lower.contains("m2") { return 2.5 }
+        if lower.contains("m3 ultra") { return 6.0 }
+        if lower.contains("m3 max") { return 3.0 }
+        if lower.contains("m3 pro") { return 3.0 }
+        if lower.contains("m3") { return 3.0 }
+        if lower.contains("m4") { return 6.0 }
+        return 8.0
+    }
+
+    private func readANEUtilization() -> Double {
+        guard let subscription = aneSubscription,
+              let channels = aneChannels,
+              let _IOReportCreateSamples,
+              let _IOReportSimpleGetIntegerValue,
+              let _IOReportChannelGetGroup,
+              let _IOReportChannelGetChannelName,
+              let _IOReportChannelGetUnitLabel else {
+            return 0
+        }
+        
+        guard let reportSample = _IOReportCreateSamples(subscription, channels, nil) else { return 0 }
+        guard let dict = reportSample as? [String: Any],
+              let channelsList = dict["IOReportChannels"] as? NSArray else {
+            return 0
+        }
+
+        let items = channelsList as CFArray
+        var currentEnergy: Double = 0
+        var found = false
+
+        for i in 0..<CFArrayGetCount(items) {
+            let item = unsafeBitCast(CFArrayGetValueAtIndex(items, i), to: CFDictionary.self)
+
+            guard let group = _IOReportChannelGetGroup(item) as? String,
+                  group == "Energy Model",
+                  let channel = _IOReportChannelGetChannelName(item) as? String,
+                  channel.hasPrefix("ANE") else { continue }
+
+            let raw = Double(_IOReportSimpleGetIntegerValue(item, 0))
+            let unit = (_IOReportChannelGetUnitLabel(item) as? String)?
+                .trimmingCharacters(in: .whitespaces) ?? ""
+
+            let joules: Double
+            switch unit.lowercased() {
+            case "mj": joules = raw / 1e3
+            case "µj": joules = raw / 1e6
+            case "uj": joules = raw / 1e6
+            default: joules = raw / 1e9
+            }
+
+            currentEnergy += joules
+            found = true
+        }
+
+        guard found else { return 0 }
+
+        let now = Date()
+        defer {
+            prevANEEnergy = currentEnergy
+            prevANETime = now
+        }
+
+        guard let prevTime = prevANETime else { return 0 }
+        let elapsed = now.timeIntervalSince(prevTime)
+        guard elapsed > 0 else { return 0 }
+
+        let power = (currentEnergy - prevANEEnergy) / elapsed
+        anePower = max(0, power)
+        return min(1.0, max(0.0, anePower / aneMaxPower))
+    }
+
     func refreshSummary() {
         let info = getGPUInfo()
         self.gpuUsage = info.device
@@ -58,6 +217,9 @@ final class GPUModule: NSObject, StatusModule {
         self.tilerUtil = info.tiler
         self.vramUsed = info.vramUsed
         self.vramTotal = info.vramTotal
+
+        // Read ANE utilization
+        self.aneUtilization = readANEUtilization()
 
         processes = getGPUProcesses(limit: 100)
 
@@ -69,10 +231,12 @@ final class GPUModule: NSObject, StatusModule {
         deviceHistory.append(info.device)
         rendererHistory.append(info.renderer)
         tilerHistory.append(info.tiler)
+        aneHistory.append(aneUtilization)
         if deviceHistory.count > maxHistoryCount {
             deviceHistory.removeFirst()
             rendererHistory.removeFirst()
             tilerHistory.removeFirst()
+            aneHistory.removeFirst()
         }
     }
 
@@ -99,8 +263,8 @@ final class GPUModule: NSObject, StatusModule {
 
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = GPUChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
-        chart.setValues(device: gpuUsage, renderer: rendererUtil, tiler: tilerUtil)
-        chart.setHistory(device: deviceHistory, renderer: rendererHistory, tiler: tilerHistory)
+        chart.setValues(device: gpuUsage, renderer: rendererUtil, tiler: tilerUtil, ane: aneUtilization)
+        chart.setHistory(device: deviceHistory, renderer: rendererHistory, tiler: tilerHistory, ane: aneHistory)
         chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
@@ -184,8 +348,8 @@ final class GPUModule: NSObject, StatusModule {
 
         processes = getGPUProcesses(limit: 100)
 
-        chartView?.setValues(device: gpuUsage, renderer: rendererUtil, tiler: tilerUtil)
-        chartView?.setHistory(device: deviceHistory, renderer: rendererHistory, tiler: tilerHistory)
+        chartView?.setValues(device: gpuUsage, renderer: rendererUtil, tiler: tilerUtil, ane: aneUtilization)
+        chartView?.setHistory(device: deviceHistory, renderer: rendererHistory, tiler: tilerHistory, ane: aneHistory)
 
         tableView?.reloadData()
 
@@ -683,17 +847,19 @@ final class GPUChartView: NSView {
     private let deviceChart: GPULineChartView
     private let rendererChart: GPULineChartView
     private let tilerChart: GPULineChartView
+    private let aneChart: GPULineChartView
 
     private let maxHistoryCount = 60
 
     private var currentDevice: Double = 0
     private var currentRenderer: Double = 0
     private var currentTiler: Double = 0
+    private var currentANE: Double = 0
 
     override init(frame frameRect: NSRect) {
-        let bigRadius: CGFloat = 28
-        let circleCenterY = frameRect.height - 15 - bigRadius
-        let labelY = circleCenterY - bigRadius - 20
+        let circleRadius: CGFloat = 22
+        let circleCenterY = frameRect.height - 15 - circleRadius
+        let labelY = circleCenterY - circleRadius - 18
         let dividerY = labelY - 7
         let lineChartHeight = dividerY - 8
 
@@ -702,6 +868,7 @@ final class GPUChartView: NSView {
         self.deviceChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemPurple.withAlphaComponent(0.8))
         self.rendererChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemBlue.withAlphaComponent(0.6))
         self.tilerChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemOrange.withAlphaComponent(0.6))
+        self.aneChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemPink.withAlphaComponent(0.8))
 
         super.init(frame: frameRect)
 
@@ -712,6 +879,7 @@ final class GPUChartView: NSView {
         addSubview(deviceChart)
         addSubview(rendererChart)
         addSubview(tilerChart)
+        addSubview(aneChart)
     }
 
     required init?(coder: NSCoder) {
@@ -722,24 +890,29 @@ final class GPUChartView: NSView {
         deviceChart.stopAnimation()
         rendererChart.stopAnimation()
         tilerChart.stopAnimation()
+        aneChart.stopAnimation()
     }
 
-    func setValues(device: Double, renderer: Double, tiler: Double) {
+    func setValues(device: Double, renderer: Double, tiler: Double, ane: Double = 0) {
         currentDevice = device
         currentRenderer = renderer
         currentTiler = tiler
+        currentANE = ane
         needsDisplay = true
     }
 
-    func setHistory(device: [Double], renderer: [Double], tiler: [Double]) {
+    func setHistory(device: [Double], renderer: [Double], tiler: [Double], ane: [Double] = []) {
         deviceChart.reinit(maxHistoryCount)
         rendererChart.reinit(maxHistoryCount)
         tilerChart.reinit(maxHistoryCount)
+        aneChart.reinit(maxHistoryCount)
 
-        for i in 0..<min(device.count, min(renderer.count, tiler.count)) {
+        let count = min(device.count, min(renderer.count, min(tiler.count, ane.count)))
+        for i in 0..<count {
             deviceChart.addValue(device[i])
             rendererChart.addValue(renderer[i])
             tilerChart.addValue(tiler[i])
+            aneChart.addValue(ane[i])
         }
     }
 
@@ -747,6 +920,7 @@ final class GPUChartView: NSView {
         deviceChart.startAnimation()
         rendererChart.startAnimation()
         tilerChart.startAnimation()
+        aneChart.startAnimation()
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -755,23 +929,26 @@ final class GPUChartView: NSView {
         let chartWidth = bounds.width
         let chartHeight = bounds.height
 
-        let bigRadius: CGFloat = 28
-        let smallRadius: CGFloat = 20
-        let circleCenterY = chartHeight - 15 - bigRadius
+        let radius: CGFloat = 22
+        let circleCenterY = chartHeight - 15 - radius
 
-        let centerX = chartWidth / 2
-        drawPieChart(center: NSPoint(x: centerX, y: circleCenterY), radius: bigRadius,
+        // Four circles in a row: Device, Renderer, Tiler, ANE
+        let spacing = (chartWidth - radius * 8) / 5
+        let x1 = spacing + radius
+        let x2 = x1 + radius * 2 + spacing
+        let x3 = x2 + radius * 2 + spacing
+        let x4 = x3 + radius * 2 + spacing
+
+        drawPieChart(center: NSPoint(x: x1, y: circleCenterY), radius: radius,
                      value: currentDevice, color: NSColor.systemPurple, label: "Device")
-
-        let leftX = centerX - bigRadius - smallRadius - 20
-        drawPieChart(center: NSPoint(x: leftX, y: circleCenterY), radius: smallRadius,
+        drawPieChart(center: NSPoint(x: x2, y: circleCenterY), radius: radius,
                      value: currentRenderer, color: NSColor.systemBlue, label: "Renderer")
-
-        let rightX = centerX + bigRadius + smallRadius + 20
-        drawPieChart(center: NSPoint(x: rightX, y: circleCenterY), radius: smallRadius,
+        drawPieChart(center: NSPoint(x: x3, y: circleCenterY), radius: radius,
                      value: currentTiler, color: NSColor.systemOrange, label: "Tiler")
+        drawPieChart(center: NSPoint(x: x4, y: circleCenterY), radius: radius,
+                     value: currentANE, color: NSColor.systemPink, label: "ANE")
 
-        let labelY = circleCenterY - bigRadius - 20
+        let labelY = circleCenterY - radius - 18
         let dividerY = labelY - 7
         let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: chartWidth - 24, height: 1))
         divider.boxType = .separator
@@ -787,19 +964,17 @@ final class GPUChartView: NSView {
         addSubview(circle)
 
         let pctLabel = NSTextField(labelWithString: String(format: "%.0f%%", value))
-        pctLabel.font = .systemFont(ofSize: radius > 24 ? 13 : 10, weight: .semibold)
+        pctLabel.font = .systemFont(ofSize: 10, weight: .semibold)
         pctLabel.textColor = NSColor.white
         pctLabel.alignment = .center
-        let labelWidth = radius > 24 ? 50.0 : 35.0
-        pctLabel.frame = NSRect(x: center.x - labelWidth / 2, y: center.y - 6,
-                                width: labelWidth, height: 14)
+        pctLabel.frame = NSRect(x: center.x - 20, y: center.y - 6, width: 40, height: 14)
         addSubview(pctLabel)
 
         let nameLabel = NSTextField(labelWithString: label)
         nameLabel.font = .systemFont(ofSize: 10)
         nameLabel.textColor = .secondaryLabelColor
         nameLabel.alignment = .center
-        nameLabel.frame = NSRect(x: center.x - 45, y: center.y - radius - 18, width: 90, height: 14)
+        nameLabel.frame = NSRect(x: center.x - 35, y: center.y - radius - 16, width: 70, height: 14)
         addSubview(nameLabel)
     }
 }
