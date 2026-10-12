@@ -333,27 +333,39 @@ final class GPUModule: NSObject, StatusModule {
     }
 
     private func refreshDetail() {
-        let info = getGPUInfo()
-        self.gpuUsage = info.device
-        self.rendererUtil = info.renderer
-        self.tilerUtil = info.tiler
-        self.vramUsed = info.vramUsed
-        self.vramTotal = info.vramTotal
+        // Run heavy data collection on background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            let info = self.getGPUInfo()
+            let procs = self.getGPUProcesses(limit: 100)
+            let deviceHist = self.deviceHistory
+            let rendererHist = self.rendererHistory
+            let tilerHist = self.tilerHistory
+            let aneHist = self.aneHistory
+            let ane = self.aneUtilization
+            
+            DispatchQueue.main.async {
+                self.gpuUsage = info.device
+                self.rendererUtil = info.renderer
+                self.tilerUtil = info.tiler
+                self.vramUsed = info.vramUsed
+                self.vramTotal = info.vramTotal
 
-        let value = String(format: "%.0f", info.device)
-        summaryText = value
-        summaryValue = value
+                let value = String(format: "%.0f", info.device)
+                self.summaryText = value
+                self.summaryValue = value
 
-        // History is updated in refreshSummary, not here
+                self.processes = procs
 
-        processes = getGPUProcesses(limit: 100)
+                self.chartView?.setValues(device: info.device, renderer: info.renderer, tiler: info.tiler, ane: ane)
+                self.chartView?.setHistory(device: deviceHist, renderer: rendererHist, tiler: tilerHist, ane: aneHist)
 
-        chartView?.setValues(device: gpuUsage, renderer: rendererUtil, tiler: tilerUtil, ane: aneUtilization)
-        chartView?.setHistory(device: deviceHistory, renderer: rendererHistory, tiler: tilerHistory, ane: aneHistory)
+                self.tableView?.reloadData()
 
-        tableView?.reloadData()
-
-        NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "gpu"])
+                NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "gpu"])
+            }
+        }
     }
 
     // MARK: - GPU Data from IORegistry

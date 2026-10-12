@@ -152,15 +152,26 @@ final class CPUModule: NSObject, StatusModule {
     }
 
     private func refreshDetail() {
-        coreUsages = ProcessInfoProvider.shared.getPerCoreCPUUsage()
-        processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 100)
+        // Run heavy data collection on background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            let cores = ProcessInfoProvider.shared.getPerCoreCPUUsage()
+            let procs = ProcessInfoProvider.shared.getProcessesByCPU(limit: 100)
+            let totalHist = self.totalCPUHistory
+            let systemHist = self.systemCPUHistory
+            let userHist = self.userCPUHistory
+            
+            DispatchQueue.main.async {
+                self.coreUsages = cores
+                self.processes = procs
 
-        // History is updated in refreshSummary, not here
+                self.chartView?.setCoreUsages(cores)
+                self.chartView?.setHistory(total: totalHist, system: systemHist, user: userHist)
 
-        chartView?.setCoreUsages(coreUsages)
-        chartView?.setHistory(total: totalCPUHistory, system: systemCPUHistory, user: userCPUHistory)
-
-        tableView?.reloadData()
+                self.tableView?.reloadData()
+            }
+        }
     }
 }
 

@@ -207,35 +207,46 @@ final class SensorModule: NSObject, StatusModule {
     }
 
     private func refreshDetail() {
-        // Read power from IOReport
-        let power = powerReader.readPower()
-        let ioReportPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
+        // Run heavy sensor reading on background thread
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self = self else { return }
+            
+            // Read power from IOReport
+            let power = self.powerReader.readPower()
+            let ioReportPower = power.cpu + power.gpu + power.dram + power.ane + power.pci
 
-        // Read power from SMC (PSTR - System Total)
-        readSMCPower()
+            // Read power from SMC (PSTR - System Total)
+            self.readSMCPower()
 
-        // Use SMC power if available, otherwise use IOReport power
-        totalPower = smcPower > 0 ? smcPower : ioReportPower
+            // Use SMC power if available, otherwise use IOReport power
+            let newTotalPower = self.smcPower > 0 ? self.smcPower : ioReportPower
 
-        // Read all sensors from HID and SMC
-        readAllSensors()
+            // Read all sensors from HID and SMC
+            self.readAllSensors()
 
-        // Read fan speeds
-        readFanSpeeds()
+            // Read fan speeds
+            self.readFanSpeeds()
+            
+            let sensors = self.allSensors
 
-        // Update summary
-        if totalPower > 0 {
-            summaryText = String(format: "%.0fW", totalPower)
-            summaryValue = String(format: "%.0fW", totalPower)
-        } else if let first = allSensors.first, first.value > 0 {
-            summaryText = String(format: "%.0f°", first.value)
-            summaryValue = String(format: "%.0f°", first.value)
+            DispatchQueue.main.async {
+                self.totalPower = newTotalPower
+
+                // Update summary
+                if newTotalPower > 0 {
+                    self.summaryText = String(format: "%.0fW", newTotalPower)
+                    self.summaryValue = String(format: "%.0fW", newTotalPower)
+                } else if let first = sensors.first, first.value > 0 {
+                    self.summaryText = String(format: "%.0f°", first.value)
+                    self.summaryValue = String(format: "%.0f°", first.value)
+                }
+
+                self.updateFanChart()
+                self.tableView?.reloadData()
+
+                NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "sensor"])
+            }
         }
-
-        updateFanChart()
-        tableView?.reloadData()
-
-        NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "sensor"])
     }
 
     private func updateFanChart() {
