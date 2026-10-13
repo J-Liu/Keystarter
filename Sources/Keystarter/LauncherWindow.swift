@@ -703,28 +703,23 @@ final class LauncherWindow: NSWindow {
                 }
             }
 
-            // Sort with match score as primary factor
+            // Secondary sort: match score (includes freq) first, then running apps, then name length
             appResults.sort { a, b in
                 let aScore = indexResults.first(where: { $0.path == a.path })?.matchScore ?? 0
                 let bScore = indexResults.first(where: { $0.path == b.path })?.matchScore ?? 0
 
-                // Primary: match score (exact/prefix > fuzzy)
+                // Primary: combined score (match + freq)
                 if aScore != bScore { return aScore > bScore }
 
-                // Secondary: new apps first (within same score tier)
+                // Secondary: new apps first
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
                 if aIsNew != bIsNew { return aIsNew }
 
-                // Tertiary: running apps (within same score tier)
+                // Tertiary: running apps
                 let aRunning = runningPaths.contains(a.path)
                 let bRunning = runningPaths.contains(b.path)
                 if aRunning != bRunning { return aRunning }
-
-                // Quaternary: usage frequency (within same score tier)
-                let aFreq = LaunchHistory.shared.count(for: a.path)
-                let bFreq = LaunchHistory.shared.count(for: b.path)
-                if aFreq != bFreq { return aFreq > bFreq }
 
                 // Final: name length
                 return a.name.count < b.name.count

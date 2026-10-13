@@ -136,15 +136,10 @@ final class LauncherIndex {
         memo.clear()
     }
     
-    /// Search entries matching query. Results are memoized.
+    /// Search entries matching query.
     func search(_ query: String, limit: Int = 100) -> [IndexEntry] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
         guard !q.isEmpty else { return entries }
-
-        // Check memo
-        if let cached = memo.get(query: q, revision: revision) {
-            return cached
-        }
 
         // Fuzzy match query (pre-fold)
         let queryChars = Array(q)
@@ -156,18 +151,19 @@ final class LauncherIndex {
             guard let score = match(queryChars: queryChars, aliases: entry.aliasTexts) else { continue }
             let freq = LaunchHistory.shared.count(for: entry.path)
             var entryWithScore = entry
-            entryWithScore.matchScore = score
+            entryWithScore.matchScore = score + freq // Store combined score
             scored.append((entryWithScore, score, freq))
         }
 
-        // Sort by: score (primary), then frequency (secondary)
+        // Sort by combined score: match score + frequency bonus
         let results = scored
-            .sorted { ($0.score, $0.freq) > ($1.score, $1.freq) }
+            .sorted {
+                let score0 = $0.score + $0.freq
+                let score1 = $1.score + $1.freq
+                return score0 > score1
+            }
             .prefix(limit)
             .map(\.entry)
-
-        // Cache results
-        memo.set(query: q, revision: revision, results: Array(results))
 
         return Array(results)
     }
@@ -183,21 +179,20 @@ final class LauncherIndex {
 
             if alias == queryString {
                 // Exact match - highest priority
-                score = 100000
+                score = 10000
             } else if alias.hasPrefix(queryString) {
-                // Prefix match - very high priority
-                // All prefix matches get similar base score, sorted by name length and frequency
-                score = 50000 + (1000 - alias.count) // Shorter name = higher score
+                // Prefix match - moderate priority (don't over-prioritize, users remember names from anywhere)
+                score = 5000 + (100 - min(alias.count, 100)) // Shorter name = higher score
             } else if let idx = alias.range(of: queryString, options: .caseInsensitive)?.lowerBound {
-                // Substring match - much lower priority
+                // Substring match
                 let offset = alias.distance(from: alias.startIndex, to: idx)
                 if offset == 0 {
                     score = 3000
                 } else {
                     let prevChar = alias[alias.index(alias.startIndex, offsetBy: offset - 1)]
                     if !prevChar.isLetter {
-                        // Word boundary match
-                        score = 2000
+                        // Word boundary match (e.g., "ch" in "google chrome")
+                        score = 6000 // Higher than prefix, important for multi-word app names
                     } else {
                         // Middle of word
                         score = max(1, 1000 - offset * 10) // Earlier = higher score
@@ -255,7 +250,7 @@ final class LauncherIndex {
         }
 
         guard qi == query.count else { return nil }
-        // Fuzzy matches get negative scores to rank below exact/prefix/substring matches
-        return score - 500
+        // Fuzzy matches rank below exact/prefix/substring matches
+        return score - 5
     }
 }
