@@ -61,6 +61,7 @@ final class GPUModule: NSObject, StatusModule {
     var refreshInterval: TimeInterval { 2.0 }
 
     private var processes: [GPUProcessInfo] = []
+    private let processQueue = DispatchQueue(label: "com.keystarter.gpu.processes", qos: .userInitiated)
     private var gpuUsage: Double = 0
     private var rendererUtil: Double = 0
     private var tilerUtil: Double = 0
@@ -356,7 +357,7 @@ final class GPUModule: NSObject, StatusModule {
                 self.summaryText = value
                 self.summaryValue = value
 
-                self.processes = procs
+                self.processQueue.sync { self.processes = procs }
 
                 self.chartView?.setValues(device: info.device, renderer: info.renderer, tiler: info.tiler, ane: ane)
                 self.chartView?.setHistory(device: deviceHist, renderer: rendererHist, tiler: tilerHist, ane: aneHist)
@@ -676,12 +677,12 @@ final class GPUModule: NSObject, StatusModule {
 extension GPUModule: NSTableViewDataSource, NSTableViewDelegate {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return processes.count
+        return processQueue.sync { processes.count }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row < processes.count else { return nil }
-        let process = processes[row]
+        let process = processQueue.sync { processes[safe: row] }
+        guard let process = process else { return nil }
 
         let cell = NSTableCellView()
         let colId = tableColumn?.identifier.rawValue ?? ""

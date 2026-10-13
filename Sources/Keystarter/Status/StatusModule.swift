@@ -33,3 +33,12 @@ protocol StatusModule: AnyObject {
 extension StatusModule {
     var refreshInterval: TimeInterval { 2.0 }
 }
+
+// MARK: - Safe Array Access
+
+extension Array {
+    /// Safe subscript that returns nil if index is out of bounds.
+    subscript(safe index: Int) -> Element? {
+        return indices.contains(index) ? self[index] : nil
+    }
+}

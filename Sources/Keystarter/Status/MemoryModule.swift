@@ -64,6 +64,7 @@ final class MemoryModule: NSObject, StatusModule {
     }
 
     private var processes: [MemoryProcessInfo] = []
+    private let processQueue = DispatchQueue(label: "com.keystarter.memory.processes", qos: .userInitiated)
     private var usedMemory: UInt64 = 0
     private var totalMemory: UInt64 = 0
 
@@ -96,7 +97,8 @@ final class MemoryModule: NSObject, StatusModule {
             usedPercentage = Double(used) / Double(total)
         }
 
-        processes = getProcessesByMemory(limit: 100)
+        let newProcesses = getProcessesByMemory(limit: 100)
+        processQueue.sync { processes = newProcesses }
     }
 
     func makeDetailView() -> NSView {
@@ -218,7 +220,7 @@ final class MemoryModule: NSObject, StatusModule {
                     self.memoryHistory.removeFirst()
                 }
 
-                self.processes = procs
+                self.processQueue.sync { self.processes = procs }
 
                 self.chartView?.setHistory(history, usedMemory: used)
                 self.tableView?.reloadData()
@@ -385,12 +387,12 @@ final class MemoryModule: NSObject, StatusModule {
 extension MemoryModule: NSTableViewDataSource, NSTableViewDelegate {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return processes.count
+        return processQueue.sync { processes.count }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row < processes.count else { return nil }
-        let process = processes[row]
+        let process = processQueue.sync { processes[safe: row] }
+        guard let process = process else { return nil }
 
         let cell = NSTableCellView()
         let colId = tableColumn?.identifier.rawValue ?? ""

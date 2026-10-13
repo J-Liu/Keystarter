@@ -48,6 +48,7 @@ final class DiskModule: NSObject, StatusModule {
     private let maxHistoryCount = 60
     
     private var processes: [DiskProcessInfo] = []
+    private let processQueue = DispatchQueue(label: "com.keystarter.disk.processes", qos: .userInitiated)
     private var readSpeed: Double = 0
     private var writeSpeed: Double = 0
     
@@ -95,7 +96,7 @@ final class DiskModule: NSObject, StatusModule {
                 
                 self.readSpeed = newReadSpeed
                 self.writeSpeed = newWriteSpeed
-                self.processes = newProcesses
+                self.processQueue.sync { self.processes = newProcesses }
                 
                 // Only update chart and notify if detail view is open
                 if self.detailTimer != nil {
@@ -484,12 +485,12 @@ final class DiskModule: NSObject, StatusModule {
 extension DiskModule: NSTableViewDataSource, NSTableViewDelegate {
     
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return processes.count
+        return processQueue.sync { processes.count }
     }
     
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row < processes.count else { return nil }
-        let process = processes[row]
+        let process = processQueue.sync { processes[safe: row] }
+        guard let process = process else { return nil }
         
         let cell = NSTableCellView()
         let colId = tableColumn?.identifier.rawValue ?? ""

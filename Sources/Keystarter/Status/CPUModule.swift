@@ -16,6 +16,7 @@ final class CPUModule: NSObject, StatusModule {
     var refreshInterval: TimeInterval { 2.0 }
 
     private var processes: [AppProcessInfo] = []
+    private let processQueue = DispatchQueue(label: "com.keystarter.cpu.processes", qos: .userInitiated)
     private var coreUsages: [CoreUsage] = []
 
     // History for line chart
@@ -35,7 +36,8 @@ final class CPUModule: NSObject, StatusModule {
         summaryValue = value
 
         coreUsages = ProcessInfoProvider.shared.getPerCoreCPUUsage()
-        processes = ProcessInfoProvider.shared.getProcessesByCPU(limit: 100)
+        let newProcesses = ProcessInfoProvider.shared.getProcessesByCPU(limit: 100)
+        processQueue.sync { processes = newProcesses }
 
         // Calculate system/user totals for history
         var systemTotal: Double = 0
@@ -164,7 +166,7 @@ final class CPUModule: NSObject, StatusModule {
             
             DispatchQueue.main.async {
                 self.coreUsages = cores
-                self.processes = procs
+                self.processQueue.sync { self.processes = procs }
 
                 self.chartView?.setCoreUsages(cores)
                 self.chartView?.setHistory(total: totalHist, system: systemHist, user: userHist)
@@ -180,12 +182,12 @@ final class CPUModule: NSObject, StatusModule {
 extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
 
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return processes.count
+        return processQueue.sync { processes.count }
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row < processes.count else { return nil }
-        let process = processes[row]
+        let process = processQueue.sync { processes[safe: row] }
+        guard let process = process else { return nil }
 
         let cell = NSTableCellView()
         let colId = tableColumn?.identifier.rawValue ?? ""

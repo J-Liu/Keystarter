@@ -43,6 +43,7 @@ final class NetworkModule: NSObject, StatusModule {
     private let maxHistoryCount = 60
     
     private var processes: [NetworkProcessInfo] = []
+    private let processQueue = DispatchQueue(label: "com.keystarter.network.processes", qos: .userInitiated)
     private var downloadSpeed: Double = 0
     private var uploadSpeed: Double = 0
     
@@ -94,7 +95,7 @@ final class NetworkModule: NSObject, StatusModule {
                 
                 self.downloadSpeed = newDownSpeed
                 self.uploadSpeed = newUpSpeed
-                self.processes = newProcesses
+                self.processQueue.sync { self.processes = newProcesses }
                 
                 // Only update chart and notify if detail view is open
                 if self.detailTimer != nil {
@@ -599,12 +600,12 @@ final class NetworkModule: NSObject, StatusModule {
 extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
     
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return processes.count
+        return processQueue.sync { processes.count }
     }
     
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row < processes.count else { return nil }
-        let process = processes[row]
+        let process = processQueue.sync { processes[safe: row] }
+        guard let process = process else { return nil }
         
         let cell = NSTableCellView()
         let colId = tableColumn?.identifier.rawValue ?? ""
