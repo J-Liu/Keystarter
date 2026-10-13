@@ -181,7 +181,7 @@ final class LauncherIndex {
                 // Exact match - highest priority
                 score = 10000
             } else if alias.hasPrefix(queryString) {
-                // Prefix match - moderate priority (don't over-prioritize, users remember names from anywhere)
+                // Prefix match - high priority for single-word app names
                 score = 5000 + (100 - min(alias.count, 100)) // Shorter name = higher score
             } else if let idx = alias.range(of: queryString, options: .caseInsensitive)?.lowerBound {
                 // Substring match
@@ -191,10 +191,10 @@ final class LauncherIndex {
                 } else {
                     let prevChar = alias[alias.index(alias.startIndex, offsetBy: offset - 1)]
                     if !prevChar.isLetter {
-                        // Word boundary match (e.g., "ch" in "google chrome")
-                        score = 6000 // Higher than prefix, important for multi-word app names
+                        // Word boundary match (e.g., "ch" in "google chrome", "th" in "about this mac")
+                        score = 5100 // Slightly higher than prefix to favor multi-word matches
                     } else {
-                        // Middle of word
+                        // Middle of word (e.g., "ch" in "wechat")
                         score = max(1, 1000 - offset * 10) // Earlier = higher score
                     }
                 }
