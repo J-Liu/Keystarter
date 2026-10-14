@@ -215,11 +215,14 @@ final class ProcessInfoProvider {
         for proc in procList {
             let pid = proc.kp_proc.p_pid
             guard pid > 0 else { continue }
-            
+
             let ppid = proc.kp_eproc.e_ppid
             let uid = proc.kp_eproc.e_ucred.cr_uid
             parentMap[pid] = ppid
-            
+
+            // Skip kernel_task (pid 0) and other low-level system processes that may cause hangs
+            if pid == 0 || pid == 1 { continue }
+
             // Get process name from path or comm
             var name: String
             if let path = getProcessPath(pid: pid) {
@@ -232,9 +235,35 @@ final class ProcessInfoProvider {
             // Filter out invalid characters (keep only printable ASCII: 32-126)
             name = name.unicodeScalars.filter { $0.value >= 32 && $0.value <= 126 }.map { Character($0) }.map { String($0) }.joined()
             if name.isEmpty { name = "process" }
+
+            // Skip kernel_task and other problematic processes
+            if name == "kernel_task" || name == "kernel" { continue }
+
             processNames[pid] = appNames[pid] ?? name
-            processCPU[pid] = getProcessCPUUsage(pid: pid)
-            processMemory[pid] = getProcessMemoryUsage(pid: pid)
+
+            // Get CPU and memory with timeout protection using DispatchSemaphore
+            let cpuSem = DispatchSemaphore(value: 0)
+            var cpuValue: Double = 0
+            DispatchQueue.global(qos: .utility).async {
+                cpuValue = self.getProcessCPUUsage(pid: pid)
+                cpuSem.signal()
+            }
+            if cpuSem.wait(timeout: .now() + 0.1) == .timedOut {
+                cpuValue = 0 // Skip if timeout
+            }
+            processCPU[pid] = cpuValue
+
+            let memSem = DispatchSemaphore(value: 0)
+            var memValue: UInt64 = 0
+            DispatchQueue.global(qos: .utility).async {
+                memValue = self.getProcessMemoryUsage(pid: pid)
+                memSem.signal()
+            }
+            if memSem.wait(timeout: .now() + 0.1) == .timedOut {
+                memValue = 0 // Skip if timeout
+            }
+            processMemory[pid] = memValue
+
             processUsers[pid] = getProcessUser(uid: uid)
             processThreads[pid] = getProcessThreads(pid: pid)
         }
