@@ -204,6 +204,11 @@ final class DiskModule: NSObject, StatusModule {
             self?.refreshDetail()
         }
     }
+
+    func cleanup() {
+        detailTimer?.invalidate()
+        detailTimer = nil
+    }
     
     private func refreshDetail() {
         updateDiskData()

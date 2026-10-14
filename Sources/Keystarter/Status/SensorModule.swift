@@ -206,6 +206,11 @@ final class SensorModule: NSObject, StatusModule {
         }
     }
 
+    func cleanup() {
+        detailTimer?.invalidate()
+        detailTimer = nil
+    }
+
     private func refreshDetail() {
         // Run heavy sensor reading on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in

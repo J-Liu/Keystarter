@@ -25,13 +25,17 @@ protocol StatusModule: AnyObject {
     
     /// Refresh the summary data.
     func refreshSummary()
-    
+
     /// Create the detail view for popover.
     func makeDetailView() -> NSView
+
+    /// Cleanup when popover closes (invalidate timers, etc.)
+    func cleanup()
 }
 
 extension StatusModule {
     var refreshInterval: TimeInterval { 2.0 }
+    func cleanup() {} // Default empty implementation
 }
 
 // MARK: - Safe Array Access

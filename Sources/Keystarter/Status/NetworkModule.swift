@@ -274,6 +274,11 @@ final class NetworkModule: NSObject, StatusModule {
             self?.refreshDetail()
         }
     }
+
+    func cleanup() {
+        detailTimer?.invalidate()
+        detailTimer = nil
+    }
     
     private func refreshDetail() {
         updateNetworkData()

@@ -633,6 +633,11 @@ extension Notification.Name {
 
 extension StatusItemController: NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
+        // Cleanup the current module's detail timer
+        if let moduleId = currentPopoverModule,
+           let module = modules.first(where: { $0.identifier == moduleId }) {
+            module.cleanup()
+        }
         currentPopoverModule = nil
     }
 }

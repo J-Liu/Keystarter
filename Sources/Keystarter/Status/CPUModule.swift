@@ -153,6 +153,11 @@ final class CPUModule: NSObject, StatusModule {
         }
     }
 
+    func cleanup() {
+        detailTimer?.invalidate()
+        detailTimer = nil
+    }
+
     private func refreshDetail() {
         // Run heavy data collection on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
