@@ -166,7 +166,11 @@ final class StockPlugin: Plugin {
             }
         }.resume()
 
-        semaphore.wait()
+        // Wait with 5 second timeout
+        let timeout = semaphore.wait(timeout: .now() + 5)
+        if timeout == .timedOut {
+            return [PluginResult(title: L("stock.queryFailed"), subtitle: "Request timed out")]
+        }
         return results
     }
 
