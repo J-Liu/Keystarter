@@ -117,37 +117,43 @@ final class SearchMemo {
 }
 
 /// Launcher index with pre-built aliases and memoization.
-@MainActor
 final class LauncherIndex {
     static let shared = LauncherIndex()
-    
-    private(set) var entries: [IndexEntry] = []
+
+    private var entries: [IndexEntry] = []
     private var revision = 0
     private let memo = SearchMemo()
-    
+    private let lock = NSLock()
+
     private init() {}
-    
+
     /// Update index with app entries.
     func update(apps: [(name: String, path: String, bundleID: String?)]) {
         let newEntries = apps.map { IndexEntry(name: $0.name, path: $0.path, bundleID: $0.bundleID) }
+        lock.lock()
+        defer { lock.unlock() }
         guard newEntries != entries else { return }
         entries = newEntries
         revision &+= 1
         memo.clear()
     }
-    
+
     /// Search entries matching query.
     func search(_ query: String, limit: Int = 100) -> [IndexEntry] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return entries }
+        lock.lock()
+        let currentEntries = entries
+        lock.unlock()
+
+        guard !q.isEmpty else { return currentEntries }
 
         // Fuzzy match query (pre-fold)
         let queryChars = Array(q)
 
         var scored: [(entry: IndexEntry, score: Int, freq: Int)] = []
-        scored.reserveCapacity(min(entries.count, limit * 2))
+        scored.reserveCapacity(min(currentEntries.count, limit * 2))
 
-        for entry in entries {
+        for entry in currentEntries {
             guard let score = match(queryChars: queryChars, aliases: entry.aliasTexts) else { continue }
             let freq = LaunchHistory.shared.count(for: entry.path)
             var entryWithScore = entry

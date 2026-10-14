@@ -684,12 +684,8 @@ final class LauncherWindow: NSWindow {
                 }
             }
 
-            // 2. App filtering using LauncherIndex (pre-built aliases, memoized)
-            // Call on main thread (LauncherIndex is @MainActor isolated)
-            var indexResults: [IndexEntry] = []
-            DispatchQueue.main.sync {
-                indexResults = LauncherIndex.shared.search(query, limit: 100)
-            }
+            // 2. App filtering using LauncherIndex (thread-safe)
+            let indexResults = LauncherIndex.shared.search(query, limit: 100)
             var appResults: [LaunchItem] = []
             let runningPaths = self.getRunningAppPaths()
 
