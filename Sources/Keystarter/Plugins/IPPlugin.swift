@@ -16,6 +16,11 @@ final class IPPlugin: Plugin {
     private let cacheTimeKey = "keystarter.publicIP.cacheTime"
     private let cacheDuration: TimeInterval = 300 // 5 minutes
 
+    init() {
+        // Pre-fetch public IP in background on plugin initialization
+        prefetchPublicIP()
+    }
+
     private func getCachedIP() -> String? {
         guard let ip = UserDefaults.standard.string(forKey: cacheKey),
               let timeInterval = UserDefaults.standard.object(forKey: cacheTimeKey) as? TimeInterval else {
@@ -31,6 +36,16 @@ final class IPPlugin: Plugin {
     private func setCachedIP(_ ip: String) {
         UserDefaults.standard.set(ip, forKey: cacheKey)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: cacheTimeKey)
+    }
+
+    /// Pre-fetch public IP in background if cache is missing or expired
+    private func prefetchPublicIP() {
+        // Only fetch if cache is missing or expired
+        guard getCachedIP() == nil else { return }
+
+        fetchPublicIP { _ in
+            // Cache is updated in fetchPublicIP callback
+        }
     }
 
     func matchesDirect(_ input: String) -> Bool {
@@ -70,30 +85,14 @@ final class IPPlugin: Plugin {
                 }
             ))
         } else {
-            // Cache miss - show loading and fetch async
+            // Cache miss - trigger background fetch and show placeholder
+            // Next query will have cached value
+            prefetchPublicIP()
             results.append(PluginResult(
-                title: "Loading public IP...",
-                subtitle: "Fetching from external service",
+                title: "Fetching public IP...",
+                subtitle: "Please try again in a moment",
                 icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
             ))
-
-            // Fetch public IP asynchronously
-            fetchPublicIP { publicIP in
-                DispatchQueue.main.async {
-                    // Update the last result with public IP
-                    if let index = results.lastIndex(where: { $0.title == "Loading public IP..." }) {
-                        results[index] = PluginResult(
-                            title: publicIP,
-                            subtitle: "Public IP",
-                            icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil),
-                            action: {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(publicIP, forType: .string)
-                            }
-                        )
-                    }
-                }
-            }
         }
 
         return results
@@ -159,7 +158,10 @@ final class IPPlugin: Plugin {
             return
         }
 
-        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5 // 5 second timeout
+
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let data = data, error == nil else {
                 // Return cached value if available, even if stale
                 if let cached = self?.getCachedIP() {
