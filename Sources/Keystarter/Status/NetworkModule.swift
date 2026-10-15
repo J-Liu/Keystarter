@@ -33,6 +33,11 @@ final class NetworkModule: NSObject, StatusModule {
     
     var refreshInterval: TimeInterval { 1.0 }
     
+    // Shared cache with IPPlugin
+    private let cacheKey = "keystarter.publicIP.cache"
+    private let cacheTimeKey = "keystarter.publicIP.cacheTime"
+    private let cacheDuration: TimeInterval = 300 // 5 minutes
+    
     private var previousBytesIn: UInt64 = 0
     private var previousBytesOut: UInt64 = 0
     private var previousTime: Date = Date()
@@ -371,20 +376,28 @@ final class NetworkModule: NSObject, StatusModule {
         return nil
     }
 
-    /// Get public IP address (async)
+    /// Get public IP address (async with caching)
     func getPublicIP(completion: @escaping (String?) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
+        // Check cache first
+        if let cached = getCachedIP() {
+            completion(cached)
+            return
+        }
+        
+        // Fetch from network
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             // Try multiple services for reliability
             let services = [
                 "https://api.ipify.org",
                 "https://icanhazip.com",
+                "https://ipecho.net/plain",
                 "https://ifconfig.me/ip"
             ]
 
             for service in services {
                 guard let url = URL(string: service) else { continue }
                 var request = URLRequest(url: url)
-                request.timeoutInterval = 3.0
+                request.timeoutInterval = 5.0
                 request.setValue("Keystarter/1.0", forHTTPHeaderField: "User-Agent")
 
                 do {
@@ -392,6 +405,7 @@ final class NetworkModule: NSObject, StatusModule {
                     if let ip = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
                         // Validate IP format
                         if ip.contains(".") || ip.contains(":") {
+                            self?.setCachedIP(ip)
                             DispatchQueue.main.async {
                                 completion(ip)
                             }
@@ -407,6 +421,24 @@ final class NetworkModule: NSObject, StatusModule {
                 completion(nil)
             }
         }
+    }
+    
+    private func getCachedIP() -> String? {
+        guard let ip = UserDefaults.standard.string(forKey: cacheKey),
+              let timeInterval = UserDefaults.standard.object(forKey: cacheTimeKey) as? TimeInterval else {
+            return nil
+        }
+        let cacheTime = Date(timeIntervalSince1970: timeInterval)
+        if Date().timeIntervalSince(cacheTime) < cacheDuration {
+            return ip
+        }
+        return nil
+    }
+
+    private func setCachedIP(_ ip: String) {
+        UserDefaults.standard.set(ip, forKey: cacheKey)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: cacheTimeKey)
+        UserDefaults.standard.synchronize()
     }
 
     private func getNetworkBytes() -> (in: UInt64, out: UInt64) {
