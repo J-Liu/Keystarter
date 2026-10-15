@@ -11,6 +11,11 @@ final class IPPlugin: Plugin {
     let keyword = ""
     let pluginDescription = "Query local and public IP addresses"
 
+    // Cache public IP for 5 minutes (IP rarely changes)
+    private var cachedPublicIP: String?
+    private var cachedPublicIPTime: Date?
+    private let cacheDuration: TimeInterval = 300 // 5 minutes
+
     func matchesDirect(_ input: String) -> Bool {
         return input.trimmingCharacters(in: .whitespaces).lowercased() == "ip"
     }
@@ -42,7 +47,7 @@ final class IPPlugin: Plugin {
             icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
         ))
 
-        // Fetch public IP asynchronously
+        // Fetch public IP asynchronously (with cache)
         fetchPublicIP { publicIP in
             DispatchQueue.main.async {
                 // Update the last result with public IP
@@ -118,19 +123,38 @@ final class IPPlugin: Plugin {
     }
 
     private func fetchPublicIP(completion: @escaping (String) -> Void) {
+        // Check cache first
+        if let cached = cachedPublicIP,
+           let cacheTime = cachedPublicIPTime,
+           Date().timeIntervalSince(cacheTime) < cacheDuration {
+            completion(cached)
+            return
+        }
+
         guard let url = URL(string: "https://api.ipify.org") else {
             completion("Failed to fetch")
             return
         }
 
-        let task = URLSession.shared.dataTask(with: url) { data, response, error in
+        let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
             guard let data = data, error == nil else {
-                completion("Failed to fetch")
+                // Return cached value if available, even if stale
+                if let cached = self?.cachedPublicIP {
+                    completion(cached)
+                } else {
+                    completion("Failed to fetch")
+                }
                 return
             }
 
             if let ip = String(data: data, encoding: .utf8) {
-                completion(ip.trimmingCharacters(in: .whitespacesAndNewlines))
+                let trimmedIP = ip.trimmingCharacters(in: .whitespacesAndNewlines)
+                // Update cache
+                DispatchQueue.main.async {
+                    self?.cachedPublicIP = trimmedIP
+                    self?.cachedPublicIPTime = Date()
+                }
+                completion(trimmedIP)
             } else {
                 completion("Failed to parse")
             }
