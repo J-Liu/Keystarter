@@ -24,18 +24,24 @@ final class IPPlugin: Plugin {
     private func getCachedIP() -> String? {
         guard let ip = UserDefaults.standard.string(forKey: cacheKey),
               let timeInterval = UserDefaults.standard.object(forKey: cacheTimeKey) as? TimeInterval else {
+            NSLog("[IPPlugin] Cache miss: no data in UserDefaults")
             return nil
         }
         let cacheTime = Date(timeIntervalSince1970: timeInterval)
-        if Date().timeIntervalSince(cacheTime) < cacheDuration {
+        let age = Date().timeIntervalSince(cacheTime)
+        if age < cacheDuration {
+            NSLog("[IPPlugin] Cache hit: IP=\(ip), age=\(Int(age))s")
             return ip
         }
+        NSLog("[IPPlugin] Cache expired: IP=\(ip), age=\(Int(age))s")
         return nil
     }
 
     private func setCachedIP(_ ip: String) {
         UserDefaults.standard.set(ip, forKey: cacheKey)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: cacheTimeKey)
+        UserDefaults.standard.synchronize()  // Ensure immediate save
+        NSLog("[IPPlugin] Cache saved: IP=\(ip)")
     }
 
     /// Pre-fetch public IP in background if cache is missing or expired
