@@ -40,27 +40,43 @@ final class IPPlugin: Plugin {
             ))
         }
 
-        // Public IP (async)
-        results.append(PluginResult(
-            title: "Loading public IP...",
-            subtitle: "Fetching from external service",
-            icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-        ))
+        // Public IP - use cache if available
+        if let cached = cachedPublicIP,
+           let cacheTime = cachedPublicIPTime,
+           Date().timeIntervalSince(cacheTime) < cacheDuration {
+            // Cache hit - return immediately
+            results.append(PluginResult(
+                title: cached,
+                subtitle: "Public IP (cached)",
+                icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil),
+                action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(cached, forType: .string)
+                }
+            ))
+        } else {
+            // Cache miss - show loading and fetch async
+            results.append(PluginResult(
+                title: "Loading public IP...",
+                subtitle: "Fetching from external service",
+                icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+            ))
 
-        // Fetch public IP asynchronously (with cache)
-        fetchPublicIP { publicIP in
-            DispatchQueue.main.async {
-                // Update the last result with public IP
-                if let index = results.lastIndex(where: { $0.title == "Loading public IP..." }) {
-                    results[index] = PluginResult(
-                        title: publicIP,
-                        subtitle: "Public IP",
-                        icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil),
-                        action: {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(publicIP, forType: .string)
-                        }
-                    )
+            // Fetch public IP asynchronously
+            fetchPublicIP { publicIP in
+                DispatchQueue.main.async {
+                    // Update the last result with public IP
+                    if let index = results.lastIndex(where: { $0.title == "Loading public IP..." }) {
+                        results[index] = PluginResult(
+                            title: publicIP,
+                            subtitle: "Public IP",
+                            icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil),
+                            action: {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(publicIP, forType: .string)
+                            }
+                        )
+                    }
                 }
             }
         }
