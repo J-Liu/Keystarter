@@ -167,12 +167,35 @@ final class IPPlugin: Plugin {
         return results
     }
 
+    private let ipServices = [
+        "https://api.ipify.org",
+        "https://icanhazip.com",
+        "https://ipecho.net/plain",
+        "https://ifconfig.me"
+    ]
+
     private func fetchPublicIP(completion: @escaping (String) -> Void) {
-        log("Fetching public IP from api.ipify.org")
+        fetchFromServices(index: 0, completion: completion)
+    }
+    
+    private func fetchFromServices(index: Int, completion: @escaping (String) -> Void) {
+        guard index < ipServices.count else {
+            log("All IP services failed")
+            // Return cached value if available, even if stale
+            if let cached = getCachedIP() {
+                completion(cached)
+            } else {
+                completion("Failed to fetch")
+            }
+            return
+        }
         
-        guard let url = URL(string: "https://api.ipify.org") else {
-            log("Failed to create URL")
-            completion("Failed to fetch")
+        let serviceURL = ipServices[index]
+        log("Fetching public IP from \(serviceURL)")
+        
+        guard let url = URL(string: serviceURL) else {
+            log("Failed to create URL: \(serviceURL)")
+            fetchFromServices(index: index + 1, completion: completion)
             return
         }
 
@@ -180,26 +203,24 @@ final class IPPlugin: Plugin {
         request.timeoutInterval = 5 // 5 second timeout
 
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            guard let self = self else { return }
+            
             guard let data = data, error == nil else {
-                self?.log("Network error: \(error?.localizedDescription ?? "unknown")")
-                // Return cached value if available, even if stale
-                if let cached = self?.getCachedIP() {
-                    completion(cached)
-                } else {
-                    completion("Failed to fetch")
-                }
+                self.log("Network error from \(serviceURL): \(error?.localizedDescription ?? "unknown")")
+                // Try next service
+                self.fetchFromServices(index: index + 1, completion: completion)
                 return
             }
 
             if let ip = String(data: data, encoding: .utf8) {
                 let trimmedIP = ip.trimmingCharacters(in: .whitespacesAndNewlines)
-                self?.log("Fetched IP: \(trimmedIP)")
+                self.log("Fetched IP from \(serviceURL): \(trimmedIP)")
                 // Update cache
-                self?.setCachedIP(trimmedIP)
+                self.setCachedIP(trimmedIP)
                 completion(trimmedIP)
             } else {
-                self?.log("Failed to parse response")
-                completion("Failed to parse")
+                self.log("Failed to parse response from \(serviceURL)")
+                self.fetchFromServices(index: index + 1, completion: completion)
             }
         }
         task.resume()
