@@ -499,6 +499,11 @@ final class StatusItemController: NSObject {
             ]
             attrString.append(NSAttributedString(string: numericPart + "\n", attributes: valueAttrs))
             attrString.append(NSAttributedString(string: unitPart, attributes: unitAttrs))
+            
+            // Calculate adaptive width for sensor based on value length
+            let valueWidth = numericPart.size(withAttributes: [.font: NSFont(name: "Tahoma", size: 11)!]).width
+            calculatedWidth = valueWidth + 4  // Small padding
+            calculatedWidth = max(calculatedWidth, 15)  // Minimum width for 2 digits
         } else if module.identifier == "disk", let diskModule = module as? DiskModule {
             // Disk: two colored dots + speed values
             let paraStyle = NSMutableParagraphStyle()
