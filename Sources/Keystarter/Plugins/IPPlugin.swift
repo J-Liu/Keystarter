@@ -52,8 +52,12 @@ final class IPPlugin: Plugin {
     /// Pre-fetch public IP in background if cache is missing or expired
     private func prefetchPublicIP() {
         // Only fetch if cache is missing or expired
-        guard getCachedIP() == nil else { return }
-
+        guard getCachedIP() == nil else {
+            log("Prefetch skipped: cache exists")
+            return
+        }
+        
+        log("Prefetch started")
         fetchPublicIP { _ in
             // Cache is updated in fetchPublicIP callback
         }
@@ -164,7 +168,10 @@ final class IPPlugin: Plugin {
     }
 
     private func fetchPublicIP(completion: @escaping (String) -> Void) {
+        log("Fetching public IP from api.ipify.org")
+        
         guard let url = URL(string: "https://api.ipify.org") else {
+            log("Failed to create URL")
             completion("Failed to fetch")
             return
         }
@@ -174,6 +181,7 @@ final class IPPlugin: Plugin {
 
         let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             guard let data = data, error == nil else {
+                self?.log("Network error: \(error?.localizedDescription ?? "unknown")")
                 // Return cached value if available, even if stale
                 if let cached = self?.getCachedIP() {
                     completion(cached)
@@ -185,10 +193,12 @@ final class IPPlugin: Plugin {
 
             if let ip = String(data: data, encoding: .utf8) {
                 let trimmedIP = ip.trimmingCharacters(in: .whitespacesAndNewlines)
+                self?.log("Fetched IP: \(trimmedIP)")
                 // Update cache
                 self?.setCachedIP(trimmedIP)
                 completion(trimmedIP)
             } else {
+                self?.log("Failed to parse response")
                 completion("Failed to parse")
             }
         }
