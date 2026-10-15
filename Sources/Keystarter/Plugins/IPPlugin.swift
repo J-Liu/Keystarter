@@ -17,8 +17,7 @@ final class IPPlugin: Plugin {
     private let cacheDuration: TimeInterval = 300 // 5 minutes
 
     init() {
-        // Pre-fetch public IP in background on plugin initialization
-        prefetchPublicIP()
+        // No prefetch - IP plugin always fetches fresh on query
     }
 
     private func getCachedIP() -> String? {
@@ -49,20 +48,6 @@ final class IPPlugin: Plugin {
         LogSettings.write("[IPPlugin] \(message)", to: LogSettings.shared.launcherLogPath)
     }
 
-    /// Pre-fetch public IP in background if cache is missing or expired
-    private func prefetchPublicIP() {
-        // Only fetch if cache is missing or expired
-        guard getCachedIP() == nil else {
-            log("Prefetch skipped: cache exists")
-            return
-        }
-        
-        log("Prefetch started")
-        fetchPublicIP { _ in
-            // Cache is updated in fetchPublicIP callback
-        }
-    }
-
     func matchesDirect(_ input: String) -> Bool {
         return input.trimmingCharacters(in: .whitespaces).lowercased() == "ip"
     }
@@ -87,27 +72,21 @@ final class IPPlugin: Plugin {
             ))
         }
 
-        // Public IP - use cache if available
-        if let cached = getCachedIP() {
-            // Cache hit - return immediately
-            results.append(PluginResult(
-                title: cached,
-                subtitle: "Public IP (cached)",
-                icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil),
-                action: {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(cached, forType: .string)
-                }
-            ))
-        } else {
-            // Cache miss - trigger background fetch and show placeholder
-            // Next query will have cached value
-            prefetchPublicIP()
-            results.append(PluginResult(
-                title: "Fetching public IP...",
-                subtitle: "Please try again in a moment",
-                icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-            ))
+        // Public IP - always fetch fresh (no cache), but update cache if changed
+        let cachedIP = getCachedIP()
+        results.append(PluginResult(
+            title: "Fetching public IP...",
+            subtitle: "Please try again in a moment",
+            icon: NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
+        ))
+        
+        // Fetch fresh IP in background
+        fetchPublicIP { [weak self] ip in
+            guard let self = self else { return }
+            // Update cache if different from cached value
+            if ip != cachedIP {
+                self.setCachedIP(ip)
+            }
         }
 
         return results
