@@ -24,16 +24,16 @@ final class IPPlugin: Plugin {
     private func getCachedIP() -> String? {
         guard let ip = UserDefaults.standard.string(forKey: cacheKey),
               let timeInterval = UserDefaults.standard.object(forKey: cacheTimeKey) as? TimeInterval else {
-            NSLog("[IPPlugin] Cache miss: no data in UserDefaults")
+            log("Cache miss: no data in UserDefaults")
             return nil
         }
         let cacheTime = Date(timeIntervalSince1970: timeInterval)
         let age = Date().timeIntervalSince(cacheTime)
         if age < cacheDuration {
-            NSLog("[IPPlugin] Cache hit: IP=\(ip), age=\(Int(age))s")
+            log("Cache hit: IP=\(ip), age=\(Int(age))s")
             return ip
         }
-        NSLog("[IPPlugin] Cache expired: IP=\(ip), age=\(Int(age))s")
+        log("Cache expired: IP=\(ip), age=\(Int(age))s")
         return nil
     }
 
@@ -41,7 +41,12 @@ final class IPPlugin: Plugin {
         UserDefaults.standard.set(ip, forKey: cacheKey)
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: cacheTimeKey)
         UserDefaults.standard.synchronize()  // Ensure immediate save
-        NSLog("[IPPlugin] Cache saved: IP=\(ip)")
+        log("Cache saved: IP=\(ip)")
+    }
+    
+    private func log(_ message: String) {
+        guard LogSettings.shared.launcherLogEnabled else { return }
+        LogSettings.write("[IPPlugin] \(message)", to: LogSettings.shared.launcherLogPath)
     }
 
     /// Pre-fetch public IP in background if cache is missing or expired
