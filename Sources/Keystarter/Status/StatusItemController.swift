@@ -125,18 +125,37 @@ final class StatusItemController: NSObject {
                 let attrString = NSMutableAttributedString()
 
                 if module.identifier == "sensor" {
-                    // Single line for sensor
+                    // Two lines for sensor (value + unit)
                     let paraStyle = NSMutableParagraphStyle()
                     paraStyle.alignment = .center
-                    paraStyle.lineSpacing = 0
-                    paraStyle.paragraphSpacing = 0
+                    paraStyle.lineSpacing = -3
+                    paraStyle.paragraphSpacing = -3
+
+                    // Extract value and unit from summaryValue
+                    let valueText = module.summaryValue
+                    var numericPart = "--"
+                    var unitPart = "W"
+                    
+                    if valueText.count > 1 {
+                        let lastChar = valueText.last!
+                        if lastChar.isLetter || lastChar == "°" {
+                            numericPart = String(valueText.dropLast())
+                            unitPart = String(lastChar)
+                        }
+                    }
 
                     let valueAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont(name: "Tahoma", size: 10)!,
+                        .font: NSFont(name: "Tahoma", size: 11)!,
                         .foregroundColor: NSColor.labelColor,
                         .paragraphStyle: paraStyle
                     ]
-                    attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                    let unitAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont.systemFont(ofSize: 7, weight: .light),
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+                    attrString.append(NSAttributedString(string: numericPart + "\n", attributes: valueAttrs))
+                    attrString.append(NSAttributedString(string: unitPart, attributes: unitAttrs))
                 } else {
                     // Two lines for others
                     let paraStyle = NSMutableParagraphStyle()
@@ -247,18 +266,37 @@ final class StatusItemController: NSObject {
                 let attrString = NSMutableAttributedString()
 
                 if module.identifier == "sensor" {
-                    // Single line for sensor
+                    // Two lines for sensor (value + unit)
                     let paraStyle = NSMutableParagraphStyle()
                     paraStyle.alignment = .center
-                    paraStyle.lineSpacing = 0
-                    paraStyle.paragraphSpacing = 0
+                    paraStyle.lineSpacing = -3
+                    paraStyle.paragraphSpacing = -3
+
+                    // Extract value and unit from summaryValue
+                    let valueText = module.summaryValue
+                    var numericPart = "--"
+                    var unitPart = "W"
+                    
+                    if valueText.count > 1 {
+                        let lastChar = valueText.last!
+                        if lastChar.isLetter || lastChar == "°" {
+                            numericPart = String(valueText.dropLast())
+                            unitPart = String(lastChar)
+                        }
+                    }
 
                     let valueAttrs: [NSAttributedString.Key: Any] = [
-                        .font: NSFont(name: "Tahoma", size: 10)!,
+                        .font: NSFont(name: "Tahoma", size: 11)!,
                         .foregroundColor: NSColor.labelColor,
                         .paragraphStyle: paraStyle
                     ]
-                    attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+                    let unitAttrs: [NSAttributedString.Key: Any] = [
+                        .font: NSFont.systemFont(ofSize: 7, weight: .light),
+                        .foregroundColor: NSColor.labelColor,
+                        .paragraphStyle: paraStyle
+                    ]
+                    attrString.append(NSAttributedString(string: numericPart + "\n", attributes: valueAttrs))
+                    attrString.append(NSAttributedString(string: unitPart, attributes: unitAttrs))
                 } else {
                     // Two lines for others
                     let paraStyle = NSMutableParagraphStyle()
@@ -428,19 +466,39 @@ final class StatusItemController: NSObject {
         // Calculate adaptive width
         var calculatedWidth: CGFloat = 28  // Default width for CPU/GPU/Sensor
 
-        // Sensor module: single line
+        // Sensor module: two lines (value + unit)
         if module.identifier == "sensor" {
             let paraStyle = NSMutableParagraphStyle()
             paraStyle.alignment = .center
-            paraStyle.lineSpacing = 0
-            paraStyle.paragraphSpacing = 0
+            paraStyle.lineSpacing = -3
+            paraStyle.paragraphSpacing = -3
+
+            // Extract value and unit from summaryValue (e.g., "15W" -> "15" and "W")
+            let valueText = module.summaryValue
+            var numericPart = "--"
+            var unitPart = "W"
+            
+            // Parse the value (e.g., "15W", "42°", "--W")
+            if valueText.count > 1 {
+                let lastChar = valueText.last!
+                if lastChar.isLetter || lastChar == "°" {
+                    numericPart = String(valueText.dropLast())
+                    unitPart = String(lastChar)
+                }
+            }
 
             let valueAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont(name: "Tahoma", size: 10)!,
+                .font: NSFont(name: "Tahoma", size: 11)!,
                 .foregroundColor: NSColor.labelColor,
                 .paragraphStyle: paraStyle
             ]
-            attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            let unitAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 7, weight: .light),
+                .foregroundColor: NSColor.labelColor,
+                .paragraphStyle: paraStyle
+            ]
+            attrString.append(NSAttributedString(string: numericPart + "\n", attributes: valueAttrs))
+            attrString.append(NSAttributedString(string: unitPart, attributes: unitAttrs))
         } else if module.identifier == "disk", let diskModule = module as? DiskModule {
             // Disk: two colored dots + speed values
             let paraStyle = NSMutableParagraphStyle()
@@ -551,12 +609,19 @@ final class StatusItemController: NSObject {
 
             attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
             attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
+            
+            // Calculate adaptive width for CPU/GPU based on value length
+            if module.identifier == "cpu" || module.identifier == "gpu" {
+                let valueWidth = module.summaryValue.size(withAttributes: [.font: NSFont(name: "Tahoma", size: 11)!]).width
+                calculatedWidth = valueWidth + 4  // Small padding
+                calculatedWidth = max(calculatedWidth, 16)  // Minimum width for 2 digits
+            }
         }
 
         button.attributedTitle = attrString
 
-        // Update width if needed (adaptive for network/disk)
-        if module.identifier == "network" || module.identifier == "disk" {
+        // Update width if needed
+        if module.identifier == "network" || module.identifier == "disk" || module.identifier == "cpu" || module.identifier == "gpu" || module.identifier == "sensor" {
             let roundedWidth = (calculatedWidth * 2).rounded() / 2  // Round to nearest 0.5
             if item.length != roundedWidth {
                 item.length = roundedWidth
