@@ -12,9 +12,26 @@ final class IPPlugin: Plugin {
     let pluginDescription = "Query local and public IP addresses"
 
     // Cache public IP for 5 minutes (IP rarely changes)
-    private var cachedPublicIP: String?
-    private var cachedPublicIPTime: Date?
+    private let cacheKey = "keystarter.publicIP.cache"
+    private let cacheTimeKey = "keystarter.publicIP.cacheTime"
     private let cacheDuration: TimeInterval = 300 // 5 minutes
+
+    private func getCachedIP() -> String? {
+        guard let ip = UserDefaults.standard.string(forKey: cacheKey),
+              let timeInterval = UserDefaults.standard.object(forKey: cacheTimeKey) as? TimeInterval else {
+            return nil
+        }
+        let cacheTime = Date(timeIntervalSince1970: timeInterval)
+        if Date().timeIntervalSince(cacheTime) < cacheDuration {
+            return ip
+        }
+        return nil
+    }
+
+    private func setCachedIP(_ ip: String) {
+        UserDefaults.standard.set(ip, forKey: cacheKey)
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: cacheTimeKey)
+    }
 
     func matchesDirect(_ input: String) -> Bool {
         return input.trimmingCharacters(in: .whitespaces).lowercased() == "ip"
@@ -41,9 +58,7 @@ final class IPPlugin: Plugin {
         }
 
         // Public IP - use cache if available
-        if let cached = cachedPublicIP,
-           let cacheTime = cachedPublicIPTime,
-           Date().timeIntervalSince(cacheTime) < cacheDuration {
+        if let cached = getCachedIP() {
             // Cache hit - return immediately
             results.append(PluginResult(
                 title: cached,
@@ -139,14 +154,6 @@ final class IPPlugin: Plugin {
     }
 
     private func fetchPublicIP(completion: @escaping (String) -> Void) {
-        // Check cache first
-        if let cached = cachedPublicIP,
-           let cacheTime = cachedPublicIPTime,
-           Date().timeIntervalSince(cacheTime) < cacheDuration {
-            completion(cached)
-            return
-        }
-
         guard let url = URL(string: "https://api.ipify.org") else {
             completion("Failed to fetch")
             return
@@ -155,7 +162,7 @@ final class IPPlugin: Plugin {
         let task = URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
             guard let data = data, error == nil else {
                 // Return cached value if available, even if stale
-                if let cached = self?.cachedPublicIP {
+                if let cached = self?.getCachedIP() {
                     completion(cached)
                 } else {
                     completion("Failed to fetch")
@@ -166,10 +173,7 @@ final class IPPlugin: Plugin {
             if let ip = String(data: data, encoding: .utf8) {
                 let trimmedIP = ip.trimmingCharacters(in: .whitespacesAndNewlines)
                 // Update cache
-                DispatchQueue.main.async {
-                    self?.cachedPublicIP = trimmedIP
-                    self?.cachedPublicIPTime = Date()
-                }
+                self?.setCachedIP(trimmedIP)
                 completion(trimmedIP)
             } else {
                 completion("Failed to parse")
