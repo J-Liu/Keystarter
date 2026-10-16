@@ -699,18 +699,18 @@ final class LauncherWindow: NSWindow {
                 }
             }
 
-            // Secondary sort: new apps first, then match score, then running apps, then name length
+            // Secondary sort: match score first, then new apps, then running apps, then name length
             appResults.sort { a, b in
                 let aScore = indexResults.first(where: { $0.path == a.path })?.matchScore ?? 0
                 let bScore = indexResults.first(where: { $0.path == b.path })?.matchScore ?? 0
 
-                // Primary: new apps first (overrides match score)
+                // Primary: combined score (match + freq)
+                if aScore != bScore { return aScore > bScore }
+
+                // Secondary: new apps first
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
                 if aIsNew != bIsNew { return aIsNew }
-
-                // Secondary: combined score (match + freq)
-                if aScore != bScore { return aScore > bScore }
 
                 // Tertiary: running apps
                 let aRunning = runningPaths.contains(a.path)
