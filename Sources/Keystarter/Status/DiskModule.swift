@@ -569,6 +569,11 @@ extension DiskModule: NSTableViewDataSource, NSTableViewDelegate {
 
 // MARK: - Disk Chart View (Stats-style with two internal charts)
 
+private class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 /// Single line chart view with smooth Bezier curves and animated scrolling
 private final class DiskLineChartView: NSView {
     private var points: [Double?] = []
@@ -577,6 +582,7 @@ private final class DiskLineChartView: NSView {
     private var lastUpdateTime: Date = Date()
     private var displayLink: CVDisplayLink?
     private let sampleInterval: TimeInterval = 2.0
+    private var weakBox: WeakBox<DiskLineChartView>?  // Keep box alive for callback
     
     init(frame: NSRect, num: Int, color: NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
@@ -617,15 +623,20 @@ private final class DiskLineChartView: NSView {
         var link: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else { return }
+
+        let box = WeakBox(self)
+        weakBox = box
         
         CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo else { return kCVReturnSuccess }
-            let view = Unmanaged<DiskLineChartView>.fromOpaque(userInfo).takeUnretainedValue()
+            guard let userInfo = userInfo else { return kCVReturnSuccess }
+            let box = Unmanaged<WeakBox<DiskLineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
+            guard let view = box.value else { return kCVReturnSuccess }
             DispatchQueue.main.async {
+                guard box.value?.displayLink != nil else { return }
                 view.needsDisplay = true
             }
             return kCVReturnSuccess
-        }, Unmanaged.passUnretained(self).toOpaque())
+        }, Unmanaged.passUnretained(box).toOpaque())
         
         CVDisplayLinkStart(link)
         displayLink = link

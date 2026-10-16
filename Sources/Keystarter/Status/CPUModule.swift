@@ -270,6 +270,11 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
 
 // MARK: - CPU Line Chart View (with smooth scrolling animation)
 
+private class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 private final class CPULineChartView: NSView {
     private var points: [Double?] = []
     private var color: NSColor
@@ -277,6 +282,7 @@ private final class CPULineChartView: NSView {
     private var displayLink: CVDisplayLink?
     private var lastUpdateTime: Date = Date()
     private var isRunning = false
+    private var weakBox: WeakBox<CPULineChartView>?  // Keep box alive for callback
 
     init(frame: NSRect, num: Int, color: NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
@@ -316,18 +322,22 @@ private final class CPULineChartView: NSView {
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else { return }
 
+        // Create a box that holds a weak reference to self
+        let box = WeakBox(self)
+        weakBox = box  // Keep box alive
+        
         let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo else { return kCVReturnSuccess }
-            let view = Unmanaged<CPULineChartView>.fromOpaque(userInfo).takeUnretainedValue()
-            guard view.isRunning else { return kCVReturnSuccess }
+            guard let userInfo = userInfo else { return kCVReturnSuccess }
+            let box = Unmanaged<WeakBox<CPULineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
+            guard let view = box.value, view.isRunning else { return kCVReturnSuccess }
             DispatchQueue.main.async {
-                guard view.isRunning else { return }
+                guard box.value?.isRunning == true else { return }
                 view.needsDisplay = true
             }
             return kCVReturnSuccess
         }
 
-        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(self).toOpaque())
+        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(box).toOpaque())
         CVDisplayLinkStart(link)
         displayLink = link
     }
@@ -335,6 +345,7 @@ private final class CPULineChartView: NSView {
     func stopAnimation() {
         isRunning = false
         if let link = displayLink {
+            // Stop the display link first to prevent callbacks after cleanup
             CVDisplayLinkStop(link)
             displayLink = nil
         }

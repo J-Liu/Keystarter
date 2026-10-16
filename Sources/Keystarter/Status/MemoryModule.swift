@@ -555,6 +555,11 @@ final class MemoryBarView: NSView {
 
 // MARK: - Memory Chart View with smooth curves
 
+private class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 /// Memory chart view with smooth Bezier curves
 final class MemoryChartView: NSView {
     private var history: [Double] = []
@@ -568,6 +573,7 @@ final class MemoryChartView: NSView {
     private var displayLink: CVDisplayLink?
     private var lastUpdateTime: Date = Date()
     private let sampleInterval: TimeInterval = 2.0
+    private var weakBox: WeakBox<MemoryChartView>?  // Keep box alive for callback
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -593,17 +599,19 @@ final class MemoryChartView: NSView {
         guard let link = link else { return }
         displayLink = link
         
-        // Use weak reference to avoid retain cycle
-        let weakSelf = Unmanaged.passUnretained(self).toOpaque()
+        let box = WeakBox(self)
+        weakBox = box
         
         CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo in
             guard let userInfo = userInfo else { return kCVReturnSuccess }
-            let view = Unmanaged<MemoryChartView>.fromOpaque(userInfo).takeUnretainedValue()
+            let box = Unmanaged<WeakBox<MemoryChartView>>.fromOpaque(userInfo).takeUnretainedValue()
+            guard let view = box.value else { return kCVReturnSuccess }
             DispatchQueue.main.async {
+                guard box.value?.displayLink != nil else { return }
                 view.needsDisplay = true
             }
             return kCVReturnSuccess
-        }, weakSelf)
+        }, Unmanaged.passUnretained(box).toOpaque())
         
         CVDisplayLinkStart(link)
         lastUpdateTime = Date()

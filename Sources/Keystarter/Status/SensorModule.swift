@@ -822,6 +822,11 @@ private struct SMCKeyData {
 
 // MARK: - Fan Line Chart View
 
+private class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 /// Fan speed line chart with smooth curves and scrolling animation
 final class FanLineChartView: NSView {
     private var leftHistory: [Int] = []
@@ -831,6 +836,7 @@ final class FanLineChartView: NSView {
     private var lastUpdateTime: Date = Date()
     private let sampleInterval: TimeInterval = 2.0
     private var isRunning = false
+    private var weakBox: WeakBox<FanLineChartView>?  // Keep box alive for callback
 
     private let leftColor = NSColor(calibratedRed: 0.7, green: 0.5, blue: 0.8, alpha: 1.0)
     private let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 1.0)
@@ -865,18 +871,21 @@ final class FanLineChartView: NSView {
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else { return }
 
+        let box = WeakBox(self)
+        weakBox = box
+        
         let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo else { return kCVReturnSuccess }
-            let view = Unmanaged<FanLineChartView>.fromOpaque(userInfo).takeUnretainedValue()
-            guard view.isRunning else { return kCVReturnSuccess }
+            guard let userInfo = userInfo else { return kCVReturnSuccess }
+            let box = Unmanaged<WeakBox<FanLineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
+            guard let view = box.value, view.isRunning else { return kCVReturnSuccess }
             DispatchQueue.main.async {
-                guard view.isRunning else { return }
+                guard box.value?.isRunning == true else { return }
                 view.needsDisplay = true
             }
             return kCVReturnSuccess
         }
 
-        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(self).toOpaque())
+        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(box).toOpaque())
         CVDisplayLinkStart(link)
         displayLink = link
     }

@@ -756,12 +756,18 @@ extension GPUModule: NSTableViewDataSource, NSTableViewDelegate {
 
 // MARK: - GPU Line Chart View (with smooth scrolling animation)
 
+private class WeakBox<T: AnyObject> {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
 private final class GPULineChartView: NSView {
     private var points: [Double?] = []
     private var color: NSColor
     private let sampleInterval: TimeInterval = 2.0
     private var displayLink: CVDisplayLink?
     private var lastUpdateTime: Date = Date()
+    private var weakBox: WeakBox<GPULineChartView>?  // Keep box alive for callback
 
     init(frame: NSRect, num: Int, color: NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
@@ -799,14 +805,19 @@ private final class GPULineChartView: NSView {
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else { return }
 
+        let box = WeakBox(self)
+        weakBox = box
+
         CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo else { return kCVReturnSuccess }
-            let view = Unmanaged<GPULineChartView>.fromOpaque(userInfo).takeUnretainedValue()
+            guard let userInfo = userInfo else { return kCVReturnSuccess }
+            let box = Unmanaged<WeakBox<GPULineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
+            guard let view = box.value else { return kCVReturnSuccess }
             DispatchQueue.main.async {
+                guard box.value?.displayLink != nil else { return }
                 view.needsDisplay = true
             }
             return kCVReturnSuccess
-        }, Unmanaged.passUnretained(self).toOpaque())
+        }, Unmanaged.passUnretained(box).toOpaque())
 
         CVDisplayLinkStart(link)
         displayLink = link
