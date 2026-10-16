@@ -1092,9 +1092,13 @@ final class LauncherWindow: NSWindow {
             // Group by frequency (most used)
             let runningPaths = getRunningAppPaths()
             let sorted = results.sorted { a, b in
+                // Newly installed apps first
+                let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
+                let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
+                if aIsNew != bIsNew { return aIsNew }
+                // Running apps second
                 let aRunning = runningPaths.contains(a.path)
                 let bRunning = runningPaths.contains(b.path)
-                // Running apps first
                 if aRunning != bRunning { return aRunning }
                 let aFreq = LaunchHistory.shared.count(for: a.path)
                 let bFreq = LaunchHistory.shared.count(for: b.path)
@@ -1274,7 +1278,7 @@ final class LauncherWindow: NSWindow {
         // Sync with install tracker (detects new/uninstalled apps)
         let newApps = AppInstallTracker.shared.syncWithApps(paths: items.map { $0.path })
         if !newApps.isEmpty {
-            print("[LauncherWindow] Detected \(newApps.count) newly installed apps")
+            print("[LauncherWindow] Detected \(newApps.count) newly installed apps: \(newApps)")
         }
 
         // Sort: new apps first, then alphabetically

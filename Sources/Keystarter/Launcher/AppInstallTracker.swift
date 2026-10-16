@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import Foundation
+import AppKit
 
 /// Tracks app installation times for "newly installed" ranking.
 final class AppInstallTracker {
@@ -27,7 +28,6 @@ final class AppInstallTracker {
         defer { lock.unlock() }
 
         guard let installDate = installTimes[path] else {
-            // No record = treat as new (newly discovered)
             return true
         }
 
@@ -82,9 +82,12 @@ final class AppInstallTracker {
         let previouslyTrackedPaths = Set(installTimes.keys)
         let missingPaths = previouslyTrackedPaths.subtracting(pathSet)
 
+        log("Previously tracked: \(previouslyTrackedPaths.count), Missing: \(missingPaths)")
+
         // Remove uninstalled apps first
         for path in missingPaths {
             if installTimes.removeValue(forKey: path) != nil {
+                log("Removed uninstalled: \(path)")
                 changed = true
             }
         }
@@ -95,10 +98,9 @@ final class AppInstallTracker {
                 // Completely new app
                 installTimes[path] = Date()
                 newApps.append(path)
+                log("New app: \(path)")
                 changed = true
             }
-            // Note: if path was previously tracked but got removed above (uninstalled then reinstalled),
-            // it will now be added with current date as "new"
         }
 
         if changed {
@@ -106,6 +108,11 @@ final class AppInstallTracker {
         }
 
         return newApps
+    }
+
+    private func log(_ message: String) {
+        guard LogSettings.shared.launcherLogEnabled else { return }
+        LogSettings.write("[AppInstallTracker] \(message)", to: LogSettings.shared.launcherLogPath)
     }
 
     // MARK: - Persistence
