@@ -1277,8 +1277,13 @@ final class LauncherWindow: NSWindow {
             print("[LauncherWindow] Detected \(newApps.count) newly installed apps")
         }
 
-        // Sort alphabetically
-        items.sort { $0.name.lowercased() < $1.name.lowercased() }
+        // Sort: new apps first, then alphabetically
+        items.sort { a, b in
+            let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
+            let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
+            if aIsNew != bIsNew { return aIsNew }
+            return a.name.lowercased() < b.name.lowercased()
+        }
 
         // Update on main thread for thread safety
         DispatchQueue.main.async { [weak self] in
