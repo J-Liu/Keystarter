@@ -69,29 +69,36 @@ final class AppInstallTracker {
     }
 
     /// Update installation records for current app set.
-    /// Returns list of newly discovered apps.
+    /// Returns list of newly discovered apps (including re-installed apps).
     func syncWithApps(paths: [String]) -> [String] {
         lock.lock()
         defer { lock.unlock() }
 
         var newApps: [String] = []
         var changed = false
+        let pathSet = Set(paths)
 
-        // Record new apps
-        for path in paths {
-            if installTimes[path] == nil {
-                installTimes[path] = Date()
-                newApps.append(path)
+        // Find paths that were previously uninstalled (in old data but not in current set)
+        let previouslyTrackedPaths = Set(installTimes.keys)
+        let missingPaths = previouslyTrackedPaths.subtracting(pathSet)
+
+        // Remove uninstalled apps first
+        for path in missingPaths {
+            if installTimes.removeValue(forKey: path) != nil {
                 changed = true
             }
         }
 
-        // Remove uninstalled apps
-        let pathSet = Set(paths)
-        let removedPaths = installTimes.keys.filter { !pathSet.contains($0) }
-        for path in removedPaths {
-            installTimes.removeValue(forKey: path)
-            changed = true
+        // Check for new or re-installed apps
+        for path in paths {
+            if installTimes[path] == nil {
+                // Completely new app
+                installTimes[path] = Date()
+                newApps.append(path)
+                changed = true
+            }
+            // Note: if path was previously tracked but got removed above (uninstalled then reinstalled),
+            // it will now be added with current date as "new"
         }
 
         if changed {
