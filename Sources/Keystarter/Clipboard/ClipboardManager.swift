@@ -91,6 +91,21 @@ final class ClipboardManager {
             }
             return
         }
+
+        // Check for file URLs (e.g., when copying files in Finder, Zed, etc.)
+        if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !fileURLs.isEmpty {
+            for url in fileURLs {
+                let filename = url.lastPathComponent
+                log("File URL found: \(filename)")
+                let hash = sha256(filename)
+                let inserted = db.insertClipboard(type: "text", content: filename, hash: hash)
+                log("Inserted file: \(inserted)")
+                if inserted {
+                    NotificationCenter.default.post(name: .clipboardChanged, object: nil)
+                }
+            }
+            return
+        }
     }
 
     private func saveImage(_ data: Data) {
