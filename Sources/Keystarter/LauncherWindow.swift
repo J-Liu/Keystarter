@@ -1073,10 +1073,13 @@ final class LauncherWindow: NSWindow {
         // Read grouping preference
         let groupBy = UserDefaults.standard.string(forKey: "launcher.groupBy") ?? "frequency"
 
+        // Filter out hidden apps only in grid view (not search)
+        let displayApps = isSearchMode ? results : results.filter { !HiddenAppsManager.shared.isHidden(path: $0.path) }
+
         // Group apps
         let groupedApps: [(String, [LaunchItem])]
         if groupBy == "letter" {
-            groupedApps = Dictionary(grouping: results) { app -> String in
+            groupedApps = Dictionary(grouping: displayApps) { app -> String in
                 let firstChar = app.name.prefix(1).uppercased()
                 if firstChar.rangeOfCharacter(from: CharacterSet.letters) != nil {
                     return firstChar
@@ -1085,13 +1088,13 @@ final class LauncherWindow: NSWindow {
             }.sorted { $0.key < $1.key }
         } else if groupBy == "category" {
             // Group by category (function)
-            groupedApps = Dictionary(grouping: results) { app -> String in
+            groupedApps = Dictionary(grouping: displayApps) { app -> String in
                 app.category ?? "Other"
             }.sorted { $0.key < $1.key }
         } else {
             // Group by frequency (most used)
             let runningPaths = getRunningAppPaths()
-            let sorted = results.sorted { a, b in
+            let sorted = displayApps.sorted { a, b in
                 // Newly installed apps first
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
@@ -1271,9 +1274,6 @@ final class LauncherWindow: NSWindow {
         for dir in appDirs {
             scanDirectoryForApps(at: dir, fileManager: fileManager, items: &items, seenPaths: &seenPaths)
         }
-
-        // Filter out ignored apps
-        items = items.filter { !IgnoredAppsManager.shared.isIgnored(path: $0.path) }
 
         // Sync with install tracker (detects new/uninstalled apps)
         let newApps = AppInstallTracker.shared.syncWithApps(paths: items.map { $0.path })

@@ -425,7 +425,7 @@ final class SettingsWindow: NSWindow {
         stack.addArrangedSubview(makeRow(label: L("settings.index.content"), control: contentCheckbox))
 
         // Row: Ignored Apps label
-        let ignoredLabel = NSTextField(labelWithString: L("settings.advanced.ignoredApps"))
+        let ignoredLabel = NSTextField(labelWithString: L("settings.advanced.hiddenApps"))
         stack.addArrangedSubview(ignoredLabel)
 
         // Table view for ignored apps
@@ -439,6 +439,8 @@ final class SettingsWindow: NSWindow {
         let tableView = NSTableView()
         tableView.identifier = NSUserInterfaceItemIdentifier("ignoredAppsTable")
         tableView.headerView = nil
+        tableView.rowHeight = 28
+        tableView.intercellSpacing = NSSize(width: 0, height: 2)
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("appPath"))
         column.width = 380
@@ -450,18 +452,18 @@ final class SettingsWindow: NSWindow {
         stack.addArrangedSubview(scrollView)
 
         // Empty label
-        let emptyLabel = NSTextField(labelWithString: L("settings.advanced.ignoredApps.empty"))
+        let emptyLabel = NSTextField(labelWithString: L("settings.advanced.hiddenApps.empty"))
         emptyLabel.alignment = .center
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.identifier = NSUserInterfaceItemIdentifier("emptyLabel")
-        emptyLabel.isHidden = !IgnoredAppsManager.shared.getAllIgnored().isEmpty
+        emptyLabel.isHidden = !HiddenAppsManager.shared.getAllHidden().isEmpty
         emptyLabel.widthAnchor.constraint(equalToConstant: 400).isActive = true
         stack.addArrangedSubview(emptyLabel)
 
         // Buttons row
-        let addButton = NSButton(title: L("settings.advanced.ignoredApps.add"), target: self, action: #selector(addIgnoredApp))
+        let addButton = NSButton(title: L("settings.advanced.hiddenApps.add"), target: self, action: #selector(addIgnoredApp))
         addButton.bezelStyle = .rounded
-        let removeButton = NSButton(title: L("settings.advanced.ignoredApps.remove"), target: self, action: #selector(removeIgnoredApp))
+        let removeButton = NSButton(title: L("settings.advanced.hiddenApps.remove"), target: self, action: #selector(removeIgnoredApp))
         removeButton.bezelStyle = .rounded
 
         let buttonRow = NSStackView(views: [addButton, removeButton])
@@ -487,38 +489,84 @@ final class SettingsWindow: NSWindow {
 
     @objc private func addIgnoredApp() {
         let openPanel = NSOpenPanel()
-        openPanel.title = L("settings.advanced.ignoredApps.addTitle")
+        openPanel.title = L("settings.advanced.hiddenApps.addTitle")
         openPanel.allowedContentTypes = [.applicationBundle]
-        openPanel.canChooseDirectories = true
-        openPanel.canChooseFiles = false
+        openPanel.canChooseDirectories = false
+        openPanel.canChooseFiles = true
         openPanel.allowsMultipleSelection = false
         openPanel.directoryURL = URL(fileURLWithPath: "/Applications")
 
         if openPanel.runModal() == .OK, let url = openPanel.url {
-            IgnoredAppsManager.shared.ignore(path: url.path)
+            HiddenAppsManager.shared.hide(path: url.path)
             refreshIgnoredAppsTable()
         }
     }
 
     @objc private func removeIgnoredApp() {
-        guard let tableView = advancedTab?.subviews.compactMap({ $0 as? NSScrollView }).first?.documentView as? NSTableView else { return }
+        // Find table view by recursive search
+        func findTableView(in view: NSView) -> NSTableView? {
+            if let scrollView = view as? NSScrollView,
+               let tableView = scrollView.documentView as? NSTableView,
+               tableView.identifier?.rawValue == "ignoredAppsTable" {
+                return tableView
+            }
+            for subview in view.subviews {
+                if let found = findTableView(in: subview) {
+                    return found
+                }
+            }
+            return nil
+        }
+        
+        guard let tableView = advancedTab.flatMap({ findTableView(in: $0) }) else { return }
         let selectedRow = tableView.selectedRow
         guard selectedRow >= 0 else { return }
 
-        let ignoredApps = IgnoredAppsManager.shared.getAllIgnored()
+        let ignoredApps = HiddenAppsManager.shared.getAllHidden()
         guard selectedRow < ignoredApps.count else { return }
 
         let pathToRemove = ignoredApps[selectedRow]
-        IgnoredAppsManager.shared.unignore(path: pathToRemove)
+        HiddenAppsManager.shared.unhide(path: pathToRemove)
         refreshIgnoredAppsTable()
     }
 
     private func refreshIgnoredAppsTable() {
-        guard let tableView = advancedTab?.subviews.compactMap({ $0 as? NSScrollView }).first?.documentView as? NSTableView else { return }
+        // Find table view by recursive search
+        func findTableView(in view: NSView) -> NSTableView? {
+            if let scrollView = view as? NSScrollView,
+               let tableView = scrollView.documentView as? NSTableView,
+               tableView.identifier?.rawValue == "ignoredAppsTable" {
+                return tableView
+            }
+            for subview in view.subviews {
+                if let found = findTableView(in: subview) {
+                    return found
+                }
+            }
+            return nil
+        }
+        
+        guard let tableView = advancedTab.flatMap({ findTableView(in: $0) }) else {
+            print("[SettingsWindow] Table view not found")
+            return
+        }
         tableView.reloadData()
 
-        if let emptyLabel = advancedTab?.subviews.first(where: { $0.identifier?.rawValue == "emptyLabel" }) as? NSTextField {
-            emptyLabel.isHidden = !IgnoredAppsManager.shared.getAllIgnored().isEmpty
+        // Find empty label
+        func findEmptyLabel(in view: NSView) -> NSTextField? {
+            if let label = view as? NSTextField, label.identifier?.rawValue == "emptyLabel" {
+                return label
+            }
+            for subview in view.subviews {
+                if let found = findEmptyLabel(in: subview) {
+                    return found
+                }
+            }
+            return nil
+        }
+        
+        if let emptyLabel = advancedTab.flatMap({ findEmptyLabel(in: $0) }) {
+            emptyLabel.isHidden = !HiddenAppsManager.shared.getAllHidden().isEmpty
         }
     }
 
@@ -900,7 +948,7 @@ extension SettingsWindow: NSTableViewDelegate, NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int {
         switch tableView.identifier?.rawValue {
         case "ignoredAppsTable":
-            return IgnoredAppsManager.shared.getAllIgnored().count
+            return HiddenAppsManager.shared.getAllHidden().count
         default:
             return 0
         }
@@ -909,18 +957,36 @@ extension SettingsWindow: NSTableViewDelegate, NSTableViewDataSource {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         switch tableView.identifier?.rawValue {
         case "ignoredAppsTable":
-            let ignoredApps = IgnoredAppsManager.shared.getAllIgnored()
+            let ignoredApps = HiddenAppsManager.shared.getAllHidden()
             guard row < ignoredApps.count else { return nil }
 
             let path = ignoredApps[row]
-            let name = IgnoredAppsManager.shared.appName(from: path)
+            let name = HiddenAppsManager.shared.appName(from: path)
 
+            // Create custom cell with icon
             let cellIdentifier = NSUserInterfaceItemIdentifier("appCell")
-            let cell = tableView.makeView(withIdentifier: cellIdentifier, owner: self) as? NSTextField ?? NSTextField(labelWithString: "")
-            cell.identifier = cellIdentifier
-            cell.stringValue = name
-            cell.toolTip = path
-            return cell
+            
+            // Create container view
+            let container = NSView()
+            container.identifier = cellIdentifier
+            
+            // App icon
+            let iconView = NSImageView()
+            if let appIcon = NSWorkspace.shared.icon(forFile: path) as NSImage? {
+                iconView.image = appIcon
+            }
+            iconView.frame = NSRect(x: 2, y: 2, width: 24, height: 24)
+            container.addSubview(iconView)
+            
+            // App name
+            let label = NSTextField(labelWithString: name)
+            label.font = .systemFont(ofSize: 13)
+            label.frame = NSRect(x: 30, y: 4, width: 340, height: 18)
+            label.lineBreakMode = .byTruncatingTail
+            container.addSubview(label)
+            
+            container.toolTip = path
+            return container
 
         default:
             return nil

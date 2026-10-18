@@ -3,13 +3,13 @@
 
 import Foundation
 
-/// Manages the list of ignored apps that should not appear in launcher.
-final class IgnoredAppsManager {
+/// Manages the list of hidden apps that should not appear in launcher grid (but searchable).
+final class HiddenAppsManager {
 
-    static let shared = IgnoredAppsManager()
+    static let shared = HiddenAppsManager()
 
-    private let storageKey = "launcher.ignoredApps"
-    private var ignoredApps: Set<String> = []
+    private let storageKey = "launcher.hiddenApps"
+    private var hiddenApps: Set<String> = []
 
     private init() {
         load()
@@ -17,34 +17,34 @@ final class IgnoredAppsManager {
 
     private func load() {
         if let saved = UserDefaults.standard.array(forKey: storageKey) as? [String] {
-            ignoredApps = Set(saved)
+            hiddenApps = Set(saved)
         }
     }
 
     private func save() {
-        UserDefaults.standard.set(Array(ignoredApps), forKey: storageKey)
+        UserDefaults.standard.set(Array(hiddenApps), forKey: storageKey)
     }
 
-    /// Check if an app is ignored.
-    func isIgnored(path: String) -> Bool {
-        return ignoredApps.contains(path)
+    /// Check if an app is hidden.
+    func isHidden(path: String) -> Bool {
+        return hiddenApps.contains(path)
     }
 
-    /// Add an app to the ignored list.
-    func ignore(path: String) {
-        ignoredApps.insert(path)
+    /// Add an app to the hidden list.
+    func hide(path: String) {
+        hiddenApps.insert(path)
         save()
     }
 
-    /// Remove an app from the ignored list.
-    func unignore(path: String) {
-        ignoredApps.remove(path)
+    /// Remove an app from the hidden list.
+    func unhide(path: String) {
+        hiddenApps.remove(path)
         save()
     }
 
-    /// Get all ignored app paths.
-    func getAllIgnored() -> [String] {
-        return Array(ignoredApps).sorted()
+    /// Get all hidden app paths.
+    func getAllHidden() -> [String] {
+        return Array(hiddenApps).sorted()
     }
 
     /// Get app name from path.

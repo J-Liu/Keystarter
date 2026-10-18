@@ -139,11 +139,11 @@ final class LocalizationManager {
             "settings.about.copyright": "© 2026 Jia Liu. All rights reserved.",
 
             // Advanced Tab
-            "settings.advanced.ignoredApps": "Ignored Apps:",
-            "settings.advanced.ignoredApps.empty": "No ignored apps",
-            "settings.advanced.ignoredApps.add": "Add...",
-            "settings.advanced.ignoredApps.remove": "Remove",
-            "settings.advanced.ignoredApps.addTitle": "Select App to Ignore",
+            "settings.advanced.hiddenApps": "Hidden Apps:",
+            "settings.advanced.hiddenApps.empty": "No hidden apps",
+            "settings.advanced.hiddenApps.add": "Add...",
+            "settings.advanced.hiddenApps.remove": "Remove",
+            "settings.advanced.hiddenApps.addTitle": "Select App to Hide",
             // Launcher Log
             "settings.launcher.log.enable": "Enable Launcher Log",
 
@@ -514,11 +514,11 @@ final class LocalizationManager {
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有權利。",
 
             // Advanced Tab
-            "settings.advanced.ignoredApps": "忽略的應用：",
-            "settings.advanced.ignoredApps.empty": "沒有忽略的應用",
-            "settings.advanced.ignoredApps.add": "新增...",
-            "settings.advanced.ignoredApps.remove": "移除",
-            "settings.advanced.ignoredApps.addTitle": "選擇要忽略的應用",
+            "settings.advanced.hiddenApps": "隱藏的應用：",
+            "settings.advanced.hiddenApps.empty": "沒有隱藏的應用",
+            "settings.advanced.hiddenApps.add": "新增...",
+            "settings.advanced.hiddenApps.remove": "移除",
+            "settings.advanced.hiddenApps.addTitle": "選擇要隱藏的應用",
 
             // Launcher Log
             "settings.launcher.log.enable": "啟用啟動器日誌",
