@@ -64,6 +64,8 @@ final class ClipboardPanel: NSObject {
     }
 
     func show() {
+        // Refresh cache every time panel is shown
+        refreshCache()
         entries = cachedEntries
         buildMenu()
 

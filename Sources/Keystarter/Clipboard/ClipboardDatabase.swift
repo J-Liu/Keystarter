@@ -37,9 +37,11 @@ final class ClipboardDatabase {
         sqlite3_close(db)
     }
 
-    func insertClipboard(type: String, content: String, hash: String) -> Bool {
+    func insertOrUpdate(type: String, content: String, hash: String) -> Bool {
         lock.lock()
         defer { lock.unlock() }
+        
+        // Try INSERT OR IGNORE first
         let sql = "INSERT OR IGNORE INTO clipboard (type, content, hash, created_at) VALUES (?, ?, ?, ?);"
         var stmt: OpaquePointer?
         guard sqlite3_prepare_v2(db, sql, -1, &stmt, nil) == SQLITE_OK else { return false }
@@ -48,9 +50,18 @@ final class ClipboardDatabase {
         sqlite3_bind_text(stmt, 3, (hash as NSString).utf8String, -1, nil)
         sqlite3_bind_int64(stmt, 4, Int64(Date().timeIntervalSince1970))
         sqlite3_step(stmt)
-        let changes = sqlite3_changes(db)
+        let insertChanges = sqlite3_changes(db)
         sqlite3_finalize(stmt)
-        return changes > 0
+        
+        // If row already exists (insert ignored), update timestamp to bump to top
+        let updateSql = "UPDATE clipboard SET created_at = ? WHERE hash = ?;"
+        guard sqlite3_prepare_v2(db, updateSql, -1, &stmt, nil) == SQLITE_OK else { return false }
+        sqlite3_bind_int64(stmt, 1, Int64(Date().timeIntervalSince1970))
+        sqlite3_bind_text(stmt, 2, (hash as NSString).utf8String, -1, nil)
+        sqlite3_step(stmt)
+        sqlite3_finalize(stmt)
+        
+        return insertChanges > 0 || true  // Always return true to trigger notification
     }
 
     func getClipboard(limit: Int = 30) -> [(id: Int64, type: String, content: String, createdAt: Date)] {

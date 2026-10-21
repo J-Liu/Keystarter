@@ -84,8 +84,8 @@ final class ClipboardManager {
         if let text = pasteboard.string(forType: .string), !text.isEmpty {
             log("Text found: \(text.prefix(50))...")
             let hash = sha256(text)
-            let inserted = db.insertClipboard(type: "text", content: text, hash: hash)
-            log("Inserted: \(inserted)")
+            let inserted = db.insertOrUpdate(type: "text", content: text, hash: hash)
+            log("Inserted: \(inserted), hash: \(hash.prefix(8))")
             if inserted {
                 NotificationCenter.default.post(name: .clipboardChanged, object: nil)
             }
@@ -94,12 +94,13 @@ final class ClipboardManager {
 
         // Check for file URLs (e.g., when copying files in Finder, Zed, etc.)
         if let fileURLs = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !fileURLs.isEmpty {
+            log("File URLs found: \(fileURLs.count)")
             for url in fileURLs {
                 let filename = url.lastPathComponent
-                log("File URL found: \(filename)")
+                log("File URL: \(filename)")
                 let hash = sha256(filename)
-                let inserted = db.insertClipboard(type: "text", content: filename, hash: hash)
-                log("Inserted file: \(inserted)")
+                let inserted = db.insertOrUpdate(type: "text", content: filename, hash: hash)
+                log("Inserted file: \(inserted), hash: \(hash.prefix(8))")
                 if inserted {
                     NotificationCenter.default.post(name: .clipboardChanged, object: nil)
                 }
@@ -115,7 +116,7 @@ final class ClipboardManager {
         let path = dir + "/" + filename
         try? data.write(to: URL(fileURLWithPath: path))
         let hash = sha256(data)
-        let inserted = db.insertClipboard(type: "image", content: path, hash: hash)
+        let inserted = db.insertOrUpdate(type: "image", content: path, hash: hash)
         log("Image saved: \(filename), inserted: \(inserted)")
         if inserted {
             DispatchQueue.main.async {
