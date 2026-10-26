@@ -268,6 +268,12 @@ final class SettingsWindow: NSWindow {
     private func createMonitorTab() -> NSView {
         let stack = makeVerticalStack()
 
+        // Row: Enable Monitor
+        let monitorEnabledCheckbox = NSButton(checkboxWithTitle: L("settings.monitor.enable"), target: self, action: #selector(monitorEnabledChanged(_:)))
+        let monitorEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        monitorEnabledCheckbox.state = monitorEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: monitorEnabledCheckbox))
+
         // Section: Status Bar Modules
         let modulesLabel = NSTextField(labelWithString: L("settings.monitor.modules"))
         modulesLabel.font = .systemFont(ofSize: 13, weight: .semibold)
@@ -354,6 +360,12 @@ final class SettingsWindow: NSWindow {
 
     private func createClipboardTab() -> NSView {
         let stack = makeVerticalStack()
+
+        // Row: Enable Clipboard
+        let clipboardEnabledCheckbox = NSButton(checkboxWithTitle: L("settings.clipboard.enable"), target: self, action: #selector(clipboardEnabledChanged(_:)))
+        let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        clipboardEnabledCheckbox.state = clipboardEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: clipboardEnabledCheckbox))
 
         // Row: Hotkey
         let clipboardHotkeyRecorder = HotkeyRecorderButton()
@@ -758,6 +770,16 @@ final class SettingsWindow: NSWindow {
         (NSApp.delegate as? AppDelegate)?.updateDockIconVisibility()
     }
 
+    @objc private func monitorEnabledChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "status.monitor.enabled")
+        if enabled {
+            StatusItemController.shared.startMonitoring()
+        } else {
+            StatusItemController.shared.stopMonitoring()
+        }
+    }
+
     @objc private func cpuModuleChanged(_ sender: NSButton) {
         let enabled = sender.state == .on
         UserDefaults.standard.set(enabled, forKey: "status.cpu.enabled")
@@ -905,6 +927,16 @@ final class SettingsWindow: NSWindow {
         UserDefaults.standard.set(Int(recorder.keyCode), forKey: "clipboard.hotkey.keyCode")
         UserDefaults.standard.set(Int(recorder.modifiers.rawValue), forKey: "clipboard.hotkey.modifiers")
         (NSApp.delegate as? AppDelegate)?.updateClipboardHotkey(keyCode: recorder.keyCode, modifiers: recorder.modifiers)
+    }
+
+    @objc private func clipboardEnabledChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "clipboard.enabled")
+        if enabled {
+            ClipboardManager.shared.start()
+        } else {
+            ClipboardManager.shared.stop()
+        }
     }
 
     @objc private func clipboardMaxCountChanged(_ sender: NSTextField) {
