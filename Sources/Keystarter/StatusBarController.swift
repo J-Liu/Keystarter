@@ -5,16 +5,18 @@ import AppKit
 import Carbon
 
 /// Manages the status bar icon and menu.
-final class StatusBarController {
+final class StatusBarController: NSObject, NSMenuDelegate {
 
     private let statusItem: NSStatusItem
     private let menu: NSMenu
     private var currentTheme: String = "system"
 
-    init() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    override init() {
+        statusItem = NSStatusBar.system.statusItem(withLength: 15)  // Width of status bar icon
         menu = NSMenu()
         currentTheme = UserDefaults.standard.string(forKey: "statusBar.theme") ?? "system"
+
+        super.init()
 
         setupIcon()
         setupMenu()
@@ -64,6 +66,9 @@ final class StatusBarController {
         }
     }
 
+    private var monitorMenuItem: NSMenuItem?
+    private var clipboardMenuItem: NSMenuItem?
+
     private func setupMenu() {
         // Open Launcher
         let openItem = NSMenuItem(
@@ -74,6 +79,32 @@ final class StatusBarController {
         openItem.keyEquivalentModifierMask = .command
         openItem.target = self
         menu.addItem(openItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Monitor toggle
+        let monitorEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        monitorMenuItem = NSMenuItem(
+            title: "Monitor",
+            action: #selector(toggleMonitor),
+            keyEquivalent: "m"
+        )
+        monitorMenuItem?.keyEquivalentModifierMask = .command
+        monitorMenuItem?.target = self
+        monitorMenuItem?.state = monitorEnabled ? .on : .off
+        menu.addItem(monitorMenuItem!)
+
+        // Clipboard toggle
+        let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        clipboardMenuItem = NSMenuItem(
+            title: "Clipboard",
+            action: #selector(toggleClipboard),
+            keyEquivalent: "c"
+        )
+        clipboardMenuItem?.keyEquivalentModifierMask = .command
+        clipboardMenuItem?.target = self
+        clipboardMenuItem?.state = clipboardEnabled ? .on : .off
+        menu.addItem(clipboardMenuItem!)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -129,12 +160,49 @@ final class StatusBarController {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+        menu.delegate = self
+    }
+
+    // MARK: - NSMenuDelegate
+    
+    func menuWillOpen(_ menu: NSMenu) {
+        // Refresh check state from UserDefaults
+        let monitorEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        monitorMenuItem?.state = monitorEnabled ? .on : .off
+        clipboardMenuItem?.state = clipboardEnabled ? .on : .off
     }
 
     // MARK: - Actions
 
     @objc private func openLauncher() {
         (NSApp.delegate as? AppDelegate)?.showLauncher()
+    }
+
+    @objc private func toggleMonitor(_ sender: NSMenuItem) {
+        let currentEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        let newEnabled = !currentEnabled
+        UserDefaults.standard.set(newEnabled, forKey: "status.monitor.enabled")
+        sender.state = newEnabled ? .on : .off
+        monitorMenuItem?.state = sender.state
+        if newEnabled {
+            StatusItemController.shared.startMonitoring()
+        } else {
+            StatusItemController.shared.stopMonitoring()
+        }
+    }
+
+    @objc private func toggleClipboard(_ sender: NSMenuItem) {
+        let currentEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        let newEnabled = !currentEnabled
+        UserDefaults.standard.set(newEnabled, forKey: "clipboard.enabled")
+        sender.state = newEnabled ? .on : .off
+        clipboardMenuItem?.state = sender.state
+        if newEnabled {
+            ClipboardManager.shared.start()
+        } else {
+            ClipboardManager.shared.stop()
+        }
     }
 
     @objc private func checkUpdates() {
@@ -146,7 +214,7 @@ final class StatusBarController {
 
     @objc private func checkPermissions() {
         (NSApp.delegate as? AppDelegate)?.hideLauncher()  // Hide launcher first
-        
+
         let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
 
         if !hasAccessibility {
@@ -199,6 +267,18 @@ final class StatusBarController {
 
     @objc private func showAbout() {
         (NSApp.delegate as? AppDelegate)?.hideLauncher()  // Hide launcher first
+
+        // Check if settings window already exists and is open
+        for window in NSApp.windows {
+            if let settings = window as? SettingsWindow {
+                settings.selectTab(withIdentifier: "about")
+                settings.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
+                return
+            }
+        }
+
+        // No existing window, create new one
         let settings = SettingsWindow()
         settings.selectTab(withIdentifier: "about")
         settings.makeKeyAndOrderFront(nil)
