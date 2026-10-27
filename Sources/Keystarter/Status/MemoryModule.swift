@@ -203,31 +203,24 @@ final class MemoryModule: NSObject, StatusModule {
     func cleanup() {
         detailTimer?.invalidate()
         detailTimer = nil
+        chartView?.stopAnimation()
     }
 
     private func refreshDetail() {
         // Run heavy data collection on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
+
             let (used, total) = self.getMemoryUsage()
             let procs = self.getProcessesByMemory(limit: 100)
-            let history = self.memoryHistory
-            
+
             DispatchQueue.main.async {
                 self.usedMemory = used
                 self.totalMemory = total
-
-                // Add to history
-                let usedGB = Double(used) / 1_073_741_824.0
-                self.memoryHistory.append(usedGB)
-                if self.memoryHistory.count > self.maxHistoryCount {
-                    self.memoryHistory.removeFirst()
-                }
-
                 self.processQueue.sync { self.processes = procs }
 
-                self.chartView?.setHistory(history, usedMemory: used)
+                // Use current history (already updated in refreshSummary)
+                self.chartView?.setHistory(self.memoryHistory, usedMemory: used)
                 self.tableView?.reloadData()
             }
         }

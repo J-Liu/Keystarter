@@ -58,7 +58,14 @@ final class GPUModule: NSObject, StatusModule {
     private(set) var summaryText: String = "0"
     private(set) var summaryValue: String = "0"
 
-    var refreshInterval: TimeInterval { 2.0 }
+    // Dynamic refresh interval based on activity
+    private var currentRefreshInterval: TimeInterval = 2.0
+    var refreshInterval: TimeInterval { currentRefreshInterval }
+
+    private var previousGPUValue: Double = 0
+    private let minRefreshInterval: TimeInterval = 0.5
+    private let maxRefreshInterval: TimeInterval = 10.0
+    private let activityThreshold: Double = 5.0  // 5% change triggers speedup
 
     private var processes: [GPUProcessInfo] = []
     private let processQueue = DispatchQueue(label: "com.keystarter.gpu.processes", qos: .userInitiated)
@@ -228,6 +235,17 @@ final class GPUModule: NSObject, StatusModule {
         summaryText = value
         summaryValue = value
 
+        // Dynamic refresh rate based on GPU activity change
+        let gpuDelta = abs(info.device - previousGPUValue)
+        if gpuDelta > activityThreshold {
+            // High activity: speed up refresh
+            currentRefreshInterval = max(currentRefreshInterval / 1.5, minRefreshInterval)
+        } else {
+            // Low activity: slow down refresh
+            currentRefreshInterval = min(currentRefreshInterval * 1.5, maxRefreshInterval)
+        }
+        previousGPUValue = info.device
+
         // Update history on every refresh (app startup onwards)
         deviceHistory.append(info.device)
         rendererHistory.append(info.renderer)
@@ -336,6 +354,7 @@ final class GPUModule: NSObject, StatusModule {
     func cleanup() {
         detailTimer?.invalidate()
         detailTimer = nil
+        chartView?.stopAnimation()
     }
 
     private func refreshDetail() {
@@ -950,6 +969,13 @@ final class GPUChartView: NSView {
         rendererChart.startAnimation()
         tilerChart.startAnimation()
         aneChart.startAnimation()
+    }
+
+    func stopAnimation() {
+        deviceChart.stopAnimation()
+        rendererChart.stopAnimation()
+        tilerChart.stopAnimation()
+        aneChart.stopAnimation()
     }
 
     override func draw(_ dirtyRect: NSRect) {

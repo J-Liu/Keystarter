@@ -156,6 +156,7 @@ final class CPUModule: NSObject, StatusModule {
     func cleanup() {
         detailTimer?.invalidate()
         detailTimer = nil
+        chartView?.stopAnimation()
     }
 
     private func refreshDetail() {
@@ -447,6 +448,11 @@ final class CPUChartView: NSView {
     func startAnimation() {
         systemChart.startAnimation()
         userChart.startAnimation()
+    }
+
+    func stopAnimation() {
+        systemChart.stopAnimation()
+        userChart.stopAnimation()
     }
 
     override func draw(_ dirtyRect: NSRect) {

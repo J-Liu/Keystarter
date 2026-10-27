@@ -63,45 +63,50 @@ final class NetworkModule: NSObject, StatusModule {
     func refreshSummary() {
         // Only update from summary if detail view is not open
         guard detailTimer == nil else { return }
-        updateNetworkData()
+        // Summary view: only update total network traffic, no per-process data
+        updateNetworkData(includeProcesses: false)
     }
     
-    private func updateNetworkData() {
+    private func updateNetworkData(includeProcesses: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
+
             let (bytesIn, bytesOut) = self.getNetworkBytes()
             let now = Date()
             let elapsed = now.timeIntervalSince(self.previousTime)
-            
+
             var newDownSpeed: Double = 0
             var newUpSpeed: Double = 0
-            
+
             if elapsed >= 0.5 {
                 let bytesInDelta = bytesIn > self.previousBytesIn ? bytesIn - self.previousBytesIn : 0
                 let bytesOutDelta = bytesOut > self.previousBytesOut ? bytesOut - self.previousBytesOut : 0
-                
+
                 newDownSpeed = Double(bytesInDelta) / elapsed
                 newUpSpeed = Double(bytesOutDelta) / elapsed
             }
-            
+
             self.previousBytesIn = bytesIn
             self.previousBytesOut = bytesOut
             self.previousTime = now
-            
-            let newProcesses = self.getProcessesByNetwork(limit: 100)
-            
+
+            // Only fetch per-process network data when explicitly requested (detail view open)
+            var newProcesses: [NetworkProcessInfo] = []
+            if includeProcesses {
+                newProcesses = self.getProcessesByNetwork(limit: 100)
+            }
+
             DispatchQueue.main.async {
                 // Update history arrays
                 self.downloadHistory.append(newDownSpeed)
                 self.uploadHistory.append(newUpSpeed)
                 if self.downloadHistory.count > self.maxHistoryCount { self.downloadHistory.removeFirst() }
                 if self.uploadHistory.count > self.maxHistoryCount { self.uploadHistory.removeFirst() }
-                
+
                 self.downloadSpeed = newDownSpeed
                 self.uploadSpeed = newUpSpeed
                 self.processQueue.sync { self.processes = newProcesses }
-                
+
                 // Only update chart and notify if detail view is open
                 if self.detailTimer != nil {
                     self.chartView?.setDownloadHistory(self.downloadHistory, uploadHistory: self.uploadHistory)
@@ -275,7 +280,8 @@ final class NetworkModule: NSObject, StatusModule {
     
     private func startDetailTimer() {
         detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+        // Use 5-second interval for nettop (expensive operation)
+        detailTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
             self?.refreshDetail()
         }
     }
@@ -283,10 +289,11 @@ final class NetworkModule: NSObject, StatusModule {
     func cleanup() {
         detailTimer?.invalidate()
         detailTimer = nil
+        chartView?.stopAnimation()
     }
     
     private func refreshDetail() {
-        updateNetworkData()
+        updateNetworkData(includeProcesses: true)
     }
     
     // MARK: - Network Data

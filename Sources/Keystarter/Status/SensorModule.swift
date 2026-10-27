@@ -45,6 +45,16 @@ final class SensorModule: NSObject, StatusModule {
     // SMC connection
     private var smcConnection: io_connect_t = 0
 
+    // Cached SMC keys (enumerate once, then cache)
+    private var cachedSMCKeys: [String] = []
+    private var smcKeysCached = false
+    // Required SMC temperature keys (fixed list, no enumeration needed)
+    private let requiredSMCTempKeys = [
+        "TaLP", "TaRF", "TW0P", "TH0x", "TH0a", "TH0b", "TH1a", "TH1b",
+        "TB0T", "TB1T", "TB2T", "Tm0C", "Tm0D", "Tm0E",
+        "Tg05", "Tg0D", "Tg0L", "Tg0T"
+    ]
+
     private weak var chartView: NSView?
     private weak var tableView: NSTableView?
     private var detailTimer: Timer?
@@ -209,6 +219,9 @@ final class SensorModule: NSObject, StatusModule {
     func cleanup() {
         detailTimer?.invalidate()
         detailTimer = nil
+        if let fanChart = chartView as? FanLineChartView {
+            fanChart.stopAnimation()
+        }
     }
 
     private func refreshDetail() {
@@ -538,10 +551,8 @@ final class SensorModule: NSObject, StatusModule {
 
         // Read from SMC for additional sensors (GPU temps are more reliable via SMC)
         if smcConnection != 0 {
-            let allKeys = readAllSMCKeys()
-
-            // Filter to temperature keys only (start with T)
-            let tempKeys = allKeys.filter { $0.hasPrefix("T") }
+            // Use required keys list instead of enumerating all keys
+            let tempKeys = requiredSMCTempKeys
 
             // Sensor name mapping based on discovered keys on Apple Silicon
             let sensorMap: [String: String] = [

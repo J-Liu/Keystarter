@@ -59,10 +59,11 @@ final class DiskModule: NSObject, StatusModule {
     func refreshSummary() {
         // Only update from summary if detail view is not open
         guard detailTimer == nil else { return }
-        updateDiskData()
+        // Summary view: only update total disk I/O, no per-process data
+        updateDiskData(includeProcesses: false)
     }
-    
-    private func updateDiskData() {
+
+    private func updateDiskData(includeProcesses: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             
@@ -85,8 +86,12 @@ final class DiskModule: NSObject, StatusModule {
             self.previousWriteBytes = writeBytes
             self.previousTime = now
             
-            let newProcesses = self.getProcessesByDiskIO(limit: 100)
-            
+            // Only fetch per-process data when explicitly requested
+            var newProcesses: [DiskProcessInfo] = []
+            if includeProcesses {
+                newProcesses = self.getProcessesByDiskIO(limit: 100)
+            }
+
             DispatchQueue.main.async {
                 // Update history arrays
                 self.readHistory.append(newReadSpeed)
@@ -208,10 +213,11 @@ final class DiskModule: NSObject, StatusModule {
     func cleanup() {
         detailTimer?.invalidate()
         detailTimer = nil
+        chartView?.stopAnimation()
     }
     
     private func refreshDetail() {
-        updateDiskData()
+        updateDiskData(includeProcesses: true)
     }
     
     // MARK: - Disk Data using DASession (Stats approach)
