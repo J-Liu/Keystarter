@@ -113,7 +113,10 @@ final class DiskModule: NSObject, StatusModule {
 
                 self.readSpeed = newReadSpeed
                 self.writeSpeed = newWriteSpeed
-                self.processQueue.sync { self.processes = newProcesses }
+                // Only update processes if we fetched new data
+                if includeProcesses {
+                    self.processQueue.sync { self.processes = newProcesses }
+                }
 
                 // Update UI if we have process data (detail view requested it)
                 if includeProcesses {

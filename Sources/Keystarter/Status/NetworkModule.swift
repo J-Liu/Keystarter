@@ -117,7 +117,10 @@ final class NetworkModule: NSObject, StatusModule {
 
                 self.downloadSpeed = newDownSpeed
                 self.uploadSpeed = newUpSpeed
-                self.processQueue.sync { self.processes = newProcesses }
+                // Only update processes if we fetched new data
+                if includeProcesses {
+                    self.processQueue.sync { self.processes = newProcesses }
+                }
 
                 // Update UI if we have process data (detail view requested it)
                 if includeProcesses {
