@@ -19,54 +19,66 @@ struct NetworkProcessInfo {
 
 /// Network monitoring module.
 final class NetworkModule: NSObject, StatusModule {
-    
+
     var identifier: String { "network" }
     var displayName: String { L("status.network.displayName") }
     var shortName: String { "NET" }
-    
+
     private(set) var summaryText: String = "↓-- ↑--"
     private(set) var summaryValue: String = "--"
-    
+
     // Public speeds for status bar
     var downloadSpeedText: String { formatSpeed(downloadSpeed) }
     var uploadSpeedText: String { formatSpeed(uploadSpeed) }
-    
+
     var refreshInterval: TimeInterval { 1.0 }
-    
+
     // Shared cache with IPPlugin
     private let cacheKey = "keystarter.publicIP.cache"
     private let cacheTimeKey = "keystarter.publicIP.cacheTime"
     private let cacheDuration: TimeInterval = 300 // 5 minutes
-    
+
     private var previousBytesIn: UInt64 = 0
     private var previousBytesOut: UInt64 = 0
     private var previousTime: Date = Date()
-    
+
     // History for charts
     private var downloadHistory: [Double] = []
     private var uploadHistory: [Double] = []
     private let maxHistoryCount = 60
-    
+
     private var processes: [NetworkProcessInfo] = []
     private let processQueue = DispatchQueue(label: "com.keystarter.network.processes", qos: .userInitiated)
     private var downloadSpeed: Double = 0
     private var uploadSpeed: Double = 0
-    
+
     // Per-process tracking
     private var prevNetIO: [Int32: (in: UInt64, out: UInt64, time: Date)] = [:]
     private var netIOLock = NSLock()
-    
+
     private weak var chartView: NetworkChartView?
     private weak var tableView: NSTableView?
     private var detailTimer: Timer?
-    
+    private var lastProcessDataTime: Date?
+
     func refreshSummary() {
         // Only update from summary if detail view is not open
         guard detailTimer == nil else { return }
-        // Summary view: only update total network traffic, no per-process data
-        updateNetworkData(includeProcesses: false)
+
+        // Fetch process data periodically (every 5 seconds) to keep it fresh
+        let now = Date()
+        let shouldFetchProcesses: Bool
+        if let lastTime = lastProcessDataTime {
+            shouldFetchProcesses = now.timeIntervalSince(lastTime) >= 5
+        } else {
+            shouldFetchProcesses = true  // First time
+        }
+        if shouldFetchProcesses {
+            lastProcessDataTime = now
+        }
+        updateNetworkData(includeProcesses: shouldFetchProcesses)
     }
-    
+
     private func updateNetworkData(includeProcesses: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -107,8 +119,8 @@ final class NetworkModule: NSObject, StatusModule {
                 self.uploadSpeed = newUpSpeed
                 self.processQueue.sync { self.processes = newProcesses }
 
-                // Only update chart and notify if detail view is open
-                if self.detailTimer != nil {
+                // Update UI if we have process data (detail view requested it)
+                if includeProcesses {
                     self.chartView?.setDownloadHistory(self.downloadHistory, uploadHistory: self.uploadHistory)
                     self.chartView?.needsDisplay = true
                     self.tableView?.reloadData()
@@ -117,7 +129,7 @@ final class NetworkModule: NSObject, StatusModule {
             }
         }
     }
-    
+
     func makeDetailView() -> NSView {
         let toolbarHeight = PopoverToolbar.height
         let headerHeight: CGFloat = 24
@@ -271,13 +283,14 @@ final class NetworkModule: NSObject, StatusModule {
         tableView = table
         container.addSubview(scrollView)
 
-        // Refresh immediately on open
+        // Show existing data immediately, then refresh
+        tableView?.reloadData()
         refreshDetail()
         startDetailTimer()
 
         return container
     }
-    
+
     private func startDetailTimer() {
         detailTimer?.invalidate()
         // Use 5-second interval for nettop (expensive operation)
@@ -291,11 +304,11 @@ final class NetworkModule: NSObject, StatusModule {
         detailTimer = nil
         chartView?.stopAnimation()
     }
-    
+
     private func refreshDetail() {
         updateNetworkData(includeProcesses: true)
     }
-    
+
     // MARK: - Network Data
 
     /// Get local IP addresses (IPv4 and IPv6)
@@ -390,7 +403,7 @@ final class NetworkModule: NSObject, StatusModule {
             completion(cached)
             return
         }
-        
+
         // Fetch from network
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             // Try multiple services for reliability
@@ -429,7 +442,7 @@ final class NetworkModule: NSObject, StatusModule {
             }
         }
     }
-    
+
     private func getCachedIP() -> String? {
         guard let ip = UserDefaults.standard.string(forKey: cacheKey),
               let timeInterval = UserDefaults.standard.object(forKey: cacheTimeKey) as? TimeInterval else {
@@ -451,16 +464,16 @@ final class NetworkModule: NSObject, StatusModule {
     private func getNetworkBytes() -> (in: UInt64, out: UInt64) {
         var bytesIn: UInt64 = 0
         var bytesOut: UInt64 = 0
-        
+
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
         guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else {
             return (0, 0)
         }
-        
+
         var ptr = firstAddr
         while true {
             let addr = ptr.pointee
-            
+
             if let name = addr.ifa_name {
                 let ifaName = String(cString: name)
                 if ifaName.hasPrefix("en") || ifaName.hasPrefix("awdl") || ifaName.hasPrefix("llw") {
@@ -471,31 +484,31 @@ final class NetworkModule: NSObject, StatusModule {
                     }
                 }
             }
-            
+
             guard let next = addr.ifa_next else { break }
             ptr = next
         }
-        
+
         freeifaddrs(ifaddr)
         return (bytesIn, bytesOut)
     }
-    
+
     private func getProcessesByNetwork(limit: Int) -> [NetworkProcessInfo] {
         // Use nettop for per-process network stats
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
         task.arguments = ["-P", "-L", "1", "-J", "bytes_in,bytes_out", "-x"]
-        
+
         let pipe = Pipe()
         task.standardOutput = pipe
         task.standardError = FileHandle.nullDevice
-        
+
         var nettopData: [(pid: Int32, name: String, bytesIn: UInt64, bytesOut: UInt64)] = []
-        
+
         do {
             try task.run()
             task.waitUntilExit()
-            
+
             let data = pipe.fileHandleForReading.readDataToEndOfFile()
             if let output = String(data: data, encoding: .utf8) {
                 nettopData = parseNettopOutput(output)
@@ -503,13 +516,13 @@ final class NetworkModule: NSObject, StatusModule {
         } catch {
             // nettop failed
         }
-        
+
         // Get running apps for icons and names
         let runningApps = NSWorkspace.shared.runningApplications
         var appPIDs = Set<Int32>()
         var appNames: [Int32: String] = [:]
         var appIcons: [Int32: NSImage] = [:]
-        
+
         for app in runningApps {
             guard let url = app.bundleURL else { continue }
             let name = url.deletingPathExtension().lastPathComponent
@@ -520,21 +533,21 @@ final class NetworkModule: NSObject, StatusModule {
                 appIcons[pid] = icon
             }
         }
-        
+
         var processes: [NetworkProcessInfo] = []
         let now = Date()
-        
+
         for (pid, name, bytesIn, bytesOut) in nettopData {
             // Get additional info
             let uid = getProcessUID(pid: pid)
             let user = getProcessUser(uid: uid)
             let ppid = getProcessPPID(pid: pid)
             let isApp = appPIDs.contains(pid)
-            
+
             // Calculate speeds from deltas
             var downloadSpeed: Double = 0
             var uploadSpeed: Double = 0
-            
+
             netIOLock.lock()
             if let prev = prevNetIO[pid] {
                 let elapsed = now.timeIntervalSince(prev.time)
@@ -545,7 +558,7 @@ final class NetworkModule: NSObject, StatusModule {
             }
             prevNetIO[pid] = (bytesIn, bytesOut, now)
             netIOLock.unlock()
-            
+
             // Include all processes regardless of activity
             processes.append(NetworkProcessInfo(
                 pid: pid,
@@ -558,39 +571,39 @@ final class NetworkModule: NSObject, StatusModule {
                 uploadSpeed: uploadSpeed
             ))
         }
-        
+
         processes.sort { ($0.downloadSpeed + $0.uploadSpeed) > ($1.downloadSpeed + $1.uploadSpeed) }
         return Array(processes.prefix(limit))
     }
-    
+
     private func parseNettopOutput(_ output: String) -> [(pid: Int32, name: String, bytesIn: UInt64, bytesOut: UInt64)] {
         var results: [(pid: Int32, name: String, bytesIn: UInt64, bytesOut: UInt64)] = []
         var seenPids = Set<Int32>()
-        
+
         for line in output.components(separatedBy: "\n").dropFirst() {
             let parts = line.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
             guard parts.count >= 3 else { continue }
-            
+
             // Parse process name (format: "AppName.123" where 123 is PID)
             let processInfo = parts[0]
             guard let dotIndex = processInfo.lastIndex(of: ".") else { continue }
-            
+
             let pidString = String(processInfo[processInfo.index(after: dotIndex)...])
             guard let pid = Int32(pidString) else { continue }
-            
+
             if seenPids.contains(pid) { continue }
             seenPids.insert(pid)
-            
+
             let name = String(processInfo[..<dotIndex])
             let bytesIn = UInt64(parts[1]) ?? 0
             let bytesOut = UInt64(parts[2]) ?? 0
-            
+
             results.append((pid, name, bytesIn, bytesOut))
         }
-        
+
         return results
     }
-    
+
     private func getProcessUID(pid: Int32) -> uid_t {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var proc = kinfo_proc()
@@ -600,7 +613,7 @@ final class NetworkModule: NSObject, StatusModule {
         }
         return 0
     }
-    
+
     private func getProcessPPID(pid: Int32) -> Int32 {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var proc = kinfo_proc()
@@ -610,7 +623,7 @@ final class NetworkModule: NSObject, StatusModule {
         }
         return 0
     }
-    
+
     private func getProcessPath(pid: Int32) -> String? {
         let maxPathSize = 4096
         var path = [CChar](repeating: 0, count: maxPathSize)
@@ -618,14 +631,14 @@ final class NetworkModule: NSObject, StatusModule {
         guard count > 0 else { return nil }
         return String(cString: path)
     }
-    
+
     private func getProcessUser(uid: uid_t) -> String {
         if let pw = getpwuid(uid) {
             return String(cString: pw.pointee.pw_name)
         }
         return "uid:\(uid)"
     }
-    
+
     private func formatSpeed(_ bytesPerSec: Double) -> String {
         if bytesPerSec >= 1_073_741_824 {
             return String(format: "%.1fG", bytesPerSec / 1_073_741_824)
@@ -642,18 +655,18 @@ final class NetworkModule: NSObject, StatusModule {
 // MARK: - NSTableViewDataSource & Delegate
 
 extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
-    
+
     func numberOfRows(in tableView: NSTableView) -> Int {
         return processQueue.sync { processes.count }
     }
-    
+
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         let process = processQueue.sync { processes[safe: row] }
         guard let process = process else { return nil }
-        
+
         let cell = NSTableCellView()
         let colId = tableColumn?.identifier.rawValue ?? ""
-        
+
         switch colId {
         case "name":
             if let icon = process.icon {
@@ -661,7 +674,7 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
                 iconView.image = icon
                 iconView.imageScaling = .scaleProportionallyDown
                 cell.addSubview(iconView)
-                
+
                 let label = NSTextField(labelWithString: process.name)
                 label.font = .systemFont(ofSize: 10)
                 label.lineBreakMode = .byTruncatingTail
@@ -680,7 +693,7 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
                 label.frame = NSRect(x: 4, y: 2, width: 142, height: 16)
                 cell.addSubview(label)
             }
-            
+
         case "pid":
             let label = NSTextField(labelWithString: "\(process.pid)")
             label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
@@ -688,7 +701,7 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
             label.alignment = .right
             label.frame = NSRect(x: 4, y: 2, width: 47, height: 16)
             cell.addSubview(label)
-            
+
         case "user":
             let label = NSTextField(labelWithString: process.user)
             label.font = .systemFont(ofSize: 10)
@@ -696,7 +709,7 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
             label.lineBreakMode = .byTruncatingTail
             label.frame = NSRect(x: 4, y: 2, width: 40, height: 16)
             cell.addSubview(label)
-            
+
         case "upload":
             let label = NSTextField(labelWithString: formatSpeed(process.uploadSpeed))
             label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
@@ -704,7 +717,7 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
             label.alignment = .right
             label.frame = NSRect(x: 4, y: 2, width: 57, height: 16)
             cell.addSubview(label)
-            
+
         case "download":
             let label = NSTextField(labelWithString: formatSpeed(process.downloadSpeed))
             label.font = .monospacedDigitSystemFont(ofSize: 10, weight: .regular)
@@ -712,11 +725,11 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
             label.alignment = .right
             label.frame = NSRect(x: 4, y: 2, width: 57, height: 16)
             cell.addSubview(label)
-            
+
         default:
             break
         }
-        
+
         return cell
     }
 }
@@ -737,22 +750,22 @@ private final class NetworkLineChartView: NSView {
     private var displayLink: CVDisplayLink?
     private let sampleInterval: TimeInterval = 2.0  // Match the 2-second sampling rate
     private var weakBox: WeakBox<NetworkLineChartView>?  // Keep box alive for callback
-    
+
     init(frame: NSRect, num: Int, color: NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
         self.color = color
         super.init(frame: frame)
         wantsLayer = true
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         stopAnimation()
     }
-    
+
     func addValue(_ value: Double) {
         // Shift all points left and add new value at the end
         for i in 0..<(points.count - 1) {
@@ -761,27 +774,27 @@ private final class NetworkLineChartView: NSView {
         points[points.count - 1] = value
         lastUpdateTime = Date()
     }
-    
+
     func reinit(_ num: Int) {
         points = Array(repeating: nil, count: max(num, 2))
         lastUpdateTime = Date()
         needsDisplay = true
     }
-    
+
     func setFlipY(_ value: Bool) {
         flipY = value
     }
-    
+
     func startAnimation() {
         guard displayLink == nil else { return }
-        
+
         var link: CVDisplayLink?
         CVDisplayLinkCreateWithActiveCGDisplays(&link)
         guard let link else { return }
 
         let box = WeakBox(self)
         weakBox = box
-        
+
         CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
             guard let userInfo = userInfo else { return kCVReturnSuccess }
             let box = Unmanaged<WeakBox<NetworkLineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
@@ -792,81 +805,81 @@ private final class NetworkLineChartView: NSView {
             }
             return kCVReturnSuccess
         }, Unmanaged.passUnretained(box).toOpaque())
-        
+
         CVDisplayLinkStart(link)
         displayLink = link
     }
-    
+
     func stopAnimation() {
         if let link = displayLink {
             CVDisplayLinkStop(link)
             displayLink = nil
         }
     }
-    
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        
+
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
-        
+
         // Find max value
         var maxValue: Double = 0
         for opt in points {
             if let p = opt, p > maxValue { maxValue = p }
         }
         if maxValue == 0 { maxValue = 1 }
-        
+
         let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let height = self.frame.height - offset
         let xRatio = self.frame.width / CGFloat(points.count - 1)
         let zero = flipY ? 0 : self.frame.height
-        
+
         // Calculate animation progress for smooth scrolling
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / sampleInterval, 1.0)
         let xOffset = progress * xRatio  // Smoothly scroll left
-        
+
         // Build line points with animation offset
         var linePoints: [CGPoint] = []
         for (i, v) in points.enumerated() {
             guard let v else { continue }
-            
+
             var y = (v / maxValue) * height
             if !flipY {
                 y = height - y
             }
-            
+
             // Apply smooth scroll offset: points move left continuously
             let x = CGFloat(i) * xRatio - xOffset
             linePoints.append(CGPoint(x: x, y: y))
         }
-        
+
         guard linePoints.count > 1 else { return }
-        
+
         // Draw smooth curve using quadratic Bezier
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
-        
+
         for i in 1..<linePoints.count {
             let prev = linePoints[i - 1]
             let curr = linePoints[i]
-            
+
             // Control point at midpoint creates smooth curve
             let midX = (prev.x + curr.x) / 2
             linePath.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
         }
-        
+
         linePath.lineWidth = offset
         color.setStroke()
         linePath.stroke()
-        
+
         // Draw filled area with gradient
         let areaPath = linePath.copy() as! NSBezierPath
         areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: zero))
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
         areaPath.close()
-        
+
         let gradient = NSGradient(colors: [
             color.withAlphaComponent(0.3),
             color.withAlphaComponent(0.5)
@@ -879,81 +892,81 @@ private final class NetworkLineChartView: NSView {
 final class NetworkChartView: NSView {
     private let uploadChart: NetworkLineChartView
     private let downloadChart: NetworkLineChartView
-    
+
     private let downloadColor = NSColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 1.0)  // Purple for download
     private let uploadColor = NSColor(red: 0.75, green: 0.35, blue: 0.35, alpha: 1.0)  // Red for upload
     private let maxHistoryCount = 60
-    
+
     private var currentUploadSpeed: Double = 0
     private var currentDownloadSpeed: Double = 0
-    
+
     override init(frame frameRect: NSRect) {
         let safeHeight = max(frameRect.height, 2)
         let topFrame = NSRect(x: 0, y: safeHeight / 2, width: frameRect.width, height: safeHeight / 2)
         let bottomFrame = NSRect(x: 0, y: 0, width: frameRect.width, height: safeHeight / 2)
-        
+
         // Upload chart is on top (topFrame), download chart is on bottom (bottomFrame)
         self.uploadChart = NetworkLineChartView(frame: topFrame, num: maxHistoryCount, color: uploadColor)
         self.downloadChart = NetworkLineChartView(frame: bottomFrame, num: maxHistoryCount, color: downloadColor)
-        
+
         super.init(frame: frameRect)
-        
+
         wantsLayer = true
         layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         layer?.cornerRadius = 4
-        
+
         // Upload chart grows down from top (flipY = true)
         self.uploadChart.setFlipY(true)
         // Download chart grows up from bottom (flipY = false)
         self.downloadChart.setFlipY(false)
-        
+
         addSubview(self.uploadChart)
         addSubview(self.downloadChart)
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         stopAnimation()
     }
-    
+
     func startAnimation() {
         uploadChart.startAnimation()
         downloadChart.startAnimation()
     }
-    
+
     func stopAnimation() {
         uploadChart.stopAnimation()
         downloadChart.stopAnimation()
     }
-    
+
     func setDownloadHistory(_ download: [Double], uploadHistory upload: [Double]) {
         // Store current speeds for display
         currentDownloadSpeed = download.last ?? 0
         currentUploadSpeed = upload.last ?? 0
-        
+
         // Clear and reinitialize charts
         self.uploadChart.reinit(maxHistoryCount)
         self.downloadChart.reinit(maxHistoryCount)
-        
+
         // Add all values
         for i in 0..<min(download.count, upload.count) {
             self.downloadChart.addValue(download[i])
             self.uploadChart.addValue(upload[i])
         }
-        
+
         needsDisplay = true
     }
-    
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        
+
         // Draw speed labels
         let padding: CGFloat = 6
         let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
-        
+
         // Upload label (top right)
         let uploadLabel = "↑ \(formatSpeed(currentUploadSpeed))"
         let uploadAttrs: [NSAttributedString.Key: Any] = [
@@ -963,7 +976,7 @@ final class NetworkChartView: NSView {
         let uploadStr = NSAttributedString(string: uploadLabel, attributes: uploadAttrs)
         let uploadSize = uploadStr.size()
         uploadStr.draw(at: CGPoint(x: bounds.width - padding - uploadSize.width, y: bounds.height - padding - uploadSize.height))
-        
+
         // Download label (bottom right)
         let downloadLabel = "↓ \(formatSpeed(currentDownloadSpeed))"
         let downloadAttrs: [NSAttributedString.Key: Any] = [
@@ -973,7 +986,7 @@ final class NetworkChartView: NSView {
         let downloadStr = NSAttributedString(string: downloadLabel, attributes: downloadAttrs)
         let downloadSize = downloadStr.size()
         downloadStr.draw(at: CGPoint(x: bounds.width - padding - downloadSize.width, y: padding))
-        
+
         // Draw center separator line
         let centerLineY = bounds.height / 2
         let linePath = NSBezierPath()
@@ -983,19 +996,19 @@ final class NetworkChartView: NSView {
         NSColor.separatorColor.withAlphaComponent(0.5).setStroke()
         linePath.stroke()
     }
-    
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
-        
+
         let safeHeight = max(newSize.height, 2)
         let halfHeight = safeHeight / 2
         let topFrame = NSRect(x: 0, y: halfHeight, width: newSize.width, height: halfHeight)
         let bottomFrame = NSRect(x: 0, y: 0, width: newSize.width, height: halfHeight)
-        
+
         uploadChart.frame = topFrame
         downloadChart.frame = bottomFrame
     }
-    
+
     private func formatSpeed(_ bytesPerSec: Double) -> String {
         if bytesPerSec >= 1_073_741_824 {
             return String(format: "%.1fG", bytesPerSec / 1_073_741_824)
