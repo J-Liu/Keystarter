@@ -87,6 +87,7 @@ final class LocalizationManager {
             "settings.dockIcon": "Dock Icon:",
             "settings.dockIcon.checkbox": "Show Dock icon",
             "settings.monitor.modules": "Status Bar Modules",
+            "settings.monitor.enable": "Enable Monitor",
             "settings.monitor.log.enable": "Enable Monitor Log",
             "settings.cpu.enabled": "CPU Usage",
             "settings.memory.enabled": "Memory Usage",
@@ -126,6 +127,7 @@ final class LocalizationManager {
             "settings.update.checkNow": "Check Now",
 
             // Clipboard Tab
+            "settings.clipboard.enable": "Enable Clipboard History",
             "settings.clipboard.hotkey": "Hotkey:",
             "settings.clipboard.log.enable": "Enable Clipboard Log",
             "settings.clipboard.maxCount": "Max Count:",
@@ -286,6 +288,7 @@ final class LocalizationManager {
             "settings.dockIcon": "Dock 图标：",
             "settings.dockIcon.checkbox": "显示 Dock 图标",
             "settings.monitor.modules": "状态栏模块",
+            "settings.monitor.enable": "启用监控",
             "settings.monitor.log.enable": "启用监控日志",
             "settings.cpu.enabled": "CPU 使用率",
             "settings.memory.enabled": "内存使用",
@@ -325,6 +328,7 @@ final class LocalizationManager {
             "settings.update.checkNow": "立即检查",
 
             // Clipboard Tab
+            "settings.clipboard.enable": "启用剪贴板历史",
             "settings.clipboard.hotkey": "快捷键：",
             "settings.clipboard.log.enable": "启用剪贴板日志",
             "settings.clipboard.maxCount": "最大条数：",
@@ -501,6 +505,7 @@ final class LocalizationManager {
             "settings.update.checkNow": "立即檢查",
 
             // Clipboard Tab
+            "settings.clipboard.enable": "啟用剪貼簿歷史",
             "settings.clipboard.hotkey": "快速鍵：",
             "settings.clipboard.log.enable": "啟用剪貼簿日誌",
             "settings.clipboard.maxCount": "最大條數：",

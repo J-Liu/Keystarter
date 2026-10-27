@@ -25,6 +25,14 @@ final class StatusItemController: NSObject {
         log("StatusItemController started")
         loadEnabledModules()
         log("Loaded \(modules.count) modules: \(modules.map { $0.identifier }.joined(separator: ", "))")
+        
+        // Check if monitor is enabled
+        let monitorEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        guard monitorEnabled else {
+            log("Monitor is disabled")
+            return
+        }
+        
         setupStatusItem()
         initialRefresh()
         startRefreshTimer()
@@ -409,6 +417,28 @@ final class StatusItemController: NSObject {
         modules.removeAll { $0.identifier == identifier }
         removeModuleView(identifier)
         log("Module disabled: \(identifier)")
+    }
+
+    // MARK: - Start/Stop Monitoring
+
+    func startMonitoring() {
+        // Recreate status items if they don't exist
+        if statusItems.isEmpty {
+            setupStatusItem()
+        }
+        startRefreshTimer()
+        initialRefresh()
+    }
+
+    func stopMonitoring() {
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        
+        // Remove all status items from the system bar
+        for (_, item) in statusItems {
+            NSStatusBar.system.removeStatusItem(item)
+        }
+        statusItems.removeAll()
     }
 
     // MARK: - Refresh

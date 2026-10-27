@@ -57,8 +57,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Load Alfred workflows
         AlfredWorkflowManager.shared.loadAll()
 
-        // Start clipboard manager (has its own database)
-        ClipboardManager.shared.start()
+        // Start clipboard manager if enabled (default true)
+        let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        if clipboardEnabled {
+            ClipboardManager.shared.start()
+        }
+
+        // Start monitor if enabled (default true)
+        let monitorEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        if !monitorEnabled {
+            StatusItemController.shared.stopMonitoring()
+        }
 
         // Start update manager
         UpdateManager.shared.startUpdater()
@@ -77,7 +86,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         HotkeyManager.shared.register(keyCode: clipboardKeyCode, modifiers: clipboardModifiers) { [weak self] in
-            self?.clipboardPanel?.toggle()
+            let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+            if clipboardEnabled {
+                self?.clipboardPanel?.toggle()
+            }
         }
 
         // Show setup wizard on first launch
@@ -119,7 +131,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         clipboardKeyCode = keyCode
         clipboardModifiers = modifiers
         HotkeyManager.shared.register(keyCode: clipboardKeyCode, modifiers: clipboardModifiers) { [weak self] in
-            self?.clipboardPanel?.toggle()
+            let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+            if clipboardEnabled {
+                self?.clipboardPanel?.toggle()
+            }
         }
         UserDefaults.standard.set(Int(keyCode), forKey: "clipboard.hotkey.keyCode")
         UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "clipboard.hotkey.modifiers")
@@ -169,6 +184,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(openLauncherFromMenu),
             keyEquivalent: " "
         )
+
+        // Monitor toggle
+        let monitorEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        let monitorItem = NSMenuItem(
+            title: "Monitor",
+            action: #selector(toggleMonitorFromMenu),
+            keyEquivalent: "m"
+        )
+        monitorItem.target = self
+        monitorItem.state = monitorEnabled ? .on : .off
+        appMenu.addItem(monitorItem)
+
+        // Clipboard toggle
+        let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        let clipboardItem = NSMenuItem(
+            title: "Clipboard",
+            action: #selector(toggleClipboardFromMenu),
+            keyEquivalent: "c"
+        )
+        clipboardItem.target = self
+        clipboardItem.state = clipboardEnabled ? .on : .off
+        appMenu.addItem(clipboardItem)
+
+        appMenu.addItem(NSMenuItem.separator())
         appMenu.addItem(
             withTitle: L("menu.checkUpdates"),
             action: #selector(checkForUpdates),
@@ -269,6 +308,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func closeWindow() {
         NSApp.keyWindow?.close()
+    }
+
+    @objc private func toggleMonitorFromMenu(_ sender: NSMenuItem) {
+        let currentEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
+        let newEnabled = !currentEnabled
+        UserDefaults.standard.set(newEnabled, forKey: "status.monitor.enabled")
+        sender.state = newEnabled ? .on : .off
+        if newEnabled {
+            StatusItemController.shared.startMonitoring()
+        } else {
+            StatusItemController.shared.stopMonitoring()
+        }
+    }
+
+    @objc private func toggleClipboardFromMenu(_ sender: NSMenuItem) {
+        let currentEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
+        let newEnabled = !currentEnabled
+        UserDefaults.standard.set(newEnabled, forKey: "clipboard.enabled")
+        sender.state = newEnabled ? .on : .off
+        if newEnabled {
+            ClipboardManager.shared.start()
+        } else {
+            ClipboardManager.shared.stop()
+        }
     }
 
     private func setupStatusBar() {
