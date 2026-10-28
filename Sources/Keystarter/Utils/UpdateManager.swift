@@ -74,6 +74,12 @@ final class UpdateManager {
     }
 
     func checkForUpdates() {
+        // Silent check: only shows dialog if update is found
+        updaterController.updater.checkForUpdatesInBackground()
+    }
+
+    /// Manual check with UI (from menu "Check for Updates...")
+    func checkForUpdatesManually() {
         updaterController.checkForUpdates(nil)
     }
 
