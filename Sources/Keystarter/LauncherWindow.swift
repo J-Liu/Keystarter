@@ -1095,6 +1095,23 @@ final class LauncherWindow: NSWindow {
             // Group by frequency (most used)
             let runningPaths = getRunningAppPaths()
             let sorted = displayApps.sorted { a, b in
+                // Check if either has manualScore (manual override takes priority)
+                let aManual = LaunchHistory.shared.manualScore(for: a.path)
+                let bManual = LaunchHistory.shared.manualScore(for: b.path)
+
+                // If both have manualScore, sort by that
+                if aManual != nil && bManual != nil {
+                    return aManual! > bManual!
+                }
+                // If only one has manualScore, it controls the order
+                if aManual != nil || bManual != nil {
+                    // Higher manualScore wins; if one is nil, treat as calculated
+                    let aScore = aManual ?? LaunchHistory.shared.effectiveScore(for: a.path)
+                    let bScore = bManual ?? LaunchHistory.shared.effectiveScore(for: b.path)
+                    return aScore > bScore
+                }
+
+                // Neither has manualScore - normal logic
                 // Newly installed apps first
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
@@ -1103,9 +1120,10 @@ final class LauncherWindow: NSWindow {
                 let aRunning = runningPaths.contains(a.path)
                 let bRunning = runningPaths.contains(b.path)
                 if aRunning != bRunning { return aRunning }
-                let aFreq = LaunchHistory.shared.count(for: a.path)
-                let bFreq = LaunchHistory.shared.count(for: b.path)
-                if aFreq != bFreq { return aFreq > bFreq }
+                // Calculated score
+                let aScore = LaunchHistory.shared.effectiveScore(for: a.path)
+                let bScore = LaunchHistory.shared.effectiveScore(for: b.path)
+                if aScore != bScore { return aScore > bScore }
                 let aDate = LaunchHistory.shared.lastLaunched(for: a.path) ?? .distantPast
                 let bDate = LaunchHistory.shared.lastLaunched(for: b.path) ?? .distantPast
                 if aDate != bDate { return aDate > bDate }

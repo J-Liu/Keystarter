@@ -53,6 +53,14 @@ final class LaunchHistory {
         }
     }
 
+    /// Reload history from file (call after manually editing the plist).
+    func reload() {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.removeAll()
+        load()
+    }
+
     private func save() {
         var dict: [String: Any] = [:]
         for (key, entry) in entries {
