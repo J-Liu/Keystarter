@@ -11,9 +11,9 @@
     <key>CFBundleDisplayName</key>
     <string>Keystarter</string>
     <key>CFBundleVersion</key>
-    <string>8</string>
+    <string>9</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.7</string>
+    <string>0.1.8</string>
     <key>CFBundleIconName</key>
     <string>Keystarter</string>
     <key>CFBundleIconFile</key>
