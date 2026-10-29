@@ -60,7 +60,7 @@ fi
 if [ -d "$SPARKLE_FRAMEWORK" ]; then
     echo "==> Copying Sparkle.framework..."
     mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
-    cp -R "$SPARKLE_FRAMEWORK" "${APP_BUNDLE}/Contents/Frameworks/"
+    cp -a "$SPARKLE_FRAMEWORK" "${APP_BUNDLE}/Contents/Frameworks/"
 fi
 
 # Set LSUIElement to true (hide from Dock by default)

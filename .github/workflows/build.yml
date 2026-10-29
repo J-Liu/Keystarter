@@ -63,7 +63,7 @@ jobs:
       if: startsWith(github.ref, 'refs/tags/')
       run: |
         VERSION="${GITHUB_REF_NAME#v}"
-        zip -r "Keystarter-${VERSION}.zip" Keystarter.app
+        ditto -c -k --keepParent Keystarter.app "Keystarter-${VERSION}.zip"
 
     - name: Sign update
       if: startsWith(github.ref, 'refs/tags/')
