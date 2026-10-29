@@ -8,21 +8,41 @@ final class HiddenAppsManager {
 
     static let shared = HiddenAppsManager()
 
-    private let storageKey = "launcher.hiddenApps"
+    private let storagePath: String
     private var hiddenApps: Set<String> = []
 
     private init() {
+        let home = NSHomeDirectory()
+        let dir = home + "/Library/Application Support/Keystarter"
+        try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        storagePath = dir + "/hidden_apps.plist"
+        
+        // Migrate from UserDefaults (run once, then clear old data)
+        migrateFromUserDefaults()
         load()
     }
 
+    private func migrateFromUserDefaults() {
+        let oldKey = "launcher.hiddenApps"
+        if let oldData = UserDefaults.standard.array(forKey: oldKey) as? [String] {
+            // Save to new location
+            let data = try? PropertyListSerialization.data(fromPropertyList: oldData, format: .xml, options: 0)
+            try? data?.write(to: URL(fileURLWithPath: storagePath))
+            // Clear old UserDefaults
+            UserDefaults.standard.removeObject(forKey: oldKey)
+        }
+    }
+
     private func load() {
-        if let saved = UserDefaults.standard.array(forKey: storageKey) as? [String] {
+        guard let data = FileManager.default.contents(atPath: storagePath) else { return }
+        if let saved = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String] {
             hiddenApps = Set(saved)
         }
     }
 
     private func save() {
-        UserDefaults.standard.set(Array(hiddenApps), forKey: storageKey)
+        let data = try? PropertyListSerialization.data(fromPropertyList: Array(hiddenApps).sorted(), format: .xml, options: 0)
+        try? data?.write(to: URL(fileURLWithPath: storagePath))
     }
 
     /// Check if an app is hidden.

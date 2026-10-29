@@ -155,13 +155,13 @@ final class LauncherIndex {
 
         for entry in currentEntries {
             guard let score = match(queryChars: queryChars, aliases: entry.aliasTexts) else { continue }
-            let freq = LaunchHistory.shared.count(for: entry.path)
+            let historyScore = LaunchHistory.shared.effectiveScore(for: entry.path)
             var entryWithScore = entry
-            entryWithScore.matchScore = score + freq // Store combined score
-            scored.append((entryWithScore, score, freq))
+            entryWithScore.matchScore = score + historyScore // Store combined score
+            scored.append((entryWithScore, score, historyScore))
         }
 
-        // Sort by combined score: match score + frequency bonus
+        // Sort by combined score: match score + history score
         let results = scored
             .sorted {
                 let score0 = $0.score + $0.freq
