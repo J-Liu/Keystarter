@@ -141,6 +141,9 @@ final class LocalizationManager {
             "settings.about.copyright": "© 2026 Jia Liu. All rights reserved.",
 
             // Advanced Tab
+            "settings.power.title": "Power Management",
+            "settings.power.preventDisplaySleep": "Prevent display sleep",
+            "settings.power.preventSystemSleep": "Prevent system sleep",
             "settings.advanced.hiddenApps": "Hidden Apps:",
             "settings.advanced.hiddenApps.empty": "No hidden apps",
             "settings.advanced.hiddenApps.add": "Add...",
@@ -341,6 +344,11 @@ final class LocalizationManager {
             "settings.about.version": "版本 %@",
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有权利。",
 
+            // Advanced Tab
+            "settings.power.title": "电源管理",
+            "settings.power.preventDisplaySleep": "保持屏幕常亮",
+            "settings.power.preventSystemSleep": "保持系统唤醒",
+
             // Launcher Log
             "settings.launcher.log.enable": "启用启动器日志",
 
@@ -519,6 +527,9 @@ final class LocalizationManager {
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有權利。",
 
             // Advanced Tab
+            "settings.power.title": "電源管理",
+            "settings.power.preventDisplaySleep": "保持螢幕常亮",
+            "settings.power.preventSystemSleep": "保持系統喚醒",
             "settings.advanced.hiddenApps": "隱藏的應用：",
             "settings.advanced.hiddenApps.empty": "沒有隱藏的應用",
             "settings.advanced.hiddenApps.add": "新增...",

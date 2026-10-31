@@ -72,6 +72,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Start update manager
         UpdateManager.shared.startUpdater()
 
+        // Load power management settings
+        PowerManager.shared.loadSettings()
+
         // Setup clipboard panel and hotkey
         clipboardPanel = ClipboardPanel()
         

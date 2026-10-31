@@ -430,6 +430,28 @@ final class SettingsWindow: NSWindow {
     private func createAdvancedTab() -> NSView {
         let stack = makeVerticalStack()
 
+        // Power management section
+        let powerHeader = NSTextField(labelWithString: L("settings.power.title"))
+        powerHeader.font = NSFont.boldSystemFont(ofSize: NSFont.systemFontSize)
+        stack.addArrangedSubview(powerHeader)
+
+        // Prevent display sleep
+        let preventDisplay = UserDefaults.standard.bool(forKey: "power.preventDisplaySleep")
+        let displayCheckbox = NSButton(checkboxWithTitle: L("settings.power.preventDisplaySleep"), target: self, action: #selector(preventDisplaySleepChanged(_:)))
+        displayCheckbox.state = preventDisplay ? .on : .off
+        stack.addArrangedSubview(displayCheckbox)
+
+        // Prevent system sleep
+        let preventSystem = UserDefaults.standard.bool(forKey: "power.preventSystemSleep")
+        let systemCheckbox = NSButton(checkboxWithTitle: L("settings.power.preventSystemSleep"), target: self, action: #selector(preventSystemSleepChanged(_:)))
+        systemCheckbox.state = preventSystem ? .on : .off
+        stack.addArrangedSubview(systemCheckbox)
+
+        // Spacer
+        let spacer = NSView()
+        spacer.heightAnchor.constraint(equalToConstant: 16).isActive = true
+        stack.addArrangedSubview(spacer)
+
         // File content search - enabled by default
         let contentEnabled = UserDefaults.standard.object(forKey: "index.fileContent") as? Bool ?? true
         let contentCheckbox = NSButton(checkboxWithTitle: L("settings.index.content.enable"), target: self, action: #selector(contentIndexChanged(_:)))
@@ -497,6 +519,18 @@ final class SettingsWindow: NSWindow {
 
     @objc private func clipboardLogChanged(_ sender: NSButton) {
         LogSettings.shared.clipboardLogEnabled = sender.state == .on
+    }
+
+    @objc private func preventDisplaySleepChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "power.preventDisplaySleep")
+        PowerManager.shared.preventDisplaySleep = enabled
+    }
+
+    @objc private func preventSystemSleepChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "power.preventSystemSleep")
+        PowerManager.shared.preventSystemSleep = enabled
     }
 
     @objc private func addIgnoredApp() {
