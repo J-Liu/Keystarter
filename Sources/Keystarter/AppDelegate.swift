@@ -71,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Start update manager
         UpdateManager.shared.startUpdater()
+        UpdateManager.shared.checkForUpdatesOnLaunch()
 
         // Load power management settings
         PowerManager.shared.loadSettings()

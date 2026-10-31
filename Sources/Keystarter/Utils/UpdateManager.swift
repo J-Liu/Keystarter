@@ -9,7 +9,7 @@ final class UpdateManager {
 
     static let shared = UpdateManager()
 
-    private let updaterController: SPUStandardUpdaterController
+    private var updaterController: SPUStandardUpdaterController!
 
     enum CheckFrequency: String, CaseIterable {
         case everyLaunch = "everyLaunch"
@@ -27,16 +27,6 @@ final class UpdateManager {
             case .never: return L("settings.update.frequency.never")
             }
         }
-
-        var seconds: TimeInterval? {
-            switch self {
-            case .everyLaunch: return 0
-            case .daily: return 86400
-            case .weekly: return 604800
-            case .monthly: return 2592000
-            case .never: return nil
-            }
-        }
     }
 
     private init() {
@@ -45,6 +35,9 @@ final class UpdateManager {
             updaterDelegate: nil,
             userDriverDelegate: nil
         )
+
+        // Disable Sparkle's built-in automatic check - we handle it ourselves
+        updaterController.updater.automaticallyChecksForUpdates = false
     }
 
     var checkFrequency: CheckFrequency {
@@ -54,31 +47,63 @@ final class UpdateManager {
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "update.checkFrequency")
-            updateCheckInterval()
         }
     }
 
-    private func updateCheckInterval() {
-        switch checkFrequency {
-        case .everyLaunch:
-            updaterController.updater.automaticallyChecksForUpdates = true
-            updaterController.updater.updateCheckInterval = 0
-        case .daily, .weekly, .monthly:
-            updaterController.updater.automaticallyChecksForUpdates = true
-            if let seconds = checkFrequency.seconds {
-                updaterController.updater.updateCheckInterval = seconds
-            }
-        case .never:
-            updaterController.updater.automaticallyChecksForUpdates = false
+    private var lastUpdateCheck: String {
+        get { UserDefaults.standard.string(forKey: "update.lastCheck") ?? "" }
+        set { UserDefaults.standard.set(newValue, forKey: "update.lastCheck") }
+    }
+
+    private func recordUpdateCheck() {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        lastUpdateCheck = formatter.string(from: Date())
+    }
+
+    func shouldCheckForUpdates() -> Bool {
+        let frequency = checkFrequency
+        if frequency == .never { return false }
+        if frequency == .everyLaunch { return true }
+
+        let lastCheck = lastUpdateCheck
+        guard !lastCheck.isEmpty else { return true }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        guard let lastDate = formatter.date(from: lastCheck) else { return true }
+
+        let now = Date()
+        let interval = now.timeIntervalSince(lastDate)
+        let day: TimeInterval = 86400
+
+        switch frequency {
+        case .daily: return interval >= day
+        case .weekly: return interval >= day * 7
+        case .monthly: return interval >= day * 30
+        default: return true
         }
     }
 
-    /// Manual check with UI - shows progress and result dialog
+    /// Called at app launch to check for updates if needed
+    func checkForUpdatesOnLaunch() {
+        guard shouldCheckForUpdates() else { return }
+
+        // Delay to let the app settle
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            // Use background check - only shows UI if update is found
+            self?.updaterController.updater.checkForUpdatesInBackground()
+            self?.recordUpdateCheck()
+        }
+    }
+
+    /// Manual check with UI (from menu "Check for Updates...")
     func checkForUpdates() {
         updaterController.checkForUpdates(nil)
+        recordUpdateCheck()
     }
 
     func startUpdater() {
-        updateCheckInterval()
+        // Updater already started in init
     }
 }
