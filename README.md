@@ -17,6 +17,8 @@ I use it every day. It combines three things I need in the menu bar: an app laun
 - **Clipboard history** — `Cmd+Shift+V` opens a grouped panel at the cursor, select to paste
 - **Dictionary lookup** — `dict <word>` queries the macOS system dictionary directly in the launcher
 - **Translation** — `tr <text>` translates without opening another app
+- **Calculator** — Math expressions with functions: `sin(pi/2)`, `ln(e)`, `sqrt(16)`, etc.
+- **Power management** — Keep display awake or prevent system sleep (configurable in Settings → Advanced)
 - **Local-first** — everything runs on your machine, no network required for core features
 - **No AI** — deterministic operations stay deterministic
 
@@ -72,8 +74,9 @@ Requires Xcode command line tools and macOS 13+.
 - [x] Clipboard history
 - [x] Status bar monitor (CPU/GPU/Memory/Disk/Network/Sensors)
 - [x] File search via Spotlight
+- [x] Auto-update via Sparkle (silent background check, prompts only when update found)
+- [x] Power management (prevent sleep)
 - [ ] Alfred workflow compatibility (implemented, untested)
-- [x] Auto-update via Sparkle
 
 ## License
 
