@@ -182,4 +182,38 @@ final class LaunchHistory {
         }
         return removed
     }
+
+    /// Normalize scores when they grow too large.
+    /// If max count exceeds threshold, divide all counts by a factor.
+    /// This preserves relative ordering while preventing overflow.
+    func normalizeScores() {
+        lock.lock()
+        defer { lock.unlock() }
+
+        // Threshold: 100,000 launches (score would be ~1,000,000)
+        let threshold = 100000
+
+        // Find max count (excluding manual scores)
+        let maxCount = entries.values
+            .filter { $0.manualScore == nil }
+            .map { $0.count }
+            .max() ?? 0
+
+        guard maxCount > threshold else { return }
+
+        // Calculate factor: bring max down to ~10% of threshold
+        let targetMax = threshold / 10
+        let factor = max(2, maxCount / targetMax)
+
+        // Normalize all counts
+        for (key, var entry) in entries {
+            // Don't modify entries with manual scores
+            if entry.manualScore == nil {
+                entry.count = max(1, entry.count / factor)
+                entries[key] = entry
+            }
+        }
+
+        save()
+    }
 }

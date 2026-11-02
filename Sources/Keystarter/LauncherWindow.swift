@@ -571,6 +571,10 @@ final class LauncherWindow: NSWindow {
         orderOut(nil)
         // Restore input source immediately after hiding
         restoreInputSource()
+        // Normalize scores in background (prevents overflow, preserves ordering)
+        DispatchQueue.global(qos: .utility).async {
+            LaunchHistory.shared.normalizeScores()
+        }
         // Clear the flag after a short delay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.isHandlingDockClick = false
@@ -1009,6 +1013,7 @@ final class LauncherWindow: NSWindow {
         // 3. Async: record history + launch app
         DispatchQueue.global(qos: .userInitiated).async {
             LaunchHistory.shared.record(identifier: item.path)
+            LaunchHistory.shared.normalizeScores()
             DispatchQueue.main.async {
                 item.execute()
             }
@@ -1032,6 +1037,7 @@ final class LauncherWindow: NSWindow {
         // 3. Async: record history + launch app
         DispatchQueue.global(qos: .userInitiated).async {
             LaunchHistory.shared.record(identifier: item.path)
+            LaunchHistory.shared.normalizeScores()
             DispatchQueue.main.async {
                 item.execute()
             }
