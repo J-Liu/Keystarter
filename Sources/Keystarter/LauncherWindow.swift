@@ -4,6 +4,11 @@
 import AppKit
 import Carbon
 
+/// A flipped NSView where Y=0 is at the top (for scroll views to start at top)
+private class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 /// A borderless, centered, floating window that hosts the launcher UI.
 /// Hides automatically when it loses focus.
 final class LauncherWindow: NSWindow {
@@ -14,7 +19,7 @@ final class LauncherWindow: NSWindow {
     private var scrollView: NSScrollView!
     private var previewScrollView: NSScrollView!
     private var previewTextView: NSTextView!
-    private var gridView: NSView!
+    private var gridView: FlippedView!
     private var gridScrollView: NSScrollView!
     private var isSearchMode = false
 
@@ -300,24 +305,39 @@ final class LauncherWindow: NSWindow {
         // Load appearance settings
         AppearanceSettings.load()
 
-        // Container view with system default rounded corners and shadow
+        // Container as subview with rounded corners (NSWindowStyles pattern)
         container = NSVisualEffectView(frame: contentView!.bounds)
+        container.translatesAutoresizingMaskIntoConstraints = false
         container.material = AppearanceSettings.material.nsMaterial
         container.blendingMode = .behindWindow
         container.state = .active
         container.wantsLayer = true
-        container.layer?.opacity = Float(AppearanceSettings.opacity)
-        container.autoresizingMask = [.width, .height]
-        contentView = container
+        container.layer?.cornerRadius = AppearanceSettings.cornerRadius
+        container.alphaValue = AppearanceSettings.opacity
+        
+        // Add as subview (not replacing contentView) - allows window shadow to work
+        contentView?.addSubview(container)
+        
+        // Pin to edges with Auto Layout
+        NSLayoutConstraint.activate([
+            container.leadingAnchor.constraint(equalTo: contentView!.leadingAnchor),
+            container.trailingAnchor.constraint(equalTo: contentView!.trailingAnchor),
+            container.topAnchor.constraint(equalTo: contentView!.topAnchor),
+            container.bottomAnchor.constraint(equalTo: contentView!.bottomAnchor)
+        ])
+        
+        // Use window frame dimensions for initial layout
+        let viewWidth = frame.width
+        let viewHeight = frame.height
 
         // Search field
         searchField = NSSearchField(frame: NSRect(
             x: 16,
-            y: container.bounds.height - 56,
-            width: container.bounds.width - 64,
+            y: viewHeight - 56,
+            width: viewWidth - 64,
             height: 40
         ))
-        searchField.autoresizingMask = [.width, .minYMargin]
+        searchField.autoresizingMask = [.maxYMargin]  // Only keep top margin, fixed width
         searchField.font = .systemFont(ofSize: 20)
         searchField.focusRingType = .none
         searchField.delegate = self
@@ -333,8 +353,8 @@ final class LauncherWindow: NSWindow {
 
         // Settings button (gear icon)
         let settingsButton = NSButton(frame: NSRect(
-            x: container.bounds.width - 48,
-            y: container.bounds.height - 52,
+            x: viewWidth - 48,
+            y: viewHeight - 52,
             width: 32,
             height: 32
         ))
@@ -342,24 +362,24 @@ final class LauncherWindow: NSWindow {
         settingsButton.bezelStyle = .regularSquare
         settingsButton.isBordered = false
         settingsButton.alphaValue = 0.5
-        settingsButton.autoresizingMask = [.minXMargin, .minYMargin]
+        settingsButton.autoresizingMask = [.minXMargin, .maxYMargin]
         settingsButton.target = self
         settingsButton.action = #selector(openSettings)
         settingsButton.toolTip = "Settings"
         container.addSubview(settingsButton)
 
         // Grid view (default view)
-        setupGridView(container: container)
+        setupGridView(container: container, viewWidth: viewWidth, viewHeight: viewHeight)
 
         // List view (search results)
-        setupListView(container: container)
+        setupListView(container: container, viewWidth: viewWidth, viewHeight: viewHeight)
 
         // Preview panel (right side)
         previewScrollView = NSScrollView(frame: NSRect(
             x: 500,
             y: 16,
-            width: container.bounds.width - 516,
-            height: container.bounds.height - 80
+            width: viewWidth - 516,
+            height: viewHeight - 80
         ))
         previewScrollView.autoresizingMask = [.width, .height]
         previewScrollView.hasVerticalScroller = true
@@ -382,29 +402,29 @@ final class LauncherWindow: NSWindow {
         container.addSubview(previewScrollView)
     }
 
-    private func setupGridView(container: NSView) {
+    private func setupGridView(container: NSView, viewWidth: CGFloat, viewHeight: CGFloat) {
         gridScrollView = NSScrollView(frame: NSRect(
             x: 16,
             y: 16,
-            width: container.bounds.width - 32,
-            height: container.bounds.height - 80
+            width: viewWidth - 32,
+            height: viewHeight - 80
         ))
         gridScrollView.autoresizingMask = [.width, .height]
         gridScrollView.hasVerticalScroller = true
         gridScrollView.drawsBackground = false
         gridScrollView.borderType = .noBorder
 
-        gridView = NSView(frame: gridScrollView.bounds)
+        gridView = FlippedView(frame: gridScrollView.bounds)
         gridScrollView.documentView = gridView
         container.addSubview(gridScrollView)
     }
 
-    private func setupListView(container: NSView) {
+    private func setupListView(container: NSView, viewWidth: CGFloat, viewHeight: CGFloat) {
         scrollView = NSScrollView(frame: NSRect(
             x: 16,
             y: 16,
-            width: container.bounds.width - 320,
-            height: container.bounds.height - 80
+            width: viewWidth - 320,
+            height: viewHeight - 80
         ))
         scrollView.autoresizingMask = [.maxXMargin, .height]
         scrollView.hasVerticalScroller = true
@@ -424,7 +444,7 @@ final class LauncherWindow: NSWindow {
         tableView.doubleAction = #selector(tableDoubleClicked)
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
-        column.width = scrollView.bounds.width
+        column.width = viewWidth - 320
         tableView.addTableColumn(column)
 
         scrollView.documentView = tableView
@@ -544,11 +564,6 @@ final class LauncherWindow: NSWindow {
         autocompleteSuggestions = []
         historyIndex = -1
         currentInput = ""
-
-        // Scroll to top
-        if gridView.bounds.height > gridScrollView.bounds.height {
-            gridScrollView.contentView.scroll(to: NSPoint(x: 0, y: gridView.bounds.height - gridScrollView.bounds.height))
-        }
 
         // Center on the screen with mouse cursor (multi-monitor support)
         centerOnMouseScreen()
@@ -1160,41 +1175,42 @@ final class LauncherWindow: NSWindow {
         let contentHeight = max(gridScrollView.bounds.height, totalHeight)
         gridView.frame = NSRect(x: 0, y: 0, width: gridScrollView.bounds.width, height: contentHeight)
 
-        // Start placing items from top
-        var y: CGFloat = contentHeight - 10
+        // Start placing items from top (y=0 with flipped coordinates)
+        var y: CGFloat = 10
         var x: CGFloat = 10
 
         for (groupName, apps) in groupedApps {
             // Group header - skip if only one group (frequency mode)
             if groupedApps.count > 1 {
                 let groupLabel = NSTextField(labelWithString: groupName)
-                groupLabel.frame = NSRect(x: 10, y: y - 16, width: 200, height: 16)
+                groupLabel.frame = NSRect(x: 10, y: y, width: 200, height: 16)
                 groupLabel.font = .systemFont(ofSize: 13, weight: .bold)
                 groupLabel.textColor = .labelColor
                 gridView.addSubview(groupLabel)
-                y -= groupHeaderHeight
+                y += groupHeaderHeight
             }
 
             x = 10
             var index = 0
             for app in apps {
                 let itemView = createGridItemView(app: app, size: NSSize(width: itemWidth, height: itemHeight))
-                itemView.frame = NSRect(x: x, y: y - itemHeight, width: itemWidth, height: itemHeight)
+                itemView.frame = NSRect(x: x, y: y, width: itemWidth, height: itemHeight)
                 gridView.addSubview(itemView)
 
                 index += 1
                 x += itemWidth + spacing
                 if index % columns == 0 {
                     x = 10
-                    y -= itemHeight + spacing
+                    y += itemHeight + spacing
                 }
             }
 
             // Reset for next row if not at start
             if index % columns != 0 {
-                y -= itemHeight + spacing
+                y += itemHeight + spacing
             }
         }
+        // No need to scroll - flipped view naturally starts at top (y=0)
     }
 
     private func createGridItemView(app: LaunchItem, size: NSSize) -> NSView {
