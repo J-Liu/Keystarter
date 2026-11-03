@@ -163,6 +163,8 @@ final class LocalizationManager {
             // About Tab
             "settings.about.version": "Version %@",
             "settings.about.copyright": "© 2026 Jia Liu. All rights reserved.",
+            "settings.about.license": "License",
+            "settings.about.notice": "Notice",
 
             // Advanced Tab
             "settings.power.title": "Power Management",
@@ -372,6 +374,8 @@ final class LocalizationManager {
             // About Tab
             "settings.about.version": "版本 %@",
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有权利。",
+            "settings.about.license": "许可证",
+            "settings.about.notice": "声明",
 
             // Advanced Tab
             "settings.power.title": "电源管理",
@@ -559,6 +563,8 @@ final class LocalizationManager {
             // About Tab
             "settings.about.version": "版本 %@",
             "settings.about.copyright": "© 2026 Jia Liu. 保留所有權利。",
+            "settings.about.license": "授權條款",
+            "settings.about.notice": "聲明",
 
             // Advanced Tab
             "settings.power.title": "電源管理",

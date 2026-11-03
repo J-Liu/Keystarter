@@ -685,6 +685,18 @@ final class SettingsWindow: NSWindow {
         checkUpdatesButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(checkUpdatesButton)
 
+        // License button
+        let licenseButton = NSButton(title: L("settings.about.license"), target: self, action: #selector(showLicense))
+        licenseButton.bezelStyle = .rounded
+        licenseButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(licenseButton)
+
+        // Notice button
+        let noticeButton = NSButton(title: L("settings.about.notice"), target: self, action: #selector(showNotice))
+        noticeButton.bezelStyle = .rounded
+        noticeButton.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(noticeButton)
+
         NSLayoutConstraint.activate([
             appIcon.topAnchor.constraint(equalTo: container.topAnchor, constant: 40),
             appIcon.centerXAnchor.constraint(equalTo: container.centerXAnchor),
@@ -703,7 +715,13 @@ final class SettingsWindow: NSWindow {
 
             checkUpdatesButton.topAnchor.constraint(equalTo: githubButton.bottomAnchor, constant: 12),
             checkUpdatesButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            checkUpdatesButton.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -20)
+
+            licenseButton.topAnchor.constraint(equalTo: checkUpdatesButton.bottomAnchor, constant: 12),
+            licenseButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+
+            noticeButton.topAnchor.constraint(equalTo: licenseButton.bottomAnchor, constant: 8),
+            noticeButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            noticeButton.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -20)
         ])
 
         return container
@@ -1037,6 +1055,83 @@ final class SettingsWindow: NSWindow {
         if let url = URL(string: "https://github.com/J-Liu/Keystarter") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    @objc private func showLicense() {
+        let licenseWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
+            styleMask: [.titled, .closable, .resizable],
+            backing: .buffered,
+            defer: false
+        )
+        licenseWindow.title = L("settings.about.license")
+        licenseWindow.center()
+
+        let scrollView = NSScrollView(frame: licenseWindow.contentView!.bounds)
+        scrollView.hasVerticalScroller = true
+        scrollView.autoresizingMask = [.width, .height]
+
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 580, height: 480))
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.font = .systemFont(ofSize: 12)
+
+        // Load LICENSE file
+        if let licensePath = Bundle.main.path(forResource: "LICENSE", ofType: nil),
+           let licenseContent = try? String(contentsOfFile: licensePath, encoding: .utf8) {
+            textView.string = licenseContent
+        } else {
+            textView.string = "GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3, 19 November 2007"
+        }
+
+        textView.sizeToFit()
+        scrollView.documentView = textView
+        licenseWindow.contentView?.addSubview(scrollView)
+
+        licenseWindow.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func showNotice() {
+        let noticeWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 500, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        noticeWindow.title = L("settings.about.notice")
+        noticeWindow.center()
+
+        let scrollView = NSScrollView(frame: noticeWindow.contentView!.bounds.insetBy(dx: 20, dy: 20))
+        scrollView.hasVerticalScroller = true
+        scrollView.autoresizingMask = [.width, .height]
+        scrollView.drawsBackground = false
+
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 460, height: 160))
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.font = .systemFont(ofSize: 13)
+        textView.drawsBackground = false
+
+        // Use project's NOTICE content
+        let notice = """
+        Keystarter - Lightweight, open-source macOS system utility.
+        Local-first, AI optional.
+        Launcher + Status bar monitor + Clipboard history.
+        Copyright 2026 Jia Liu
+
+        This product includes software developed by Jia Liu.
+
+        The original Keystarter project and its contributors must be credited
+        in any redistribution or derivative work. This attribution notice must
+        be retained in all copies or substantial portions of the software.
+        """
+
+        textView.string = notice
+        textView.sizeToFit()
+        scrollView.documentView = textView
+        noticeWindow.contentView?.addSubview(scrollView)
+
+        noticeWindow.makeKeyAndOrderFront(nil)
     }
 
     func selectTab(withIdentifier identifier: String) {
