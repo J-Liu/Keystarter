@@ -64,11 +64,6 @@ final class LauncherWindow: NSWindow {
     /// File system monitors for app directories
     private var appDirectoryMonitors: [DispatchSourceFileSystemObject] = []
 
-    private func log(_ message: String) {
-        guard LogSettings.shared.launcherLogEnabled else { return }
-        LogSettings.write(message, to: LogSettings.shared.launcherLogPath)
-    }
-
     init() {
         // Initial frame: centered, fixed size
         let screenFrame = NSScreen.main?.visibleFrame ?? .zero
@@ -549,7 +544,6 @@ final class LauncherWindow: NSWindow {
         
         // Don't switch input source here - wait until window has focus
         isHandlingDockClick = true
-        log("LauncherWindow shown")
 
         // Reset search
         searchField.stringValue = ""
@@ -586,7 +580,6 @@ final class LauncherWindow: NSWindow {
 
     func hide() {
         guard isVisible else { return }
-        log("LauncherWindow hidden")
         isHandlingDockClick = true
         orderOut(nil)
         // Restore input source immediately after hiding
@@ -1020,7 +1013,6 @@ final class LauncherWindow: NSWindow {
         // 1. Hide window immediately
         orderOut(nil)
         isHandlingDockClick = true
-        log("LauncherWindow hidden (executeSelected)")
 
         // 2. Async: restore input source + cleanup
         DispatchQueue.main.async { [weak self] in
@@ -1044,7 +1036,6 @@ final class LauncherWindow: NSWindow {
         // 1. Hide window immediately (visual feedback)
         orderOut(nil)
         isHandlingDockClick = true
-        log("LauncherWindow hidden (execute)")
 
         // 2. Async: restore input source + cleanup
         DispatchQueue.main.async { [weak self] in
