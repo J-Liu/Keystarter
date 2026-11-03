@@ -1286,7 +1286,7 @@ final class LauncherWindow: NSWindow {
         }
 
         // Sync with install tracker (detects new/uninstalled apps)
-        let newApps = AppInstallTracker.shared.syncWithApps(paths: items.map { $0.path })
+        _ = AppInstallTracker.shared.syncWithApps(paths: items.map { $0.path })
 
         // Sort: new apps first, then alphabetically
         items.sort { a, b in
