@@ -307,6 +307,7 @@ final class LauncherWindow: NSWindow {
         container.state = .active
         container.wantsLayer = true
         container.layer?.cornerRadius = AppearanceSettings.cornerRadius
+        container.layer?.masksToBounds = true
         container.layer?.opacity = Float(AppearanceSettings.opacity)
         container.autoresizingMask = [.width, .height]
         contentView = container
@@ -526,6 +527,7 @@ final class LauncherWindow: NSWindow {
         // Update appearance from settings
         AppearanceSettings.load()
         container.layer?.cornerRadius = AppearanceSettings.cornerRadius
+        container.layer?.masksToBounds = true
         container.layer?.opacity = Float(AppearanceSettings.opacity)
         
         // Don't switch input source here - wait until window has focus
