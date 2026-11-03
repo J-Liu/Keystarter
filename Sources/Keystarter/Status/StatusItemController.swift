@@ -672,6 +672,8 @@ final class StatusItemController: NSObject {
         let newPopover = NSPopover()
         newPopover.behavior = .transient
         newPopover.delegate = self
+        // Inherit app's appearance for dark mode support
+        newPopover.appearance = NSApp.appearance
         let viewController = NSViewController()
         let contentView = module.makeDetailView()
         viewController.view = contentView
