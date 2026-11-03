@@ -166,6 +166,7 @@ final class SettingsWindow: NSWindow {
 
         // Row: Corner Radius
         let radiusSlider = NSSlider(value: Double(AppearanceSettings.cornerRadius), minValue: 0, maxValue: 24, target: self, action: #selector(radiusChanged(_:)))
+        radiusSlider.isContinuous = true
         radiusSlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
         let radiusValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
         radiusValue.identifier = NSUserInterfaceItemIdentifier("radiusValue")
@@ -179,6 +180,7 @@ final class SettingsWindow: NSWindow {
 
         // Row: Opacity
         let opacitySlider = NSSlider(value: Double(AppearanceSettings.opacity), minValue: 0.5, maxValue: 1.0, target: self, action: #selector(opacityChanged(_:)))
+        opacitySlider.isContinuous = true
         opacitySlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
         let opacityValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
         opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
