@@ -304,9 +304,10 @@ final class LauncherWindow: NSWindow {
         // Shadow container (provides shadow without clipping)
         shadowContainer = NSView(frame: contentView!.bounds)
         shadowContainer.wantsLayer = true
-        shadowContainer.layer?.shadowColor = NSColor.black.withAlphaComponent(0.25).cgColor
-        shadowContainer.layer?.shadowOffset = NSSize(width: 0, height: -8)
-        shadowContainer.layer?.shadowRadius = 20
+        shadowContainer.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.01).cgColor
+        shadowContainer.layer?.shadowColor = NSColor.black.withAlphaComponent(0.35).cgColor
+        shadowContainer.layer?.shadowOffset = NSSize(width: 0, height: -5)
+        shadowContainer.layer?.shadowRadius = 15
         shadowContainer.layer?.shadowOpacity = 1.0
         shadowContainer.layer?.cornerRadius = AppearanceSettings.cornerRadius
         shadowContainer.autoresizingMask = [.width, .height]
