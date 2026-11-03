@@ -16,6 +16,7 @@ final class SettingsWindow: NSWindow {
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
     private var opacityValueLabel: NSTextField!
+    private var cornerRadiusValueLabel: NSTextField!
 
     // Layout constants
     private let labelWidth: CGFloat = 120
@@ -178,6 +179,20 @@ final class SettingsWindow: NSWindow {
         opacityRow.spacing = 8
         opacityRow.alignment = .centerY
         stack.addArrangedSubview(makeRow(label: L("settings.opacity"), control: opacityRow))
+
+        // Row: Corner Radius
+        let cornerRadiusSlider = NSSlider(value: Double(AppearanceSettings.cornerRadius), minValue: 0, maxValue: 24, target: self, action: #selector(cornerRadiusChanged(_:)))
+        cornerRadiusSlider.isContinuous = true
+        cornerRadiusSlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
+        cornerRadiusValueLabel = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
+        cornerRadiusValueLabel.identifier = NSUserInterfaceItemIdentifier("cornerRadiusValue")
+        cornerRadiusValueLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
+
+        let cornerRadiusRow = NSStackView(views: [cornerRadiusSlider, cornerRadiusValueLabel])
+        cornerRadiusRow.orientation = .horizontal
+        cornerRadiusRow.spacing = 8
+        cornerRadiusRow.alignment = .centerY
+        stack.addArrangedSubview(makeRow(label: L("settings.cornerRadius"), control: cornerRadiusRow))
 
         // Row: Group By
         let groupByPopup = NSPopUpButton()
@@ -930,6 +945,12 @@ final class SettingsWindow: NSWindow {
         AppearanceSettings.opacity = CGFloat(sender.doubleValue)
         AppearanceSettings.save()
         opacityValueLabel?.stringValue = "\(Int(sender.doubleValue * 100))%"
+    }
+
+    @objc private func cornerRadiusChanged(_ sender: NSSlider) {
+        AppearanceSettings.cornerRadius = CGFloat(sender.doubleValue)
+        AppearanceSettings.save()
+        cornerRadiusValueLabel?.stringValue = "\(Int(sender.doubleValue))"
     }
 
     private func generalTabSubview(withIdentifier id: String) -> NSView? {
