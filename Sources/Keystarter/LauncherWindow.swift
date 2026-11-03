@@ -8,6 +8,7 @@ import Carbon
 /// Hides automatically when it loses focus.
 final class LauncherWindow: NSWindow {
 
+    private var container: NSVisualEffectView!
     private var searchField: NSSearchField!
     private var tableView: NSTableView!
     private var scrollView: NSScrollView!
@@ -300,7 +301,7 @@ final class LauncherWindow: NSWindow {
         AppearanceSettings.load()
 
         // Container view with rounded corners
-        let container = NSVisualEffectView(frame: contentView!.bounds)
+        container = NSVisualEffectView(frame: contentView!.bounds)
         container.material = AppearanceSettings.material.nsMaterial
         container.blendingMode = .behindWindow
         container.state = .active
@@ -521,6 +522,11 @@ final class LauncherWindow: NSWindow {
 
         // Save current input source immediately before any async operations
         saveCurrentInputSource()
+
+        // Update appearance from settings
+        AppearanceSettings.load()
+        container.layer?.cornerRadius = AppearanceSettings.cornerRadius
+        container.layer?.opacity = Float(AppearanceSettings.opacity)
         
         // Don't switch input source here - wait until window has focus
         isHandlingDockClick = true
