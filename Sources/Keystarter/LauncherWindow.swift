@@ -544,7 +544,8 @@ final class LauncherWindow: NSWindow {
 
         // Update appearance from settings
         AppearanceSettings.load()
-        container.layer?.opacity = Float(AppearanceSettings.opacity)
+        container.layer?.cornerRadius = AppearanceSettings.cornerRadius
+        container.alphaValue = AppearanceSettings.opacity
         
         // Don't switch input source here - wait until window has focus
         isHandlingDockClick = true
