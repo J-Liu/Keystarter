@@ -15,6 +15,8 @@ final class SettingsWindow: NSWindow {
     private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
+    private var radiusValueLabel: NSTextField!
+    private var opacityValueLabel: NSTextField!
 
     // Layout constants
     private let labelWidth: CGFloat = 120
@@ -168,11 +170,11 @@ final class SettingsWindow: NSWindow {
         let radiusSlider = NSSlider(value: Double(AppearanceSettings.cornerRadius), minValue: 0, maxValue: 24, target: self, action: #selector(radiusChanged(_:)))
         radiusSlider.isContinuous = true
         radiusSlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
-        let radiusValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
-        radiusValue.identifier = NSUserInterfaceItemIdentifier("radiusValue")
-        radiusValue.widthAnchor.constraint(equalToConstant: 40).isActive = true
+        radiusValueLabel = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
+        radiusValueLabel.identifier = NSUserInterfaceItemIdentifier("radiusValue")
+        radiusValueLabel.widthAnchor.constraint(equalToConstant: 40).isActive = true
 
-        let radiusRow = NSStackView(views: [radiusSlider, radiusValue])
+        let radiusRow = NSStackView(views: [radiusSlider, radiusValueLabel])
         radiusRow.orientation = .horizontal
         radiusRow.spacing = 8
         radiusRow.alignment = .centerY
@@ -182,11 +184,11 @@ final class SettingsWindow: NSWindow {
         let opacitySlider = NSSlider(value: Double(AppearanceSettings.opacity), minValue: 0.5, maxValue: 1.0, target: self, action: #selector(opacityChanged(_:)))
         opacitySlider.isContinuous = true
         opacitySlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
-        let opacityValue = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
-        opacityValue.identifier = NSUserInterfaceItemIdentifier("opacityValue")
-        opacityValue.widthAnchor.constraint(equalToConstant: 50).isActive = true
+        opacityValueLabel = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
+        opacityValueLabel.identifier = NSUserInterfaceItemIdentifier("opacityValue")
+        opacityValueLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
 
-        let opacityRow = NSStackView(views: [opacitySlider, opacityValue])
+        let opacityRow = NSStackView(views: [opacitySlider, opacityValueLabel])
         opacityRow.orientation = .horizontal
         opacityRow.spacing = 8
         opacityRow.alignment = .centerY
@@ -942,17 +944,13 @@ final class SettingsWindow: NSWindow {
     @objc private func radiusChanged(_ sender: NSSlider) {
         AppearanceSettings.cornerRadius = CGFloat(sender.doubleValue)
         AppearanceSettings.save()
-        if let label = generalTabSubview(withIdentifier: "radiusValue") as? NSTextField {
-            label.stringValue = "\(Int(sender.doubleValue))"
-        }
+        radiusValueLabel?.stringValue = "\(Int(sender.doubleValue))"
     }
 
     @objc private func opacityChanged(_ sender: NSSlider) {
         AppearanceSettings.opacity = CGFloat(sender.doubleValue)
         AppearanceSettings.save()
-        if let label = generalTabSubview(withIdentifier: "opacityValue") as? NSTextField {
-            label.stringValue = "\(Int(sender.doubleValue * 100))%"
-        }
+        opacityValueLabel?.stringValue = "\(Int(sender.doubleValue * 100))%"
     }
 
     private func generalTabSubview(withIdentifier id: String) -> NSView? {
