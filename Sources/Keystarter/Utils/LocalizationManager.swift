@@ -20,7 +20,7 @@ final class LocalizationManager {
 
         var displayName: String {
             switch self {
-            case .system: return "Follow System"
+            case .system: return L("settings.language.system")
             case .english: return "English"
             case .simplifiedChinese: return "简体中文"
             case .traditionalChinese: return "繁體中文"
@@ -92,6 +92,7 @@ final class LocalizationManager {
             "settings.theme.light": "Light",
             "settings.theme.dark": "Dark",
             "settings.language": "Language:",
+            "settings.language.system": "System Default",
             "settings.hotkey": "Hotkey:",
             "settings.hotkey.hint": "Click to record",
             "settings.statusbar": "Status Bar:",
@@ -300,6 +301,7 @@ final class LocalizationManager {
             "settings.theme.light": "浅色",
             "settings.theme.dark": "深色",
             "settings.language": "语言：",
+            "settings.language.system": "跟随系统",
             "settings.hotkey": "快捷键：",
             "settings.hotkey.hint": "点击录制",
             "settings.statusbar": "状态栏：",
@@ -504,6 +506,7 @@ final class LocalizationManager {
             "settings.theme.light": "淺色",
             "settings.theme.dark": "深色",
             "settings.language": "語言：",
+            "settings.language.system": "跟隨系統",
             "settings.hotkey": "快速鍵：",
             "settings.hotkey.hint": "點擊錄製",
             "settings.statusbar": "狀態列：",
