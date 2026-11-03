@@ -103,15 +103,11 @@ final class LauncherWindow: NSWindow {
         NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self = self, self.isVisible else { return }
             // Skip if we're handling a Dock click (prevent race condition)
-            guard !self.isHandlingDockClick else {
-                print("[Window] Skipping global monitor - handling Dock click")
-                return
-            }
+            guard !self.isHandlingDockClick else { return }
             let clickPoint = event.locationInWindow
             let windowFrame = self.frame
             // If click is outside window, hide it
             if !windowFrame.contains(clickPoint) {
-                print("[Window] Click outside window, calling hide()")
                 self.hide()  // Use hide() to restore input source
             }
         }
@@ -452,21 +448,13 @@ final class LauncherWindow: NSWindow {
     private func saveCurrentInputSource() {
         if let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() {
             savedInputSource = currentSource
-            let sourceID = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID)
-            let sourceIDString = sourceID != nil ? (Unmanaged<CFString>.fromOpaque(sourceID!).takeUnretainedValue() as String) : "unknown"
-            print("[Input] Saved current input: \(sourceIDString)")
-        } else {
-            print("[Input] No current input source to save")
         }
     }
 
     /// Switch to English input source
     private func switchToEnglishInput() {
         // Find English input source (ASCII-capable keyboard layout)
-        guard let inputSources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else {
-            print("[Input] Failed to get input source list")
-            return
-        }
+        guard let inputSources = TISCreateInputSourceList(nil, false)?.takeRetainedValue() as? [TISInputSource] else { return }
 
         // Priority: ABC > US > any ASCII-capable layout
         var abcSource: TISInputSource?
@@ -496,26 +484,15 @@ final class LauncherWindow: NSWindow {
 
         // Select the best available English input
         if let source = abcSource ?? usSource ?? asciiSource {
-            let sourceID = TISGetInputSourceProperty(source, kTISPropertyInputSourceID)
-            let sourceIDString = Unmanaged<CFString>.fromOpaque(sourceID!).takeUnretainedValue() as String
-            print("[Input] Switching to English: \(sourceIDString)")
             TISSelectInputSource(source)
-        } else {
-            print("[Input] No English input source found")
         }
     }
 
     /// Restore previously saved input source
     private func restoreInputSource() {
-        guard let savedSource = savedInputSource else {
-            print("[Input] No saved input source to restore")
-            return
-        }
+        guard let savedSource = savedInputSource else { return }
         // Only restore once, then clear
         savedInputSource = nil
-        let sourceID = TISGetInputSourceProperty(savedSource, kTISPropertyInputSourceID)
-        let sourceIDString = sourceID != nil ? (Unmanaged<CFString>.fromOpaque(sourceID!).takeUnretainedValue() as String) : "unknown"
-        print("[Input] Restoring to: \(sourceIDString)")
         TISSelectInputSource(savedSource)
     }
 
@@ -1271,7 +1248,6 @@ final class LauncherWindow: NSWindow {
             )
 
             source.setEventHandler { [weak self] in
-                print("[LauncherWindow] App directory changed: \(dirPath)")
                 // Debounce: wait a moment for batch changes to complete
                 DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 1.0) {
                     self?.loadApplications()
@@ -1285,8 +1261,6 @@ final class LauncherWindow: NSWindow {
             source.resume()
             appDirectoryMonitors.append(source)
         }
-
-        print("[LauncherWindow] Monitoring \(appDirectoryMonitors.count) app directories")
     }
 
     private func loadApplications() {
@@ -1313,9 +1287,6 @@ final class LauncherWindow: NSWindow {
 
         // Sync with install tracker (detects new/uninstalled apps)
         let newApps = AppInstallTracker.shared.syncWithApps(paths: items.map { $0.path })
-        if !newApps.isEmpty {
-            print("[LauncherWindow] Detected \(newApps.count) newly installed apps: \(newApps)")
-        }
 
         // Sort: new apps first, then alphabetically
         items.sort { a, b in
@@ -1332,9 +1303,6 @@ final class LauncherWindow: NSWindow {
             // Update LauncherIndex with pre-built aliases
             LauncherIndex.shared.update(apps: items.map { ($0.name, $0.path, nil) })
         }
-
-        // Debug log
-        print("[LauncherWindow] Loaded \(items.count) applications")
     }
 
     /// Get paths of currently running applications.
@@ -1354,10 +1322,7 @@ final class LauncherWindow: NSWindow {
     }
 
     private func scanDirectoryForApps(at path: String, fileManager: FileManager, items: inout [LaunchItem], seenPaths: inout Set<String>) {
-        guard let contents = try? fileManager.contentsOfDirectory(atPath: path) else {
-            print("[LauncherWindow] Failed to scan: \(path)")
-            return
-        }
+        guard let contents = try? fileManager.contentsOfDirectory(atPath: path) else { return }
 
         for name in contents {
             // Skip hidden files and directories

@@ -38,7 +38,6 @@ final class AlfredWorkflowManager {
             loadWorkflow(at: destDir)
             return true
         } catch {
-            print("[AlfredWorkflowManager] Import failed: \(error)")
             return false
         }
     }
@@ -60,18 +59,13 @@ final class AlfredWorkflowManager {
 
     /// Load a single workflow and register it as a plugin.
     private func loadWorkflow(at path: String) {
-        guard let workflow = AlfredWorkflowParser.parse(path: path) else {
-            print("[AlfredWorkflowManager] Failed to parse: \(path)")
-            return
-        }
+        guard let workflow = AlfredWorkflowParser.parse(path: path) else { return }
 
         loadedWorkflows[workflow.bundleId] = workflow
 
         // Register as plugin
         let plugin = AlfredWorkflowPlugin(workflow: workflow)
         PluginManager.shared.register(plugin)
-
-        print("[AlfredWorkflowManager] Loaded: \(workflow.name) (keywords: \(workflow.keywords.map { $0.keyword }))")
     }
 
     /// List all loaded workflows.

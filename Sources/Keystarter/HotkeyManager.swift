@@ -51,7 +51,6 @@ final class HotkeyManager {
         }
         isRegistered = false
         hotkeys.removeAll()
-        print("[HotkeyManager] All hotkeys unregistered")
     }
 
     /// Try to register the event tap.
@@ -59,10 +58,7 @@ final class HotkeyManager {
         // Check accessibility permission
         let trusted = AXIsProcessTrusted()
 
-        if !trusted {
-            print("[HotkeyManager] Accessibility permission not granted yet")
-            return
-        }
+        if !trusted { return }
 
         // Already registered
         if isRegistered {
@@ -88,17 +84,13 @@ final class HotkeyManager {
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         )
 
-        guard let eventTap = eventTap else {
-            print("[HotkeyManager] Failed to create event tap")
-            return
-        }
+        guard let eventTap = eventTap else { return }
 
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0)
         CFRunLoopAddSource(CFRunLoopGetCurrent(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: eventTap, enable: true)
 
         isRegistered = true
-        print("[HotkeyManager] Hotkeys registered: \(hotkeys.keys)")
     }
 
     /// Start periodic permission check.

@@ -599,16 +599,16 @@ private class WeakBox<T: AnyObject> {
 /// Single line chart view with smooth Bezier curves and animated scrolling
 private final class DiskLineChartView: NSView {
     private var points: [Double?] = []
-    private var color: NSColor
+    private let colorProvider: () -> NSColor
     private var flipY: Bool = false
     private var lastUpdateTime: Date = Date()
     private var displayLink: CVDisplayLink?
     private let sampleInterval: TimeInterval = 2.0
     private var weakBox: WeakBox<DiskLineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, color: NSColor) {
+    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
-        self.color = color
+        self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
     }
@@ -719,7 +719,7 @@ private final class DiskLineChartView: NSView {
         }
 
         linePath.lineWidth = offset
-        color.setStroke()
+        colorProvider().setStroke()
         linePath.stroke()
 
         let areaPath = linePath.copy() as! NSBezierPath
@@ -727,6 +727,7 @@ private final class DiskLineChartView: NSView {
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
         areaPath.close()
 
+        let color = colorProvider()
         let gradient = NSGradient(colors: [
             color.withAlphaComponent(0.3),
             color.withAlphaComponent(0.5)
@@ -740,8 +741,6 @@ final class DiskChartView: NSView {
     private let writeChart: DiskLineChartView
     private let readChart: DiskLineChartView
 
-    private let readColor = NSColor(red: 0.4, green: 0.6, blue: 0.9, alpha: 1.0)  // Blue for read
-    private let writeColor = NSColor(red: 0.7, green: 0.4, blue: 0.5, alpha: 1.0)  // Red for write
     private let maxHistoryCount = 60
 
     private var currentReadSpeed: Double = 0
@@ -753,13 +752,12 @@ final class DiskChartView: NSView {
         let bottomFrame = NSRect(x: 0, y: 0, width: frameRect.width, height: safeHeight / 2)
 
         // Write chart is on top (topFrame), read chart is on bottom (bottomFrame)
-        self.writeChart = DiskLineChartView(frame: topFrame, num: maxHistoryCount, color: writeColor)
-        self.readChart = DiskLineChartView(frame: bottomFrame, num: maxHistoryCount, color: readColor)
+        self.writeChart = DiskLineChartView(frame: topFrame, num: maxHistoryCount) { NSColor.systemOrange.withAlphaComponent(0.8) }
+        self.readChart = DiskLineChartView(frame: bottomFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.8) }
 
         super.init(frame: frameRect)
 
         wantsLayer = true
-        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         layer?.cornerRadius = 4
 
         // Write chart grows down from top (flipY = true)
@@ -813,6 +811,9 @@ final class DiskChartView: NSView {
         // Draw speed labels
         let padding: CGFloat = 6
         let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
+
+        let writeColor = NSColor.systemOrange.withAlphaComponent(0.8)
+        let readColor = NSColor.systemBlue.withAlphaComponent(0.8)
 
         // Write label (top right)
         let writeLabel = "W \(formatSpeed(currentWriteSpeed))"

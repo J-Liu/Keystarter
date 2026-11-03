@@ -278,16 +278,16 @@ private class WeakBox<T: AnyObject> {
 
 private final class CPULineChartView: NSView {
     private var points: [Double?] = []
-    private var color: NSColor
+    private let colorProvider: () -> NSColor
     private let sampleInterval: TimeInterval = 2.0
     private var displayLink: CVDisplayLink?
     private var lastUpdateTime: Date = Date()
     private var isRunning = false
     private var weakBox: WeakBox<CPULineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, color: NSColor) {
+    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
-        self.color = color
+        self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
     }
@@ -387,7 +387,7 @@ private final class CPULineChartView: NSView {
         }
 
         linePath.lineWidth = 1.5
-        color.setStroke()
+        colorProvider().setStroke()
         linePath.stroke()
     }
 }
@@ -408,13 +408,12 @@ final class CPUChartView: NSView {
 
         let lineFrame = NSRect(x: 0, y: 4, width: frameRect.width, height: lineChartHeight)
 
-        self.systemChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemRed.withAlphaComponent(0.6))
-        self.userChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemBlue.withAlphaComponent(0.6))
+        self.systemChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemRed.withAlphaComponent(0.6) }
+        self.userChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.6) }
 
         super.init(frame: frameRect)
 
         wantsLayer = true
-        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         layer?.cornerRadius = 4
 
         addSubview(systemChart)

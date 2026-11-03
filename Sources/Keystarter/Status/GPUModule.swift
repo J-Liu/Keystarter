@@ -782,15 +782,15 @@ private class WeakBox<T: AnyObject> {
 
 private final class GPULineChartView: NSView {
     private var points: [Double?] = []
-    private var color: NSColor
+    private let colorProvider: () -> NSColor
     private let sampleInterval: TimeInterval = 2.0
     private var displayLink: CVDisplayLink?
     private var lastUpdateTime: Date = Date()
     private var weakBox: WeakBox<GPULineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, color: NSColor) {
+    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
-        self.color = color
+        self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
     }
@@ -884,7 +884,7 @@ private final class GPULineChartView: NSView {
         }
 
         linePath.lineWidth = 1.5
-        color.setStroke()
+        colorProvider().setStroke()
         linePath.stroke()
     }
 }
@@ -913,15 +913,14 @@ final class GPUChartView: NSView {
 
         let lineFrame = NSRect(x: 0, y: 4, width: frameRect.width, height: lineChartHeight)
 
-        self.deviceChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemPurple.withAlphaComponent(0.8))
-        self.rendererChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemBlue.withAlphaComponent(0.6))
-        self.tilerChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemOrange.withAlphaComponent(0.6))
-        self.aneChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount, color: NSColor.systemPink.withAlphaComponent(0.8))
+        self.deviceChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemPurple.withAlphaComponent(0.8) }
+        self.rendererChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.6) }
+        self.tilerChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemOrange.withAlphaComponent(0.6) }
+        self.aneChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemPink.withAlphaComponent(0.8) }
 
         super.init(frame: frameRect)
 
         wantsLayer = true
-        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         layer?.cornerRadius = 4
 
         addSubview(deviceChart)

@@ -398,11 +398,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let enabled = SpotlightService.isSpotlightEnabled()
             DispatchQueue.main.async {
                 self?.isIndexReady = enabled
-                if !enabled {
-                    print("[Index] Spotlight is not available. File search disabled.")
-                } else {
-                    print("[Index] Spotlight is available. File search enabled.")
-                }
             }
         }
     }

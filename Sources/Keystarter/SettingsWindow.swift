@@ -611,10 +611,7 @@ final class SettingsWindow: NSWindow {
             return nil
         }
         
-        guard let tableView = advancedTab.flatMap({ findTableView(in: $0) }) else {
-            print("[SettingsWindow] Table view not found")
-            return
-        }
+        guard let tableView = advancedTab.flatMap({ findTableView(in: $0) }) else { return }
         tableView.reloadData()
 
         // Find empty label

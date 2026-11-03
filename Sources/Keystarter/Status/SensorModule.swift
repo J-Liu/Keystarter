@@ -283,14 +283,14 @@ final class SensorModule: NSObject, StatusModule {
         // Left fan (purple-ish)
         let leftX = chartWidth / 2 - circleRadius - 30
         let leftPercent = fanLeftMax > 0 ? Double(fanLeft) / Double(fanLeftMax) * 100 : 0
-        let leftColor = NSColor(calibratedRed: 0.7, green: 0.5, blue: 0.8, alpha: 0.3)
+        let leftColor = NSColor.systemPurple.withAlphaComponent(0.3)
         createFanCircle(in: chart, center: NSPoint(x: leftX, y: circleCenterY), radius: circleRadius,
                        percent: leftPercent, speed: fanLeft, color: leftColor, label: "L")
 
         // Right fan (blue-ish)
         let rightX = chartWidth / 2 + circleRadius + 30
         let rightPercent = fanRightMax > 0 ? Double(fanRight) / Double(fanRightMax) * 100 : 0
-        let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 0.3)
+        let rightColor = NSColor.systemBlue.withAlphaComponent(0.3)
         createFanCircle(in: chart, center: NSPoint(x: rightX, y: circleCenterY), radius: circleRadius,
                        percent: rightPercent, speed: fanRight, color: rightColor, label: "R")
 
@@ -303,7 +303,11 @@ final class SensorModule: NSObject, StatusModule {
 
         // Line chart at bottom
         let lineChartHeight = dividerY - 8
-        let lineChart = FanLineChartView(frame: NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight))
+        let lineChart = FanLineChartView(
+            frame: NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight),
+            leftColor: { NSColor.systemPurple.withAlphaComponent(0.8) },
+            rightColor: { NSColor.systemBlue.withAlphaComponent(0.7) }
+        )
         lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
         lineChart.startAnimation()
         chart.addSubview(lineChart)
@@ -347,7 +351,6 @@ final class SensorModule: NSObject, StatusModule {
     private func createFanChart(frame: NSRect) -> NSView {
         let view = NSView(frame: frame)
         view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
         view.layer?.cornerRadius = 4
         return view
     }
@@ -849,10 +852,12 @@ final class FanLineChartView: NSView {
     private var isRunning = false
     private var weakBox: WeakBox<FanLineChartView>?  // Keep box alive for callback
 
-    private let leftColor = NSColor(calibratedRed: 0.7, green: 0.5, blue: 0.8, alpha: 1.0)
-    private let rightColor = NSColor(calibratedRed: 0.5, green: 0.7, blue: 0.9, alpha: 1.0)
+    private let leftColorProvider: () -> NSColor
+    private let rightColorProvider: () -> NSColor
 
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect, leftColor: @escaping () -> NSColor, rightColor: @escaping () -> NSColor) {
+        self.leftColorProvider = leftColor
+        self.rightColorProvider = rightColor
         super.init(frame: frameRect)
         wantsLayer = true
     }
@@ -928,12 +933,12 @@ final class FanLineChartView: NSView {
 
         // Draw left fan line (purple)
         if leftHistory.count > 1 {
-            drawLine(history: leftHistory, color: leftColor, padding: padding, height: height, xRatio: xRatio, xOffset: xOffset)
+            drawLine(history: leftHistory, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio, xOffset: xOffset)
         }
 
         // Draw right fan line (blue)
         if rightHistory.count > 1 {
-            drawLine(history: rightHistory, color: rightColor, padding: padding, height: height, xRatio: xRatio, xOffset: xOffset)
+            drawLine(history: rightHistory, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio, xOffset: xOffset)
         }
     }
 

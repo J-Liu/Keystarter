@@ -58,7 +58,6 @@ final class PermissionManager {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                print("Failed to \(enabled ? "register" : "unregister") login item: \(error)")
             }
         } else {
             // For older macOS versions

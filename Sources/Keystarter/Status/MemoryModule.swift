@@ -127,7 +127,7 @@ final class MemoryModule: NSObject, StatusModule {
 
         // Memory usage area chart
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = MemoryChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        let chart = MemoryChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight)) { NSColor.systemPink.withAlphaComponent(0.7) }
         chart.setTotalMemory(totalMemory)
         chart.setHistory(memoryHistory, usedMemory: usedMemory)
         chart.startAnimation()
@@ -559,26 +559,25 @@ final class MemoryChartView: NSView {
     private var totalMemory: UInt64 = 0
     private var usedMemory: UInt64 = 0
     private let maxHistoryCount = 60
-    
-    private let chartColor = NSColor(red: 0.75, green: 0.55, blue: 0.65, alpha: 1.0)
-    
+
+    private let chartColorProvider: () -> NSColor
+
     // Animation
     private var displayLink: CVDisplayLink?
     private var lastUpdateTime: Date = Date()
     private let sampleInterval: TimeInterval = 2.0
     private var weakBox: WeakBox<MemoryChartView>?  // Keep box alive for callback
-    
-    override init(frame frameRect: NSRect) {
+
+    init(frame frameRect: NSRect, colorProvider: @escaping () -> NSColor) {
+        self.chartColorProvider = colorProvider
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-        layer?.cornerRadius = 4
     }
-    
+
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    
+
     deinit {
         stopAnimation()
     }
@@ -679,13 +678,14 @@ final class MemoryChartView: NSView {
         areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: padding))
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: padding))
         areaPath.close()
-        
+
+        let chartColor = chartColorProvider()
         let gradient = NSGradient(colors: [
             chartColor.withAlphaComponent(0.2),
             chartColor.withAlphaComponent(0.4)
         ])
         gradient?.draw(in: areaPath, angle: 90)
-        
+
         // Draw line
         linePath.lineWidth = 1.5
         chartColor.withAlphaComponent(0.9).setStroke()

@@ -170,7 +170,6 @@ final class NetworkModule: NSObject, StatusModule {
         let ipY = chartY - ipInfoHeight
         let ipContainer = NSView(frame: NSRect(x: 12, y: ipY, width: viewWidth - 24, height: ipInfoHeight))
         ipContainer.wantsLayer = true
-        ipContainer.layer?.backgroundColor = NSColor.controlBackgroundColor.cgColor
         ipContainer.layer?.cornerRadius = 4
 
         // Get local IPs
@@ -747,16 +746,16 @@ private class WeakBox<T: AnyObject> {
 /// Single line chart view with smooth Bezier curves and animated scrolling
 private final class NetworkLineChartView: NSView {
     private var points: [Double?] = []
-    private var color: NSColor
+    private let colorProvider: () -> NSColor
     private var flipY: Bool = false
     private var lastUpdateTime: Date = Date()
     private var displayLink: CVDisplayLink?
     private let sampleInterval: TimeInterval = 2.0  // Match the 2-second sampling rate
     private var weakBox: WeakBox<NetworkLineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, color: NSColor) {
+    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
         self.points = Array(repeating: nil, count: max(num, 2))
-        self.color = color
+        self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
     }
@@ -874,7 +873,7 @@ private final class NetworkLineChartView: NSView {
         }
 
         linePath.lineWidth = offset
-        color.setStroke()
+        colorProvider().setStroke()
         linePath.stroke()
 
         // Draw filled area with gradient
@@ -883,6 +882,7 @@ private final class NetworkLineChartView: NSView {
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
         areaPath.close()
 
+        let color = colorProvider()
         let gradient = NSGradient(colors: [
             color.withAlphaComponent(0.3),
             color.withAlphaComponent(0.5)
@@ -896,8 +896,6 @@ final class NetworkChartView: NSView {
     private let uploadChart: NetworkLineChartView
     private let downloadChart: NetworkLineChartView
 
-    private let downloadColor = NSColor(red: 0.6, green: 0.4, blue: 0.7, alpha: 1.0)  // Purple for download
-    private let uploadColor = NSColor(red: 0.75, green: 0.35, blue: 0.35, alpha: 1.0)  // Red for upload
     private let maxHistoryCount = 60
 
     private var currentUploadSpeed: Double = 0
@@ -909,14 +907,12 @@ final class NetworkChartView: NSView {
         let bottomFrame = NSRect(x: 0, y: 0, width: frameRect.width, height: safeHeight / 2)
 
         // Upload chart is on top (topFrame), download chart is on bottom (bottomFrame)
-        self.uploadChart = NetworkLineChartView(frame: topFrame, num: maxHistoryCount, color: uploadColor)
-        self.downloadChart = NetworkLineChartView(frame: bottomFrame, num: maxHistoryCount, color: downloadColor)
+        self.uploadChart = NetworkLineChartView(frame: topFrame, num: maxHistoryCount) { NSColor.systemPurple.withAlphaComponent(0.8) }
+        self.downloadChart = NetworkLineChartView(frame: bottomFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.6) }
 
         super.init(frame: frameRect)
 
         wantsLayer = true
-        layer?.backgroundColor = NSColor.controlBackgroundColor.withAlphaComponent(0.5).cgColor
-        layer?.cornerRadius = 4
 
         // Upload chart grows down from top (flipY = true)
         self.uploadChart.setFlipY(true)
@@ -969,6 +965,9 @@ final class NetworkChartView: NSView {
         // Draw speed labels
         let padding: CGFloat = 6
         let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
+
+        let downloadColor = NSColor.systemBlue.withAlphaComponent(0.6)
+        let uploadColor = NSColor.systemPurple.withAlphaComponent(0.8)
 
         // Upload label (top right)
         let uploadLabel = "↑ \(formatSpeed(currentUploadSpeed))"
