@@ -130,6 +130,21 @@ final class SettingsWindow: NSWindow {
     private func createGeneralTab() -> NSView {
         let stack = makeVerticalStack()
 
+        // Row: Theme
+        let themePopup = NSPopUpButton()
+        themePopup.addItem(withTitle: L("settings.theme.system"))
+        themePopup.addItem(withTitle: L("settings.theme.light"))
+        themePopup.addItem(withTitle: L("settings.theme.dark"))
+        let savedTheme = UserDefaults.standard.string(forKey: "app.theme") ?? "system"
+        switch savedTheme {
+        case "light": themePopup.selectItem(at: 1)
+        case "dark": themePopup.selectItem(at: 2)
+        default: themePopup.selectItem(at: 0)
+        }
+        themePopup.target = self
+        themePopup.action = #selector(themeChanged(_:))
+        stack.addArrangedSubview(makeRow(label: L("settings.theme"), control: themePopup))
+
         // Row: Language
         let languagePopup = NSPopUpButton()
         for language in LocalizationManager.Language.allCases {
@@ -160,25 +175,11 @@ final class SettingsWindow: NSWindow {
         statusBarPopup.addItem(withTitle: L("settings.statusbar.light"))
         statusBarPopup.addItem(withTitle: L("settings.statusbar.dark"))
         statusBarPopup.addItem(withTitle: L("settings.statusbar.hidden"))
-        let savedTheme = UserDefaults.standard.string(forKey: "statusBar.theme") ?? "system"
-        statusBarPopup.selectItem(withTitle: themeName(for: savedTheme))
+        let savedStatusBarTheme = UserDefaults.standard.string(forKey: "statusBar.theme") ?? "system"
+        statusBarPopup.selectItem(withTitle: themeName(for: savedStatusBarTheme))
         statusBarPopup.target = self
         statusBarPopup.action = #selector(statusBarThemeChanged(_:))
         stack.addArrangedSubview(makeRow(label: L("settings.statusbar"), control: statusBarPopup))
-
-        // Row: Opacity
-        let opacitySlider = NSSlider(value: Double(AppearanceSettings.opacity), minValue: 0.5, maxValue: 1.0, target: self, action: #selector(opacityChanged(_:)))
-        opacitySlider.isContinuous = true
-        opacitySlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
-        opacityValueLabel = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
-        opacityValueLabel.identifier = NSUserInterfaceItemIdentifier("opacityValue")
-        opacityValueLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
-
-        let opacityRow = NSStackView(views: [opacitySlider, opacityValueLabel])
-        opacityRow.orientation = .horizontal
-        opacityRow.spacing = 8
-        opacityRow.alignment = .centerY
-        stack.addArrangedSubview(makeRow(label: L("settings.opacity"), control: opacityRow))
 
         // Row: Corner Radius
         let cornerRadiusSlider = NSSlider(value: Double(AppearanceSettings.cornerRadius), minValue: 0, maxValue: 24, target: self, action: #selector(cornerRadiusChanged(_:)))
@@ -193,6 +194,20 @@ final class SettingsWindow: NSWindow {
         cornerRadiusRow.spacing = 8
         cornerRadiusRow.alignment = .centerY
         stack.addArrangedSubview(makeRow(label: L("settings.cornerRadius"), control: cornerRadiusRow))
+
+        // Row: Opacity
+        let opacitySlider = NSSlider(value: Double(AppearanceSettings.opacity), minValue: 0.5, maxValue: 1.0, target: self, action: #selector(opacityChanged(_:)))
+        opacitySlider.isContinuous = true
+        opacitySlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
+        opacityValueLabel = NSTextField(labelWithString: "\(Int(AppearanceSettings.opacity * 100))%")
+        opacityValueLabel.identifier = NSUserInterfaceItemIdentifier("opacityValue")
+        opacityValueLabel.widthAnchor.constraint(equalToConstant: 50).isActive = true
+
+        let opacityRow = NSStackView(views: [opacitySlider, opacityValueLabel])
+        opacityRow.orientation = .horizontal
+        opacityRow.spacing = 8
+        opacityRow.alignment = .centerY
+        stack.addArrangedSubview(makeRow(label: L("settings.opacity"), control: opacityRow))
 
         // Row: Group By
         let groupByPopup = NSPopUpButton()
@@ -951,6 +966,30 @@ final class SettingsWindow: NSWindow {
         AppearanceSettings.cornerRadius = CGFloat(sender.doubleValue)
         AppearanceSettings.save()
         cornerRadiusValueLabel?.stringValue = "\(Int(sender.doubleValue))"
+    }
+
+    @objc private func themeChanged(_ sender: NSPopUpButton) {
+        let theme: String
+        switch sender.indexOfSelectedItem {
+        case 1: theme = "light"
+        case 2: theme = "dark"
+        default: theme = "system"
+        }
+        UserDefaults.standard.set(theme, forKey: "app.theme")
+        applyTheme(theme)
+    }
+    
+    private func applyTheme(_ theme: String) {
+        let appearance: NSAppearance?
+        switch theme {
+        case "light":
+            appearance = NSAppearance(named: .aqua)
+        case "dark":
+            appearance = NSAppearance(named: .darkAqua)
+        default:
+            appearance = nil  // System default
+        }
+        NSApp.appearance = appearance
     }
 
     private func generalTabSubview(withIdentifier id: String) -> NSView? {

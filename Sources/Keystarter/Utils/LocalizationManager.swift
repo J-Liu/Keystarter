@@ -13,12 +13,14 @@ final class LocalizationManager {
     static let shared = LocalizationManager()
 
     enum Language: String, CaseIterable {
+        case system = "system"
         case english = "en"
         case simplifiedChinese = "zh-Hans"
         case traditionalChinese = "zh-Hant"
 
         var displayName: String {
             switch self {
+            case .system: return "Follow System"
             case .english: return "English"
             case .simplifiedChinese: return "简体中文"
             case .traditionalChinese: return "繁體中文"
@@ -34,17 +36,34 @@ final class LocalizationManager {
 
     var currentLanguage: Language {
         get {
-            let code = UserDefaults.standard.string(forKey: "app.language") ?? Language.english.rawValue
-            return Language(rawValue: code) ?? .english
+            let code = UserDefaults.standard.string(forKey: "app.language") ?? Language.system.rawValue
+            return Language(rawValue: code) ?? .system
         }
         set {
             UserDefaults.standard.set(newValue.rawValue, forKey: "app.language")
             loadLanguage()
         }
     }
+    
+    /// The effective language (resolves "system" to actual system language)
+    private var effectiveLanguage: Language {
+        let lang = currentLanguage
+        if lang == .system {
+            // Detect system language
+            let preferredLanguage = Locale.preferredLanguages.first ?? "en"
+            if preferredLanguage.hasPrefix("zh-Hans") {
+                return .simplifiedChinese
+            } else if preferredLanguage.hasPrefix("zh-Hant") || preferredLanguage.hasPrefix("zh-TW") || preferredLanguage.hasPrefix("zh-HK") {
+                return .traditionalChinese
+            } else {
+                return .english
+            }
+        }
+        return lang
+    }
 
     private func loadLanguage() {
-        strings = localizedStrings[currentLanguage] ?? [:]
+        strings = localizedStrings[effectiveLanguage] ?? [:]
         // Post notification for menu updates
         NotificationCenter.default.post(name: .languageChanged, object: nil)
     }
@@ -68,6 +87,10 @@ final class LocalizationManager {
             "settings.tab.about": "About",
 
             // General Tab
+            "settings.theme": "Theme:",
+            "settings.theme.system": "System",
+            "settings.theme.light": "Light",
+            "settings.theme.dark": "Dark",
             "settings.language": "Language:",
             "settings.hotkey": "Hotkey:",
             "settings.hotkey.hint": "Click to record",
@@ -272,6 +295,10 @@ final class LocalizationManager {
             "settings.tab.about": "关于",
 
             // General Tab
+            "settings.theme": "主题：",
+            "settings.theme.system": "跟随系统",
+            "settings.theme.light": "浅色",
+            "settings.theme.dark": "深色",
             "settings.language": "语言：",
             "settings.hotkey": "快捷键：",
             "settings.hotkey.hint": "点击录制",
@@ -472,6 +499,10 @@ final class LocalizationManager {
             "settings.tab.about": "關於",
 
             // General Tab
+            "settings.theme": "主題：",
+            "settings.theme.system": "跟隨系統",
+            "settings.theme.light": "淺色",
+            "settings.theme.dark": "深色",
             "settings.language": "語言：",
             "settings.hotkey": "快速鍵：",
             "settings.hotkey.hint": "點擊錄製",

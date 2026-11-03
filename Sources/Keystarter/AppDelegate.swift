@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenu()
+        applyInitialTheme()
         setupStatusBar()
         setupIndex()
         updateDockIconVisibility()
@@ -156,6 +157,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             NSApp.setActivationPolicy(.accessory)
         }
+    }
+
+    private func applyInitialTheme() {
+        let theme = UserDefaults.standard.string(forKey: "app.theme") ?? "system"
+        let appearance: NSAppearance?
+        switch theme {
+        case "light":
+            appearance = NSAppearance(named: .aqua)
+        case "dark":
+            appearance = NSAppearance(named: .darkAqua)
+        default:
+            appearance = nil  // System default
+        }
+        NSApp.appearance = appearance
     }
 
     /// Full menu for Dock icon and system menu bar.
