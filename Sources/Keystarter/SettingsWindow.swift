@@ -15,7 +15,6 @@ final class SettingsWindow: NSWindow {
     private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
-    private var radiusValueLabel: NSTextField!
     private var opacityValueLabel: NSTextField!
 
     // Layout constants
@@ -165,20 +164,6 @@ final class SettingsWindow: NSWindow {
         statusBarPopup.target = self
         statusBarPopup.action = #selector(statusBarThemeChanged(_:))
         stack.addArrangedSubview(makeRow(label: L("settings.statusbar"), control: statusBarPopup))
-
-        // Row: Corner Radius
-        let radiusSlider = NSSlider(value: Double(AppearanceSettings.cornerRadius), minValue: 0, maxValue: 24, target: self, action: #selector(radiusChanged(_:)))
-        radiusSlider.isContinuous = true
-        radiusSlider.widthAnchor.constraint(equalToConstant: controlWidth).isActive = true
-        radiusValueLabel = NSTextField(labelWithString: "\(Int(AppearanceSettings.cornerRadius))")
-        radiusValueLabel.identifier = NSUserInterfaceItemIdentifier("radiusValue")
-        radiusValueLabel.widthAnchor.constraint(equalToConstant: 40).isActive = true
-
-        let radiusRow = NSStackView(views: [radiusSlider, radiusValueLabel])
-        radiusRow.orientation = .horizontal
-        radiusRow.spacing = 8
-        radiusRow.alignment = .centerY
-        stack.addArrangedSubview(makeRow(label: L("settings.cornerRadius"), control: radiusRow))
 
         // Row: Opacity
         let opacitySlider = NSSlider(value: Double(AppearanceSettings.opacity), minValue: 0.5, maxValue: 1.0, target: self, action: #selector(opacityChanged(_:)))
@@ -939,12 +924,6 @@ final class SettingsWindow: NSWindow {
 
         alert.accessoryView = containerView
         alert.runModal()
-    }
-
-    @objc private func radiusChanged(_ sender: NSSlider) {
-        AppearanceSettings.cornerRadius = CGFloat(sender.doubleValue)
-        AppearanceSettings.save()
-        radiusValueLabel?.stringValue = "\(Int(sender.doubleValue))"
     }
 
     @objc private func opacityChanged(_ sender: NSSlider) {

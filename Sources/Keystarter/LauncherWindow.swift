@@ -8,7 +8,6 @@ import Carbon
 /// Hides automatically when it loses focus.
 final class LauncherWindow: NSWindow {
 
-    private var shadowContainer: NSView!
     private var container: NSVisualEffectView!
     private var searchField: NSSearchField!
     private var tableView: NSTableView!
@@ -85,7 +84,7 @@ final class LauncherWindow: NSWindow {
         self.level = .floating
         self.isOpaque = false
         self.backgroundColor = .clear
-        self.hasShadow = false  // Disable system shadow, use custom shadow on container
+        self.hasShadow = true
         self.isMovableByWindowBackground = true
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
@@ -301,29 +300,15 @@ final class LauncherWindow: NSWindow {
         // Load appearance settings
         AppearanceSettings.load()
 
-        // Shadow container (provides shadow without clipping)
-        shadowContainer = NSView(frame: contentView!.bounds)
-        shadowContainer.wantsLayer = true
-        shadowContainer.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.01).cgColor
-        shadowContainer.layer?.shadowColor = NSColor.black.withAlphaComponent(0.35).cgColor
-        shadowContainer.layer?.shadowOffset = NSSize(width: 0, height: -5)
-        shadowContainer.layer?.shadowRadius = 15
-        shadowContainer.layer?.shadowOpacity = 1.0
-        shadowContainer.layer?.cornerRadius = AppearanceSettings.cornerRadius
-        shadowContainer.autoresizingMask = [.width, .height]
-        contentView = shadowContainer
-
-        // Container view with rounded corners (clips content)
-        container = NSVisualEffectView(frame: shadowContainer.bounds)
+        // Container view with system default rounded corners and shadow
+        container = NSVisualEffectView(frame: contentView!.bounds)
         container.material = AppearanceSettings.material.nsMaterial
         container.blendingMode = .behindWindow
         container.state = .active
         container.wantsLayer = true
-        container.layer?.cornerRadius = AppearanceSettings.cornerRadius
-        container.layer?.masksToBounds = true
         container.layer?.opacity = Float(AppearanceSettings.opacity)
         container.autoresizingMask = [.width, .height]
-        shadowContainer.addSubview(container)
+        contentView = container
 
         // Search field
         searchField = NSSearchField(frame: NSRect(
@@ -539,9 +524,6 @@ final class LauncherWindow: NSWindow {
 
         // Update appearance from settings
         AppearanceSettings.load()
-        shadowContainer.layer?.cornerRadius = AppearanceSettings.cornerRadius
-        container.layer?.cornerRadius = AppearanceSettings.cornerRadius
-        container.layer?.masksToBounds = true
         container.layer?.opacity = Float(AppearanceSettings.opacity)
         
         // Don't switch input source here - wait until window has focus
