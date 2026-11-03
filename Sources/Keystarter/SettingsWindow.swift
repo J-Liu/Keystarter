@@ -685,17 +685,17 @@ final class SettingsWindow: NSWindow {
         checkUpdatesButton.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(checkUpdatesButton)
 
-        // License button
+        // License and Notice buttons in a row
         let licenseButton = NSButton(title: L("settings.about.license"), target: self, action: #selector(showLicense))
         licenseButton.bezelStyle = .rounded
-        licenseButton.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(licenseButton)
-
-        // Notice button
         let noticeButton = NSButton(title: L("settings.about.notice"), target: self, action: #selector(showNotice))
         noticeButton.bezelStyle = .rounded
-        noticeButton.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(noticeButton)
+
+        let buttonRow = NSStackView(views: [licenseButton, noticeButton])
+        buttonRow.orientation = .horizontal
+        buttonRow.spacing = 16
+        buttonRow.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(buttonRow)
 
         NSLayoutConstraint.activate([
             appIcon.topAnchor.constraint(equalTo: container.topAnchor, constant: 40),
@@ -716,12 +716,9 @@ final class SettingsWindow: NSWindow {
             checkUpdatesButton.topAnchor.constraint(equalTo: githubButton.bottomAnchor, constant: 12),
             checkUpdatesButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
 
-            licenseButton.topAnchor.constraint(equalTo: checkUpdatesButton.bottomAnchor, constant: 12),
-            licenseButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-
-            noticeButton.topAnchor.constraint(equalTo: licenseButton.bottomAnchor, constant: 8),
-            noticeButton.centerXAnchor.constraint(equalTo: container.centerXAnchor),
-            noticeButton.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -20)
+            buttonRow.topAnchor.constraint(equalTo: checkUpdatesButton.bottomAnchor, constant: 12),
+            buttonRow.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            buttonRow.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -20)
         ])
 
         return container
@@ -1058,61 +1055,56 @@ final class SettingsWindow: NSWindow {
     }
 
     @objc private func showLicense() {
-        let licenseWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 500),
-            styleMask: [.titled, .closable, .resizable],
-            backing: .buffered,
-            defer: false
-        )
-        licenseWindow.title = L("settings.about.license")
-        licenseWindow.center()
-
-        let scrollView = NSScrollView(frame: licenseWindow.contentView!.bounds)
-        scrollView.hasVerticalScroller = true
-        scrollView.autoresizingMask = [.width, .height]
-
-        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 580, height: 480))
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 350))
         textView.isEditable = false
         textView.isSelectable = true
-        textView.font = .systemFont(ofSize: 12)
+        textView.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
 
-        // Load LICENSE file
-        if let licensePath = Bundle.main.path(forResource: "LICENSE", ofType: nil),
-           let licenseContent = try? String(contentsOfFile: licensePath, encoding: .utf8) {
-            textView.string = licenseContent
-        } else {
-            textView.string = "GNU AFFERO GENERAL PUBLIC LICENSE\nVersion 3, 19 November 2007"
-        }
+        let licenseText = """
+        GNU AFFERO GENERAL PUBLIC LICENSE
+        Version 3, 19 November 2007
 
-        textView.sizeToFit()
+        Copyright (C) 2007 Free Software Foundation, Inc.
+        Copyright (C) 2026 Jia Liu
+
+        This program is free software: you can redistribute it and/or modify
+        it under the terms of the GNU Affero General Public License as published
+        by the Free Software Foundation, either version 3 of the License, or
+        (at your option) any later version.
+
+        This program is distributed in the hope that it will be useful,
+        but WITHOUT ANY WARRANTY; without even the implied warranty of
+        MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+        GNU Affero General Public License for more details.
+
+        Full license text:
+        https://github.com/J-Liu/Keystarter/blob/main/LICENSE
+        """
+
+        let attributedString = NSMutableAttributedString(string: licenseText, attributes: [
+            .font: NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        ])
+
+        let urlRange = (licenseText as NSString).range(of: "https://github.com/J-Liu/Keystarter/blob/main/LICENSE")
+        attributedString.addAttribute(.link, value: "https://github.com/J-Liu/Keystarter/blob/main/LICENSE", range: urlRange)
+        attributedString.addAttribute(.foregroundColor, value: NSColor.linkColor, range: urlRange)
+
+        textView.textStorage?.setAttributedString(attributedString)
+        textView.textContainerInset = NSSize(width: 8, height: 8)
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 500, height: 370))
         scrollView.documentView = textView
-        licenseWindow.contentView?.addSubview(scrollView)
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
 
-        licenseWindow.makeKeyAndOrderFront(nil)
+        let alert = NSAlert()
+        alert.messageText = L("settings.about.license")
+        alert.accessoryView = scrollView
+        alert.addButton(withTitle: L("alert.ok"))
+        alert.beginSheetModal(for: self)
     }
 
     @objc private func showNotice() {
-        let noticeWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 500, height: 200),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        noticeWindow.title = L("settings.about.notice")
-        noticeWindow.center()
-
-        let scrollView = NSScrollView(frame: noticeWindow.contentView!.bounds.insetBy(dx: 20, dy: 20))
-        scrollView.hasVerticalScroller = true
-        scrollView.autoresizingMask = [.width, .height]
-        scrollView.drawsBackground = false
-
-        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 460, height: 160))
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.font = .systemFont(ofSize: 13)
-        textView.drawsBackground = false
-
-        // Use project's NOTICE content
         let notice = """
         Keystarter - Lightweight, open-source macOS system utility.
         Local-first, AI optional.
@@ -1126,12 +1118,23 @@ final class SettingsWindow: NSWindow {
         be retained in all copies or substantial portions of the software.
         """
 
+        let textView = NSTextView(frame: NSRect(x: 0, y: 0, width: 480, height: 200))
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.font = .systemFont(ofSize: 13, weight: .regular)
         textView.string = notice
-        textView.sizeToFit()
-        scrollView.documentView = textView
-        noticeWindow.contentView?.addSubview(scrollView)
+        textView.textContainerInset = NSSize(width: 8, height: 8)
 
-        noticeWindow.makeKeyAndOrderFront(nil)
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 0, width: 500, height: 220))
+        scrollView.documentView = textView
+        scrollView.hasVerticalScroller = true
+        scrollView.borderType = .bezelBorder
+
+        let alert = NSAlert()
+        alert.messageText = L("settings.about.notice")
+        alert.accessoryView = scrollView
+        alert.addButton(withTitle: L("alert.ok"))
+        alert.beginSheetModal(for: self)
     }
 
     func selectTab(withIdentifier identifier: String) {
