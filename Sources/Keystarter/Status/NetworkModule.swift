@@ -65,13 +65,13 @@ final class NetworkModule: NSObject, StatusModule {
         // Only update from summary if detail view is not open
         guard detailTimer == nil else { return }
 
-        // Fetch process data periodically (every 5 seconds) to keep it fresh
+        // Fetch process data every 2 seconds to keep it fresh for detail view
         let now = Date()
         let shouldFetchProcesses: Bool
         if let lastTime = lastProcessDataTime {
-            shouldFetchProcesses = now.timeIntervalSince(lastTime) >= 5
+            shouldFetchProcesses = now.timeIntervalSince(lastTime) >= 2
         } else {
-            shouldFetchProcesses = true  // First time
+            shouldFetchProcesses = true
         }
         if shouldFetchProcesses {
             lastProcessDataTime = now
@@ -287,7 +287,8 @@ final class NetworkModule: NSObject, StatusModule {
 
         // Show existing data immediately, then refresh
         tableView?.reloadData()
-        refreshDetail()
+        // Immediately fetch process data for detail view (don't wait for timer)
+        updateNetworkData(includeProcesses: true)
         startDetailTimer()
 
         return container
