@@ -1267,15 +1267,12 @@ final class LauncherWindow: NSWindow {
         let fileManager = FileManager.default
         let appDirs = [
             "/Applications",
-            "/System/Applications",
-            NSHomeDirectory() + "/Applications",
-            // Xcode bundled apps
-            "/Applications/Xcode.app/Contents/Applications",
-            // Developer tools
             "/Applications/Utilities",
+            "/System/Applications",
             "/System/Applications/Utilities",
-            // Additional system locations
-            "/System/Library/CoreServices/Applications"
+            // Xcode bundled tools (Icon Composer, Instruments, etc.)
+            "/Applications/Xcode.app/Contents/Applications",
+            NSHomeDirectory() + "/Applications"
         ]
 
         var items: [LaunchItem] = []
@@ -1337,6 +1334,10 @@ final class LauncherWindow: NSWindow {
                 // If it's a .app bundle, add it
                 if name.hasSuffix(".app") {
                     if !seenPaths.contains(fullPath) {
+                        // Skip agent apps (no UI, background only)
+                        if isAgentApp(path: fullPath) {
+                            continue
+                        }
                         seenPaths.insert(fullPath)
                         let displayName = (name as NSString).deletingPathExtension
                         let category = readAppCategory(path: fullPath)
@@ -1386,6 +1387,29 @@ final class LauncherWindow: NSWindow {
         case "public.app-category.healthcare-fitness": return "Health & Fitness"
         default: return "Other"
         }
+    }
+
+    /// Check if an app is an agent (background-only, no UI).
+    private func isAgentApp(path: String) -> Bool {
+        let plistPath = path + "/Contents/Info.plist"
+        guard let data = FileManager.default.contents(atPath: plistPath),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
+            return false
+        }
+
+        // LSUIElement = 1 means agent app (no Dock icon, background only)
+        // Also check for "Application is agent (UIElement)" which is the human-readable key
+        if let uiElement = plist["LSUIElement"] as? Bool, uiElement {
+            return true
+        }
+        if let uiElement = plist["Application is agent (UIElement)"] as? Bool, uiElement {
+            return true
+        }
+        // LSBackgroundOnly = 1 means background-only app (no UI at all)
+        if let bgOnly = plist["LSBackgroundOnly"] as? Bool, bgOnly {
+            return true
+        }
+        return false
     }
 }
 
