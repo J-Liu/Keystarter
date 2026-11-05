@@ -6,15 +6,21 @@ import CoreVideo
 import SystemConfiguration
 
 /// Network process information.
-struct NetworkProcessInfo {
+struct NetworkProcessInfo: Codable {
     let pid: Int32
     let name: String
     let isApp: Bool
-    let icon: NSImage?
     let user: String
     let ppid: Int32
     var downloadSpeed: Double
     var uploadSpeed: Double
+    
+    // Not encoded - loaded on demand from running apps
+    var icon: NSImage? = nil
+    
+    enum CodingKeys: String, CodingKey {
+        case pid, name, isApp, user, ppid, downloadSpeed, uploadSpeed
+    }
 }
 
 /// Network monitoring module.
@@ -51,6 +57,9 @@ final class NetworkModule: NSObject, StatusModule {
     private let processQueue = DispatchQueue(label: "com.keystarter.network.processes", qos: .userInitiated)
     private var downloadSpeed: Double = 0
     private var uploadSpeed: Double = 0
+    
+    // Cache for instant popup display
+    private let processCachePath = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/Keystarter/network_processes.cache")
 
     // Per-process tracking
     private var prevNetIO: [Int32: (in: UInt64, out: UInt64, time: Date)] = [:]
@@ -60,6 +69,28 @@ final class NetworkModule: NSObject, StatusModule {
     private weak var tableView: NSTableView?
     private var detailTimer: Timer?
     private var lastProcessDataTime: Date?
+    
+    // MARK: - Init
+    
+    override init() {
+        super.init()
+        loadCachedProcesses()
+    }
+    
+    private func loadCachedProcesses() {
+        guard let data = FileManager.default.contents(atPath: processCachePath),
+              let cached = try? JSONDecoder().decode([NetworkProcessInfo].self, from: data) else {
+            return
+        }
+        processQueue.sync { processes = cached }
+    }
+    
+    private func saveCachedProcesses() {
+        let data = processQueue.sync { processes }
+        guard let encoded = try? JSONEncoder().encode(data) else { return }
+        try? FileManager.default.createDirectory(atPath: (processCachePath as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        try? encoded.write(to: URL(fileURLWithPath: processCachePath))
+    }
 
     func refreshSummary() {
         // Only update from summary if detail view is not open
@@ -120,6 +151,7 @@ final class NetworkModule: NSObject, StatusModule {
                 // Only update processes if we fetched new data
                 if includeProcesses {
                     self.processQueue.sync { self.processes = newProcesses }
+                    self.saveCachedProcesses()
                 }
 
                 // Update UI if we have process data (detail view requested it)
@@ -567,11 +599,11 @@ final class NetworkModule: NSObject, StatusModule {
                 pid: pid,
                 name: appNames[pid] ?? name,
                 isApp: isApp,
-                icon: appIcons[pid],
                 user: user,
                 ppid: ppid,
                 downloadSpeed: downloadSpeed,
-                uploadSpeed: uploadSpeed
+                uploadSpeed: uploadSpeed,
+                icon: appIcons[pid]
             ))
         }
 
