@@ -508,8 +508,7 @@ final class LauncherWindow: NSWindow {
     }
 
     func show() {
-        // App list is refreshed periodically in background (see init)
-        // No synchronous scan here to avoid UI delay
+        // App list is loaded once at startup and monitored for changes
 
         // Save current input source immediately before any async operations
         saveCurrentInputSource()
@@ -1390,7 +1389,13 @@ final class LauncherWindow: NSWindow {
     }
 
     /// Check if an app is an agent (background-only, no UI).
+    /// Only filters system agent apps - user-installed agents (like TeamViewerHost) are kept.
     private func isAgentApp(path: String) -> Bool {
+        // Only filter agent apps in system directories
+        // User-installed agents (in /Applications, ~/Applications) are kept
+        let isSystemApp = path.hasPrefix("/System/") || path.hasPrefix("/Library/Apple/")
+        guard isSystemApp else { return false }
+
         let plistPath = path + "/Contents/Info.plist"
         guard let data = FileManager.default.contents(atPath: plistPath),
               let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
@@ -1398,7 +1403,6 @@ final class LauncherWindow: NSWindow {
         }
 
         // LSUIElement = 1 means agent app (no Dock icon, background only)
-        // Also check for "Application is agent (UIElement)" which is the human-readable key
         if let uiElement = plist["LSUIElement"] as? Bool, uiElement {
             return true
         }
