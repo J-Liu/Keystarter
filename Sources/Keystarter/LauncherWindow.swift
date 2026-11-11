@@ -1232,8 +1232,10 @@ final class LauncherWindow: NSWindow {
 
     /// Monitor app directories for changes (new/uninstalled apps)
     private func setupAppDirectoryMonitoring() {
+        // Monitor all top-level app directories
         let monitoredDirs = [
             "/Applications",
+            "/System/Applications",
             NSHomeDirectory() + "/Applications"
         ]
 

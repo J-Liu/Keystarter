@@ -21,7 +21,7 @@ final class ClipboardPanel: NSObject {
     /// Cached entries for instant display
     private var cachedEntries: [ClipboardEntry] = []
     private let cacheQueue = DispatchQueue(label: "com.keystarter.clipboard.cache", qos: .utility)
-    
+
     /// Thumbnail cache [path: image]
     private var thumbnailCache: [String: NSImage] = [:]
     private let thumbnailCacheQueue = DispatchQueue(label: "com.keystarter.clipboard.thumbnails", qos: .utility)
@@ -171,54 +171,28 @@ final class ClipboardPanel: NSObject {
     @objc private func pasteEntry(_ sender: NSMenuItem) {
         guard let entry = sender.representedObject as? ClipboardEntry else { return }
 
+        // 1. Set clipboard immediately
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         if entry.type == "text" {
             pasteboard.setString(entry.content, forType: .string)
         } else if entry.type == "image" {
-            // Write raw data directly, avoid NSImage decoding
             if let data = try? Data(contentsOf: URL(fileURLWithPath: entry.content)) {
                 pasteboard.setData(data, forType: .png)
             }
         }
 
-        // Move to front (update created_at)
-        ClipboardManager.shared.db.touchEntry(id: entry.id)
-        NotificationCenter.default.post(name: .clipboardChanged, object: nil)
+        // 2. Paste immediately (before any other operations)
+        sendPaste()
 
+        // 3. Close menu
         hide()
 
-        DispatchQueue.main.async { [weak self] in
-            self?.activateAndPaste()
+        // 4. Update database and notify in background (don't block paste)
+        DispatchQueue.global(qos: .utility).async {
+            ClipboardManager.shared.db.touchEntry(id: entry.id)
+            NotificationCenter.default.post(name: .clipboardChanged, object: nil)
         }
-    }
-
-    private func activateAndPaste() {
-        guard PermissionManager.shared.hasAccessibilityPermission() else {
-            let alert = NSAlert()
-            alert.messageText = L("alert.permissions.title")
-            alert.informativeText = L("alert.permissions.message")
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: L("alert.grant"))
-            alert.addButton(withTitle: L("alert.cancel"))
-            if alert.runModal() == .alertFirstButtonReturn {
-                _ = AXIsProcessTrustedWithOptions([
-                    kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
-                ] as CFDictionary)
-            }
-            return
-        }
-
-        if let app = previousApp {
-            app.activate()
-        }
-        let source = CGEventSource(stateID: .hidSystemState)
-        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true)
-        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
-        vDown?.flags = .maskCommand
-        vUp?.flags = .maskCommand
-        vDown?.post(tap: .cgSessionEventTap)
-        vUp?.post(tap: .cgSessionEventTap)
     }
 
     @objc private func clearHistory() {
@@ -300,5 +274,31 @@ final class ClipboardPanel: NSObject {
 extension ClipboardPanel: NSMenuDelegate {
     func menuDidClose(_ menu: NSMenu) {
         self.menu = nil
+    }
+
+    private func sendPaste() {
+        guard PermissionManager.shared.hasAccessibilityPermission() else {
+            let alert = NSAlert()
+            alert.messageText = L("alert.permissions.title")
+            alert.informativeText = L("alert.permissions.message")
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: L("alert.grant"))
+            alert.addButton(withTitle: L("alert.cancel"))
+            if alert.runModal() == .alertFirstButtonReturn {
+                _ = AXIsProcessTrustedWithOptions([
+                    kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+                ] as CFDictionary)
+            }
+            return
+        }
+
+        // Cmd+V via CGEvent (bypasses menu and goes directly to session)
+        let source = CGEventSource(stateID: .hidSystemState)
+        let vDown = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true)
+        let vUp = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false)
+        vDown?.flags = .maskCommand
+        vUp?.flags = .maskCommand
+        vDown?.post(tap: .cgSessionEventTap)
+        vUp?.post(tap: .cgSessionEventTap)
     }
 }
