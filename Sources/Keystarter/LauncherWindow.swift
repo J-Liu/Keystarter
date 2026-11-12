@@ -9,6 +9,25 @@ private class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
+/// Custom search field to adjust search icon position
+private class CustomSearchField: NSSearchField {
+    var iconVerticalOffset: CGFloat = 0
+
+    override func layout() {
+        super.layout()
+
+        // Adjust search button (magnifying glass) position
+        for subview in subviews {
+            if let button = subview as? NSButton {
+                // This is likely the search button or cancel button
+                var frame = button.frame
+                frame.origin.y -= iconVerticalOffset
+                button.frame = frame
+            }
+        }
+    }
+}
+
 /// A borderless, centered, floating window that hosts the launcher UI.
 /// Hides automatically when it loses focus.
 final class LauncherWindow: NSWindow {
@@ -114,19 +133,19 @@ final class LauncherWindow: NSWindow {
 
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isVisible else { return event }
-            
+
             // Esc - close window
             if event.keyCode == 53 {
                 self.hide()
                 return nil
             }
-            
+
             // Cmd+W - close window
             if event.modifierFlags.contains(.command) && event.keyCode == 13 {
                 self.hide()
                 return nil
             }
-            
+
             // Handle standard editing commands manually for the search field
             if let fieldEditor = self.searchField.currentEditor() {
                 // Tab - autocomplete
@@ -134,7 +153,7 @@ final class LauncherWindow: NSWindow {
                     self.performAutocomplete()
                     return nil
                 }
-                
+
                 if event.modifierFlags.contains(.command) {
                     // Cmd+C - copy
                     if event.keyCode == 8 {
@@ -168,7 +187,7 @@ final class LauncherWindow: NSWindow {
                     }
                 }
             }
-            
+
             return event
         }
 
@@ -305,10 +324,10 @@ final class LauncherWindow: NSWindow {
         container.wantsLayer = true
         container.layer?.cornerRadius = AppearanceSettings.cornerRadius
         container.alphaValue = AppearanceSettings.opacity
-        
+
         // Add as subview (not replacing contentView) - allows window shadow to work
         contentView?.addSubview(container)
-        
+
         // Pin to edges with Auto Layout
         NSLayoutConstraint.activate([
             container.leadingAnchor.constraint(equalTo: contentView!.leadingAnchor),
@@ -316,30 +335,36 @@ final class LauncherWindow: NSWindow {
             container.topAnchor.constraint(equalTo: contentView!.topAnchor),
             container.bottomAnchor.constraint(equalTo: contentView!.bottomAnchor)
         ])
-        
+
         // Use window frame dimensions for initial layout
         let viewWidth = frame.width
         let viewHeight = frame.height
 
-        // Search field
-        searchField = NSSearchField(frame: NSRect(
+        // Search field with custom class for icon position adjustment
+        searchField = CustomSearchField(frame: NSRect(
             x: 16,
             y: viewHeight - 56,
             width: viewWidth - 64,
             height: 40
         ))
-        searchField.autoresizingMask = [.maxYMargin]  // Only keep top margin, fixed width
+        searchField.autoresizingMask = [.maxYMargin]
         searchField.font = .systemFont(ofSize: 20)
         searchField.focusRingType = .none
         searchField.delegate = self
         searchField.target = self
         searchField.action = #selector(searchFieldChanged)
-        // Listen for every keystroke
         searchField.sendsSearchStringImmediately = true
+
+        // Set icon vertical offset (positive = move down)
+        if let customField = searchField as? CustomSearchField {
+            customField.iconVerticalOffset = 0  // Make icon for visual centering
+        }
+
         if let cell = searchField.cell as? NSSearchFieldCell {
             cell.sendsWholeSearchString = false
             cell.sendsSearchStringImmediately = true
         }
+
         container.addSubview(searchField)
 
         // Settings button (gear icon)
@@ -383,7 +408,7 @@ final class LauncherWindow: NSWindow {
         previewTextView.drawsBackground = false
         previewTextView.font = .systemFont(ofSize: 14)
         previewTextView.textContainerInset = NSSize(width: 8, height: 8)
-        
+
         // Add double-click gesture for executing action
         let doubleClickGesture = NSClickGestureRecognizer(target: self, action: #selector(previewDoubleClicked))
         doubleClickGesture.numberOfClicksRequired = 2
@@ -517,7 +542,7 @@ final class LauncherWindow: NSWindow {
         AppearanceSettings.load()
         container.layer?.cornerRadius = AppearanceSettings.cornerRadius
         container.alphaValue = AppearanceSettings.opacity
-        
+
         // Don't switch input source here - wait until window has focus
         isHandlingDockClick = true
 
@@ -732,7 +757,7 @@ final class LauncherWindow: NSWindow {
 
             // MARK: - Background results (bookmarks, history, clipboard - no Spotlight)
             // Spotlight removed from main search path for performance
-            
+
             // 3. Browser bookmarks
             var bookmarkResults: [LaunchItem] = []
             let bookmarkMatches = BrowserBookmarksManager.shared.search(query)
