@@ -14,7 +14,7 @@ final class AppInstallTracker {
     private let lock = NSLock()
 
     /// Apps installed within this many days are considered "new".
-    let newAppDays: Double = 7.0
+    let newAppDays: Double = 0.125
 
     init() {
         load()
