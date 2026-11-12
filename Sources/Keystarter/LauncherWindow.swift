@@ -76,10 +76,6 @@ final class LauncherWindow: NSWindow {
     private var fileContentSearchRevision = 0
     private var fileContentSearchResults: [LaunchItem] = []
 
-    /// Cached running app paths for faster sorting
-    private var cachedRunningAppPaths: Set<String> = []
-    private var runningAppsCacheTimer: Timer?
-
     /// File system monitors for app directories
     private var appDirectoryMonitors: [DispatchSourceFileSystemObject] = []
 
@@ -108,12 +104,6 @@ final class LauncherWindow: NSWindow {
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
 
         setupUI()
-
-        // Cache running apps and update periodically
-        refreshRunningAppsCache()
-        runningAppsCacheTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.refreshRunningAppsCache()
-        }
 
         // Monitor app directories for changes (new/uninstalled apps)
         setupAppDirectoryMonitoring()
@@ -705,7 +695,6 @@ final class LauncherWindow: NSWindow {
             // 2. App filtering using LauncherIndex (thread-safe)
             let indexResults = LauncherIndex.shared.search(query, limit: 100)
             var appResults: [LaunchItem] = []
-            let runningPaths = self.getRunningAppPaths()
 
             for entry in indexResults {
                 // Find matching LaunchItem
@@ -717,7 +706,7 @@ final class LauncherWindow: NSWindow {
                 }
             }
 
-            // Secondary sort: match score first, then new apps, then running apps, then name length
+            // Secondary sort: match score first, then new apps, then name length
             appResults.sort { a, b in
                 let aScore = indexResults.first(where: { $0.path == a.path })?.matchScore ?? 0
                 let bScore = indexResults.first(where: { $0.path == b.path })?.matchScore ?? 0
@@ -729,11 +718,6 @@ final class LauncherWindow: NSWindow {
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
                 if aIsNew != bIsNew { return aIsNew }
-
-                // Tertiary: running apps
-                let aRunning = runningPaths.contains(a.path)
-                let bRunning = runningPaths.contains(b.path)
-                if aRunning != bRunning { return aRunning }
 
                 // Final: name length
                 return a.name.count < b.name.count
@@ -1111,40 +1095,38 @@ final class LauncherWindow: NSWindow {
             }.sorted { $0.key < $1.key }
         } else {
             // Group by frequency (most used)
-            let runningPaths = getRunningAppPaths()
             let sorted = displayApps.sorted { a, b in
-                // Check if either has manualScore (manual override takes priority)
+                // Manual score takes priority
                 let aManual = LaunchHistory.shared.manualScore(for: a.path)
                 let bManual = LaunchHistory.shared.manualScore(for: b.path)
-
-                // If both have manualScore, sort by that
                 if aManual != nil && bManual != nil {
                     return aManual! > bManual!
                 }
-                // If only one has manualScore, it controls the order
                 if aManual != nil || bManual != nil {
-                    // Higher manualScore wins; if one is nil, treat as calculated
                     let aScore = aManual ?? LaunchHistory.shared.effectiveScore(for: a.path)
                     let bScore = bManual ?? LaunchHistory.shared.effectiveScore(for: b.path)
                     return aScore > bScore
                 }
 
-                // Neither has manualScore - normal logic
-                // Newly installed apps first
+                // New + never launched apps first
                 let aIsNew = AppInstallTracker.shared.isNewlyInstalled(path: a.path)
                 let bIsNew = AppInstallTracker.shared.isNewlyInstalled(path: b.path)
-                if aIsNew != bIsNew { return aIsNew }
-                // Running apps second
-                let aRunning = runningPaths.contains(a.path)
-                let bRunning = runningPaths.contains(b.path)
-                if aRunning != bRunning { return aRunning }
-                // Calculated score
+                let aNeverLaunched = LaunchHistory.shared.count(for: a.path) == 0
+                let bNeverLaunched = LaunchHistory.shared.count(for: b.path) == 0
+                let aIsNewUnopened = aIsNew && aNeverLaunched
+                let bIsNewUnopened = bIsNew && bNeverLaunched
+                if aIsNewUnopened != bIsNewUnopened { return aIsNewUnopened }
+
+                // Score
                 let aScore = LaunchHistory.shared.effectiveScore(for: a.path)
                 let bScore = LaunchHistory.shared.effectiveScore(for: b.path)
                 if aScore != bScore { return aScore > bScore }
+
+                // Last launched
                 let aDate = LaunchHistory.shared.lastLaunched(for: a.path) ?? .distantPast
                 let bDate = LaunchHistory.shared.lastLaunched(for: b.path) ?? .distantPast
                 if aDate != bDate { return aDate > bDate }
+
                 return a.name < b.name
             }
             groupedApps = [(L("settings.groupBy.frequency"), sorted)]
@@ -1326,22 +1308,6 @@ final class LauncherWindow: NSWindow {
             // Update LauncherIndex with pre-built aliases
             LauncherIndex.shared.update(apps: items.map { ($0.name, $0.path, nil) })
         }
-    }
-
-    /// Get paths of currently running applications.
-    private func getRunningAppPaths() -> Set<String> {
-        return cachedRunningAppPaths
-    }
-
-    private func refreshRunningAppsCache() {
-        var paths = Set<String>()
-        let workspace = NSWorkspace.shared
-        for app in workspace.runningApplications {
-            if let url = app.bundleURL {
-                paths.insert(url.path)
-            }
-        }
-        cachedRunningAppPaths = paths
     }
 
     private func scanDirectoryForApps(at path: String, fileManager: FileManager, items: inout [LaunchItem], seenPaths: inout Set<String>) {

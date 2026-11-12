@@ -122,13 +122,23 @@ final class LaunchHistory {
     func effectiveScore(for identifier: String) -> Int {
         lock.lock()
         defer { lock.unlock() }
-        guard let entry = entries[identifier] else { return 0 }
-        if let manual = entry.manualScore {
-            return manual
+
+        if let entry = entries[identifier] {
+            if let manual = entry.manualScore {
+                return manual
+            }
+            // Calculated score: count * 10 + recency bonus
+            let daysSinceLaunch = Date().timeIntervalSince(entry.lastLaunched) / 86400
+            return entry.count * 10 + Int(100 / (1 + daysSinceLaunch))
         }
-        // Calculated score: count * 10 + recency bonus
-        let daysSinceLaunch = Date().timeIntervalSince(entry.lastLaunched) / 86400
-        return entry.count * 10 + Int(100 / (1 + daysSinceLaunch))
+
+        // App never launched - check if it's still "new"
+        // If not new anymore, treat as launched once (score = 10)
+        if !AppInstallTracker.shared.isNewlyInstalled(path: identifier) {
+            return 10  // Equivalent to 1 launch
+        }
+
+        return 0
     }
 
     /// Get the last launched date for an identifier.
