@@ -7,8 +7,10 @@ import AppKit
 /// Uses its own event monitor to capture keys reliably.
 final class HotkeyRecorderButton: NSButton {
 
-    /// Class-level flag so SettingsWindow knows not to intercept keys.
+    /// Class-level flag so SettingsWindow and HotkeyManager know not to intercept.
     static var isAnyRecording = false
+    /// The currently recording button (only one at a time)
+    private static weak var currentRecorder: HotkeyRecorderButton?
 
     var onKeyRecorded: ((HotkeyRecorderButton) -> Void)?
     private var isRecording = false
@@ -42,15 +44,23 @@ final class HotkeyRecorderButton: NSButton {
     }
 
     @objc private func startRecording() {
+        // Cancel any other recording in progress
+        if let current = HotkeyRecorderButton.currentRecorder, current !== self {
+            current.cancelRecording()
+        }
+
         isRecording = true
         HotkeyRecorderButton.isAnyRecording = true
+        HotkeyRecorderButton.currentRecorder = self
         self.title = "Press shortcut..."
         self.state = .on
         window?.makeFirstResponder(self)
 
         // Use our own event monitor to capture keys reliably
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self, self.isRecording else { return event }
+            guard let self = self else { return event }
+            // Only handle if this is the current recorder
+            if !self.isRecording { return event }
             self.handleKeyEvent(event)
             return nil
         }
@@ -59,10 +69,20 @@ final class HotkeyRecorderButton: NSButton {
     private func stopRecording() {
         isRecording = false
         HotkeyRecorderButton.isAnyRecording = false
+        HotkeyRecorderButton.currentRecorder = nil
         self.state = .off
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
+        }
+    }
+
+    private func cancelRecording() {
+        stopRecording()
+        if recordedKeyCode != 0 {
+            self.title = formatShortcut(keyCode: recordedKeyCode, modifiers: recordedModifiers)
+        } else {
+            self.title = "Click to record"
         }
     }
 

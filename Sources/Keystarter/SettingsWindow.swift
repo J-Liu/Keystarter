@@ -737,8 +737,8 @@ final class SettingsWindow: NSWindow {
     private func setupKeyHandlers() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isVisible else { return event }
-            // When recording hotkey, intercept ALL keys (window won't respond)
-            if HotkeyRecorderButton.isAnyRecording { return nil }
+            // When recording hotkey, let the recorder handle it (don't intercept)
+            if HotkeyRecorderButton.isAnyRecording { return event }
             if event.keyCode == 53 { // Esc
                 // If there's a focused control, clear focus first
                 if firstResponder != nil && firstResponder != self {
