@@ -5,6 +5,14 @@ import AppKit
 import Carbon
 import UniformTypeIdentifiers
 
+/// A view that clears first responder when clicked.
+private class ClickableView: NSView {
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(nil)
+        super.mouseDown(with: event)
+    }
+}
+
 /// Settings window with tabs for configuration.
 final class SettingsWindow: NSWindow {
 
@@ -86,9 +94,9 @@ final class SettingsWindow: NSWindow {
 
     // MARK: - Layout Helpers
 
-    /// Wrap content in a top-aligned container so the stack starts at the top.
+    /// Wrap content in a top-aligned container that clears focus when clicked.
     private func wrapInTopAlignedContainer(_ stack: NSStackView) -> NSView {
-        let container = NSView()
+        let container = ClickableView()
         stack.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -635,7 +643,7 @@ final class SettingsWindow: NSWindow {
     // MARK: - About Tab
 
     private func createAboutTab() -> NSView {
-        let container = NSView()
+        let container = ClickableView()
 
         // App Icon
         let appIcon = NSImageView()
@@ -729,8 +737,15 @@ final class SettingsWindow: NSWindow {
     private func setupKeyHandlers() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self = self, self.isVisible else { return event }
-            if HotkeyRecorderButton.isAnyRecording { return event }
+            // When recording hotkey, intercept ALL keys (window won't respond)
+            if HotkeyRecorderButton.isAnyRecording { return nil }
             if event.keyCode == 53 { // Esc
+                // If there's a focused control, clear focus first
+                if firstResponder != nil && firstResponder != self {
+                    makeFirstResponder(nil)
+                    return nil
+                }
+                // Otherwise close window
                 self.close()
                 return nil
             }

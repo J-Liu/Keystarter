@@ -121,6 +121,11 @@ final class HotkeyManager {
             return Unmanaged.passRetained(event)
         }
 
+        // Don't trigger hotkeys while recording in settings
+        if HotkeyRecorderButton.isAnyRecording {
+            return Unmanaged.passRetained(event)
+        }
+
         let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
         let flags = event.flags
 
