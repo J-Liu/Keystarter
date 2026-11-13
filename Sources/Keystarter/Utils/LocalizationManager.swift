@@ -44,7 +44,7 @@ final class LocalizationManager {
             loadLanguage()
         }
     }
-    
+
     /// The effective language (resolves "system" to actual system language)
     private var effectiveLanguage: Language {
         let lang = currentLanguage
@@ -92,11 +92,11 @@ final class LocalizationManager {
             "settings.theme.light": "Light",
             "settings.theme.dark": "Dark",
             "settings.language": "Language:",
-            "settings.language.system": "System Default",
+            "settings.language.system": "System",
             "settings.hotkey": "Hotkey:",
             "settings.hotkey.hint": "Click to record",
             "settings.statusbar": "Status Bar:",
-            "settings.statusbar.system": "System Default",
+            "settings.statusbar.system": "System",
             "settings.statusbar.light": "Light",
             "settings.statusbar.dark": "Dark",
             "settings.statusbar.hidden": "Hidden",
