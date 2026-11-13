@@ -88,15 +88,15 @@ final class LocalizationManager {
 
             // General Tab
             "settings.theme": "Theme:",
-            "settings.theme.system": "System",
+            "settings.theme.system": "System Default",
             "settings.theme.light": "Light",
             "settings.theme.dark": "Dark",
             "settings.language": "Language:",
-            "settings.language.system": "System",
+            "settings.language.system": "System Default",
             "settings.hotkey": "Hotkey:",
             "settings.hotkey.hint": "Click to record",
             "settings.statusbar": "Status Bar:",
-            "settings.statusbar.system": "System",
+            "settings.statusbar.system": "System Default",
             "settings.statusbar.light": "Light",
             "settings.statusbar.dark": "Dark",
             "settings.statusbar.hidden": "Hidden",
