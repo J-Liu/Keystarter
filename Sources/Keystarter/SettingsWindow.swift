@@ -14,7 +14,7 @@ private class ClickableView: NSView {
 }
 
 /// Settings window with tabs for configuration.
-final class SettingsWindow: NSWindow {
+final class SettingsWindow: NSWindow, NSTabViewDelegate, NSTextFieldDelegate {
 
     private var tabView: NSTabView!
     private var generalTab: NSView!
@@ -23,6 +23,9 @@ final class SettingsWindow: NSWindow {
     private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
+    private var clipboardHotkeyRecorder: HotkeyRecorderButton!
+    private var maxCountField: NSTextField!
+    private var maxDaysField: NSTextField!
     private var opacityValueLabel: NSTextField!
     private var cornerRadiusValueLabel: NSTextField!
 
@@ -58,6 +61,7 @@ final class SettingsWindow: NSWindow {
     private func setupUI() {
         tabView = NSTabView(frame: contentView!.bounds.insetBy(dx: 10, dy: 10))
         tabView.autoresizingMask = [.width, .height]
+        tabView.delegate = self
 
         generalTab = createGeneralTab()
         let generalItem = NSTabViewItem(identifier: "general")
@@ -167,6 +171,7 @@ final class SettingsWindow: NSWindow {
         hotkeyRecorder = HotkeyRecorderButton()
         hotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.hotkeyChanged(recorder: recorder)
+            recorder.window?.makeFirstResponder(nil)
         }
         let savedKeyCode = UserDefaults.standard.integer(forKey: "hotkey.keyCode")
         let savedModifiers = UserDefaults.standard.integer(forKey: "hotkey.modifiers")
@@ -395,9 +400,10 @@ final class SettingsWindow: NSWindow {
         stack.addArrangedSubview(makeRow(label: "", control: clipboardEnabledCheckbox))
 
         // Row: Hotkey
-        let clipboardHotkeyRecorder = HotkeyRecorderButton()
+        clipboardHotkeyRecorder = HotkeyRecorderButton()
         clipboardHotkeyRecorder.onKeyRecorded = { [weak self] recorder in
             self?.clipboardHotkeyChanged(recorder: recorder)
+            recorder.window?.makeFirstResponder(nil)
         }
         let savedKeyCode = UserDefaults.standard.integer(forKey: "clipboard.hotkey.keyCode")
         let savedModifiers = UserDefaults.standard.integer(forKey: "clipboard.hotkey.modifiers")
@@ -409,19 +415,17 @@ final class SettingsWindow: NSWindow {
         stack.addArrangedSubview(makeRow(label: L("settings.clipboard.hotkey"), control: clipboardHotkeyRecorder))
 
         // Row: Max Count
-        let maxCountField = NSTextField()
+        maxCountField = NSTextField()
         let currentMaxCount = UserDefaults.standard.integer(forKey: "clipboard.maxCount") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxCount") : 500
         maxCountField.stringValue = String(currentMaxCount)
-        maxCountField.target = self
-        maxCountField.action = #selector(clipboardMaxCountChanged(_:))
+        maxCountField.delegate = self
         maxCountField.widthAnchor.constraint(equalToConstant: 80).isActive = true
         stack.addArrangedSubview(makeRow(label: L("settings.clipboard.maxCount"), control: maxCountField))
 
         // Row: Max Days
-        let maxDaysField = NSTextField()
+        maxDaysField = NSTextField()
         maxDaysField.stringValue = String(UserDefaults.standard.integer(forKey: "clipboard.maxDays") > 0 ? UserDefaults.standard.integer(forKey: "clipboard.maxDays") : 30)
-        maxDaysField.target = self
-        maxDaysField.action = #selector(clipboardMaxDaysChanged(_:))
+        maxDaysField.delegate = self
         maxDaysField.widthAnchor.constraint(equalToConstant: 80).isActive = true
         stack.addArrangedSubview(makeRow(label: L("settings.clipboard.maxDays"), control: maxDaysField))
 
@@ -1039,18 +1043,6 @@ final class SettingsWindow: NSWindow {
         }
     }
 
-    @objc private func clipboardMaxCountChanged(_ sender: NSTextField) {
-        if let value = Int(sender.stringValue) {
-            UserDefaults.standard.set(value, forKey: "clipboard.maxCount")
-        }
-    }
-
-    @objc private func clipboardMaxDaysChanged(_ sender: NSTextField) {
-        if let value = Int(sender.stringValue) {
-            UserDefaults.standard.set(value, forKey: "clipboard.maxDays")
-        }
-    }
-
     @objc private func clearClipboardHistory() {
         let alert = NSAlert()
         alert.messageText = "Clear Clipboard History?"
@@ -1154,6 +1146,47 @@ final class SettingsWindow: NSWindow {
 
     func selectTab(withIdentifier identifier: String) {
         tabView.selectTabViewItem(withIdentifier: identifier)
+    }
+
+    // MARK: - NSTabViewDelegate
+
+    func tabView(_ tabView: NSTabView, shouldSelect tabViewItem: NSTabViewItem?) -> Bool {
+        // Clear focus when switching tabs
+        makeFirstResponder(nil)
+        return true
+    }
+
+    // MARK: - NSTextFieldDelegate
+
+    func controlTextDidEndEditing(_ obj: Notification) {
+        guard let textField = obj.object as? NSTextField else { return }
+
+        if textField == maxCountField {
+            if let value = Int(textField.stringValue), value > 0 {
+                UserDefaults.standard.set(value, forKey: "clipboard.maxCount")
+            } else {
+                // Restore valid value
+                let current = UserDefaults.standard.integer(forKey: "clipboard.maxCount")
+                textField.stringValue = current > 0 ? String(current) : "500"
+            }
+        } else if textField == maxDaysField {
+            if let value = Int(textField.stringValue), value >= 0 {
+                UserDefaults.standard.set(value, forKey: "clipboard.maxDays")
+            } else {
+                // Restore valid value
+                let current = UserDefaults.standard.integer(forKey: "clipboard.maxDays")
+                textField.stringValue = current > 0 ? String(current) : "30"
+            }
+        }
+    }
+
+    func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+        // Handle Enter key - clear focus to apply changes
+        if commandSelector == #selector(insertNewline(_:)) {
+            makeFirstResponder(nil)
+            return true
+        }
+        return false
     }
 }
 
