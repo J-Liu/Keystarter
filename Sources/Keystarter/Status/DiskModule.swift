@@ -602,6 +602,7 @@ private final class DiskLineChartView: NSView {
     private var flipY: Bool = false
     private var oldValues: [Double] = []
     private var lastUpdateTime: Date = Date()
+    private var shiftOffset: CGFloat = 0
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -628,18 +629,23 @@ private final class DiskLineChartView: NSView {
         let maxCount = 60
         guard values.count > 1 else { return }
 
+        let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
+        let height = self.frame.height - offset
+        let stepX = self.frame.width / CGFloat(maxCount - 1)
+        let zero = flipY ? 0 : self.frame.height
+
         // Detect data change
-        if values != oldValues && !oldValues.isEmpty {
+        if values != oldValues {
+            if !oldValues.isEmpty { shiftOffset = stepX }
             oldValues = values
             lastUpdateTime = Date()
-        } else if oldValues.isEmpty {
-            oldValues = values
         }
 
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
+        let currentShift = shiftOffset * (1.0 - progress)
 
-        // Interpolate
+        // Interpolate y values
         var displayValues: [Double] = []
         for i in 0..<values.count {
             let newVal = values[i]
@@ -653,18 +659,13 @@ private final class DiskLineChartView: NSView {
         }
         if maxValue == 0 { maxValue = 1 }
 
-        let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
-        let height = self.frame.height - offset
-        let stepX = self.frame.width / CGFloat(maxCount - 1)
-        let zero = flipY ? 0 : self.frame.height
-
         var linePoints: [CGPoint] = []
         for (i, v) in displayValues.enumerated() {
             var y = (v / maxValue) * height
             if !flipY {
                 y = height - y
             }
-            let x = self.frame.width - CGFloat(displayValues.count - 1 - i) * stepX
+            let x = self.frame.width - CGFloat(displayValues.count - 1 - i) * stepX + currentShift
             linePoints.append(CGPoint(x: x, y: y))
         }
 

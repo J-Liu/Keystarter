@@ -276,6 +276,7 @@ private final class CPULineChartView: NSView {
     private let colorProvider: () -> NSColor
     private var oldValues: [Double] = []
     private var lastUpdateTime: Date = Date()
+    private var shiftOffset: CGFloat = 0
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -298,18 +299,20 @@ private final class CPULineChartView: NSView {
         let maxCount = 60
         guard values.count > 1 else { return }
 
+        let stepX = self.frame.width / CGFloat(maxCount - 1)
+
         // Detect data change
-        if values != oldValues && !oldValues.isEmpty {
+        if values != oldValues {
+            if !oldValues.isEmpty { shiftOffset = stepX }
             oldValues = values
             lastUpdateTime = Date()
-        } else if oldValues.isEmpty {
-            oldValues = values
         }
 
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
+        let currentShift = shiftOffset * (1.0 - progress)
 
-        // Interpolate
+        // Interpolate y values
         var displayValues: [Double] = []
         for i in 0..<values.count {
             let newVal = values[i]
@@ -318,12 +321,11 @@ private final class CPULineChartView: NSView {
         }
 
         let height = self.frame.height
-        let stepX = self.frame.width / CGFloat(maxCount - 1)
 
         var linePoints: [CGPoint] = []
         for (i, v) in displayValues.enumerated() {
             let y = v / 100.0 * height
-            let x = self.frame.width - CGFloat(displayValues.count - 1 - i) * stepX
+            let x = self.frame.width - CGFloat(displayValues.count - 1 - i) * stepX + currentShift
             linePoints.append(CGPoint(x: x, y: y))
         }
 
@@ -331,7 +333,6 @@ private final class CPULineChartView: NSView {
 
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
-
         for i in 1..<linePoints.count {
             let prev = linePoints[i - 1]
             let curr = linePoints[i]

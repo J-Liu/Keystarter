@@ -561,6 +561,7 @@ final class MemoryChartView: NSView {
     private let chartColorProvider: () -> NSColor
     private var oldHistory: [Double] = []
     private var lastUpdateTime: Date = Date()
+    private var shiftOffset: CGFloat = 0
 
     init(frame frameRect: NSRect, historyProvider: @escaping () -> [Double], usedMemoryProvider: @escaping () -> UInt64, colorProvider: @escaping () -> NSColor) {
         self.historyProvider = historyProvider
@@ -601,18 +602,24 @@ final class MemoryChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
+        let padding: CGFloat = 8
+        let labelHeight: CGFloat = 24
+        let height = bounds.height - labelHeight - padding
+        let width = bounds.width - padding * 2
+        let stepX = width / CGFloat(maxHistoryCount - 1)
+
         // Detect data change
-        if history != oldHistory && !oldHistory.isEmpty {
+        if history != oldHistory {
+            if !oldHistory.isEmpty { shiftOffset = stepX }
             oldHistory = history
             lastUpdateTime = Date()
-        } else if oldHistory.isEmpty {
-            oldHistory = history
         }
 
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
+        let currentShift = shiftOffset * (1.0 - progress)
 
-        // Interpolate
+        // Interpolate y values
         var displayHistory: [Double] = []
         for i in 0..<history.count {
             let newVal = history[i]
@@ -623,15 +630,9 @@ final class MemoryChartView: NSView {
         let totalGB = Double(totalMemory) / 1_073_741_824.0
         let usedGB = Double(usedMemory) / 1_073_741_824.0
 
-        let padding: CGFloat = 8
-        let labelHeight: CGFloat = 24
-        let height = bounds.height - labelHeight - padding
-        let width = bounds.width - padding * 2
-        let stepX = width / CGFloat(maxHistoryCount - 1)
-
         var linePoints: [CGPoint] = []
         for (i, value) in displayHistory.enumerated() {
-            let x = bounds.width - padding - CGFloat(displayHistory.count - 1 - i) * stepX
+            let x = bounds.width - padding - CGFloat(displayHistory.count - 1 - i) * stepX + currentShift
             let y = padding + min(value / totalGB, 1.0) * height
             linePoints.append(CGPoint(x: x, y: y))
         }
@@ -660,7 +661,6 @@ final class MemoryChartView: NSView {
         chartColor.withAlphaComponent(0.9).setStroke()
         linePath.stroke()
 
-        // Labels
         let usageLabel = NSAttributedString(string: String(format: "%.1f GB", usedGB), attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.secondaryLabelColor

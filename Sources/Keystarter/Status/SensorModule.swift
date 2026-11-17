@@ -841,6 +841,7 @@ final class FanLineChartView: NSView {
     private var oldLeft: [Int] = []
     private var oldRight: [Int] = []
     private var lastUpdateTime: Date = Date()
+    private var shiftOffset: CGFloat = 0  // For smooth shift animation
 
     private let leftColorProvider: () -> NSColor
     private let rightColorProvider: () -> NSColor
@@ -886,31 +887,33 @@ final class FanLineChartView: NSView {
         let rightHistory = rightProvider()
         let maxSpeed = maxSpeedProvider()
 
-        // Detect change
-        if leftHistory != oldLeft {
-            oldLeft = leftHistory
-            lastUpdateTime = Date()
-        }
-        if rightHistory != oldRight {
-            oldRight = rightHistory
-        }
-
         let padding: CGFloat = 8
         let height = bounds.height - padding * 2
         let width = bounds.width - padding * 2
-        let xRatio = width / CGFloat(60 - 1)
+        let stepX = width / CGFloat(60 - 1)
+
+        // Detect data change
+        if leftHistory != oldLeft || rightHistory != oldRight {
+            if !oldLeft.isEmpty { shiftOffset = stepX }  // Start shift animation
+            oldLeft = leftHistory
+            oldRight = rightHistory
+            lastUpdateTime = Date()
+        }
 
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
 
+        // Smooth shift: shiftOffset decreases from stepX to 0
+        let currentShift = shiftOffset * (1.0 - progress)
+
         if leftHistory.count > 1 {
             let displayLeft = interpolate(from: oldLeft, to: leftHistory, progress: progress)
-            drawLine(history: displayLeft, maxSpeed: maxSpeed, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            drawLine(history: displayLeft, maxSpeed: maxSpeed, color: leftColorProvider(), padding: padding, height: height, stepX: stepX, shift: currentShift)
         }
 
         if rightHistory.count > 1 {
             let displayRight = interpolate(from: oldRight, to: rightHistory, progress: progress)
-            drawLine(history: displayRight, maxSpeed: maxSpeed, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            drawLine(history: displayRight, maxSpeed: maxSpeed, color: rightColorProvider(), padding: padding, height: height, stepX: stepX, shift: currentShift)
         }
     }
 
@@ -926,10 +929,11 @@ final class FanLineChartView: NSView {
         return result
     }
 
-    private func drawLine(history: [Int], maxSpeed: Int, color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat) {
+    private func drawLine(history: [Int], maxSpeed: Int, color: NSColor, padding: CGFloat, height: CGFloat, stepX: CGFloat, shift: CGFloat) {
         var points: [CGPoint] = []
         for (i, speed) in history.enumerated() {
-            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio
+            // Shift all points left, newest point enters from right edge
+            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * stepX + shift
             let y = padding + CGFloat(speed) / CGFloat(maxSpeed > 0 ? maxSpeed : 6000) * (height - 4)
             points.append(CGPoint(x: x, y: y))
         }
