@@ -224,7 +224,7 @@ final class SensorModule: NSObject, StatusModule {
         }
     }
 
-    private func refreshDetail() {
+    func refreshDetail() {
         // Run heavy sensor reading on background thread
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
@@ -269,6 +269,7 @@ final class SensorModule: NSObject, StatusModule {
 
     private func updateFanChart() {
         guard let chart = chartView else { return }
+
         chart.subviews.forEach { $0.removeFromSuperview() }
         chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
 
@@ -540,7 +541,7 @@ final class SensorModule: NSObject, StatusModule {
     }
 
     private func readAllSensors() {
-        allSensors = []
+        var sensors: [(key: String, name: String, value: Double)] = []
 
         // Read from HID first (most reliable for Apple Silicon CPU/GPU temps)
         let hidTemps = SensorReaderSwift.readTemperatures()
@@ -548,7 +549,7 @@ final class SensorModule: NSObject, StatusModule {
             let name = mapHIDSensorName(key)
             // Only include sensors with valid names and reasonable values
             if !name.isEmpty && value > 0 && value < 120 {
-                allSensors.append((key: key, name: name, value: value))
+                sensors.append((key: key, name: name, value: value))
             }
         }
 
@@ -606,8 +607,8 @@ final class SensorModule: NSObject, StatusModule {
                 if let value = readSMCValue(key: key) {
                     // Filter out invalid values (0, >120, or clearly broken sensors)
                     if value > 10 && value < 120 {
-                        if !allSensors.contains(where: { $0.key == key }) {
-                            allSensors.append((key: key, name: localizedName!, value: value))
+                        if !sensors.contains(where: { $0.key == key }) {
+                            sensors.append((key: key, name: localizedName!, value: value))
                         }
                     }
                 }
@@ -615,7 +616,7 @@ final class SensorModule: NSObject, StatusModule {
         }
 
         // Sort by name, CPU first, then GPU, Memory, etc.
-        allSensors.sort { a, b in
+        sensors.sort { a, b in
             let order = [
                 L("sensor.cpu.ecore"),
                 L("sensor.cpu.pcore"),
@@ -636,6 +637,8 @@ final class SensorModule: NSObject, StatusModule {
             }
             return a.name < b.name
         }
+
+        allSensors = sensors
     }
 
     private func mapHIDSensorName(_ key: String) -> String {
