@@ -822,7 +822,6 @@ final class GPUChartView: NSView {
     private let rendererChart: GPULineChartView
     private let tilerChart: GPULineChartView
     private let aneChart: GPULineChartView
-    private var timer: Timer?
 
     private var currentDevice: Double = 0
     private var currentRenderer: Double = 0
@@ -875,21 +874,24 @@ final class GPUChartView: NSView {
     }
 
     func startAnimation() {
-        guard timer == nil else { return }
-        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.needsDisplay = true
-            self?.deviceChart.needsDisplay = true
-            self?.rendererChart.needsDisplay = true
-            self?.tilerChart.needsDisplay = true
-            self?.aneChart.needsDisplay = true
-        }
-        RunLoop.current.add(t, forMode: .common)
-        timer = t
+        ChartTimerManager.shared.register(self)
     }
 
     func stopAnimation() {
-        timer?.invalidate()
-        timer = nil
+        ChartTimerManager.shared.unregister(self)
+    }
+
+    override var needsDisplay: Bool {
+        get { super.needsDisplay }
+        set {
+            super.needsDisplay = newValue
+            if newValue {
+                deviceChart.needsDisplay = true
+                rendererChart.needsDisplay = true
+                tilerChart.needsDisplay = true
+                aneChart.needsDisplay = true
+            }
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {

@@ -329,7 +329,6 @@ private final class CPULineChartView: NSView {
 final class CPUChartView: NSView {
     private let systemChart: CPULineChartView
     private let userChart: CPULineChartView
-    private var timer: Timer?
     private var currentCoreUsages: [CoreUsage] = []
 
     init(frame frameRect: NSRect, systemHistoryProvider: @escaping () -> [Double], userHistoryProvider: @escaping () -> [Double]) {
@@ -366,19 +365,22 @@ final class CPUChartView: NSView {
     }
 
     func startAnimation() {
-        guard timer == nil else { return }
-        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.needsDisplay = true
-            self?.systemChart.needsDisplay = true
-            self?.userChart.needsDisplay = true
-        }
-        RunLoop.current.add(t, forMode: .common)
-        timer = t
+        ChartTimerManager.shared.register(self)
     }
 
     func stopAnimation() {
-        timer?.invalidate()
-        timer = nil
+        ChartTimerManager.shared.unregister(self)
+    }
+
+    override var needsDisplay: Bool {
+        get { super.needsDisplay }
+        set {
+            super.needsDisplay = newValue
+            if newValue {
+                systemChart.needsDisplay = true
+                userChart.needsDisplay = true
+            }
+        }
     }
 
     override func draw(_ dirtyRect: NSRect) {

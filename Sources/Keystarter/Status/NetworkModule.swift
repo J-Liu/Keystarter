@@ -863,7 +863,6 @@ private final class NetworkLineChartView: NSView {
 final class NetworkChartView: NSView {
     private let uploadChart: NetworkLineChartView
     private let downloadChart: NetworkLineChartView
-    private var timer: Timer?
 
     private var currentUploadSpeed: Double = 0
     private var currentDownloadSpeed: Double = 0
@@ -896,19 +895,22 @@ final class NetworkChartView: NSView {
     }
 
     func startAnimation() {
-        guard timer == nil else { return }
-        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.needsDisplay = true
-            self?.uploadChart.needsDisplay = true
-            self?.downloadChart.needsDisplay = true
-        }
-        RunLoop.current.add(t, forMode: .common)
-        timer = t
+        ChartTimerManager.shared.register(self)
     }
 
     func stopAnimation() {
-        timer?.invalidate()
-        timer = nil
+        ChartTimerManager.shared.unregister(self)
+    }
+
+    override var needsDisplay: Bool {
+        get { super.needsDisplay }
+        set {
+            super.needsDisplay = newValue
+            if newValue {
+                uploadChart.needsDisplay = true
+                downloadChart.needsDisplay = true
+            }
+        }
     }
 
     func updateCurrentSpeeds(download: Double, upload: Double) {

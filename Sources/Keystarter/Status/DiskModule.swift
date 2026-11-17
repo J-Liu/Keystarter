@@ -681,7 +681,6 @@ private final class DiskLineChartView: NSView {
 final class DiskChartView: NSView {
     private let writeChart: DiskLineChartView
     private let readChart: DiskLineChartView
-    private var timer: Timer?
 
     private var currentReadSpeed: Double = 0
     private var currentWriteSpeed: Double = 0
@@ -715,19 +714,22 @@ final class DiskChartView: NSView {
     }
 
     func startAnimation() {
-        guard timer == nil else { return }
-        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.needsDisplay = true
-            self?.writeChart.needsDisplay = true
-            self?.readChart.needsDisplay = true
-        }
-        RunLoop.current.add(t, forMode: .common)
-        timer = t
+        ChartTimerManager.shared.register(self)
     }
 
     func stopAnimation() {
-        timer?.invalidate()
-        timer = nil
+        ChartTimerManager.shared.unregister(self)
+    }
+
+    override var needsDisplay: Bool {
+        get { super.needsDisplay }
+        set {
+            super.needsDisplay = newValue
+            if newValue {
+                writeChart.needsDisplay = true
+                readChart.needsDisplay = true
+            }
+        }
     }
 
     func updateCurrentSpeeds(read: Double, write: Double) {

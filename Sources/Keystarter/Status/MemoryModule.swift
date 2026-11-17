@@ -560,7 +560,6 @@ final class MemoryChartView: NSView {
     private let usedMemoryProvider: () -> UInt64
     private var totalMemory: UInt64 = 0
     private let chartColorProvider: () -> NSColor
-    private var timer: Timer?
 
     init(frame frameRect: NSRect, historyProvider: @escaping () -> [Double], usedMemoryProvider: @escaping () -> UInt64, colorProvider: @escaping () -> NSColor) {
         self.historyProvider = historyProvider
@@ -577,19 +576,13 @@ final class MemoryChartView: NSView {
     deinit {
         stopAnimation()
     }
-    
+
     func startAnimation() {
-        guard timer == nil else { return }
-        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.needsDisplay = true
-        }
-        RunLoop.current.add(t, forMode: .common)
-        timer = t
+        ChartTimerManager.shared.register(self)
     }
-    
+
     func stopAnimation() {
-        timer?.invalidate()
-        timer = nil
+        ChartTimerManager.shared.unregister(self)
     }
     
     func setTotalMemory(_ total: UInt64) {
