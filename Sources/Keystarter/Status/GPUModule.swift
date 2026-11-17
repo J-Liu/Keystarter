@@ -58,17 +58,11 @@ final class GPUModule: NSObject, StatusModule {
     private(set) var summaryText: String = "0"
     private(set) var summaryValue: String = "0"
 
-    // Dynamic refresh interval based on activity
-    private var currentRefreshInterval: TimeInterval = 2.0
-    var refreshInterval: TimeInterval { currentRefreshInterval }
-
-    private var previousGPUValue: Double = 0
-    private let minRefreshInterval: TimeInterval = 0.5
-    private let maxRefreshInterval: TimeInterval = 10.0
-    private let activityThreshold: Double = 5.0  // 5% change triggers speedup
+    var refreshInterval: TimeInterval { 2.0 }
 
     private var processes: [GPUProcessInfo] = []
     private let processQueue = DispatchQueue(label: "com.keystarter.gpu.processes", qos: .userInitiated)
+    private var isRefreshPaused: Bool = false
     private var gpuUsage: Double = 0
     private var rendererUtil: Double = 0
     private var tilerUtil: Double = 0
@@ -98,7 +92,6 @@ final class GPUModule: NSObject, StatusModule {
 
     private weak var chartView: GPUChartView?
     private weak var tableView: NSTableView?
-    private var detailTimer: Timer?
 
     override init() {
         super.init()
@@ -235,18 +228,7 @@ final class GPUModule: NSObject, StatusModule {
         summaryText = value
         summaryValue = value
 
-        // Dynamic refresh rate based on GPU activity change
-        let gpuDelta = abs(info.device - previousGPUValue)
-        if gpuDelta > activityThreshold {
-            // High activity: speed up refresh
-            currentRefreshInterval = max(currentRefreshInterval / 1.5, minRefreshInterval)
-        } else {
-            // Low activity: slow down refresh
-            currentRefreshInterval = min(currentRefreshInterval * 1.5, maxRefreshInterval)
-        }
-        previousGPUValue = info.device
-
-        // Update history on every refresh (app startup onwards)
+        // Update history on every refresh
         deviceHistory.append(info.device)
         rendererHistory.append(info.renderer)
         tilerHistory.append(info.tiler)
@@ -281,9 +263,14 @@ final class GPUModule: NSObject, StatusModule {
         container.addSubview(headerView)
 
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = GPUChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        let chart = GPUChartView(
+            frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight),
+            deviceHistoryProvider: { [weak self] in self?.deviceHistory ?? [] },
+            rendererHistoryProvider: { [weak self] in self?.rendererHistory ?? [] },
+            tilerHistoryProvider: { [weak self] in self?.tilerHistory ?? [] },
+            aneHistoryProvider: { [weak self] in self?.aneHistory ?? [] }
+        )
         chart.setValues(device: gpuUsage, renderer: rendererUtil, tiler: tilerUtil, ane: aneUtilization)
-        chart.setHistory(device: deviceHistory, renderer: rendererHistory, tiler: tilerHistory, ane: aneHistory)
         chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
@@ -308,6 +295,12 @@ final class GPUModule: NSObject, StatusModule {
             let process = self.processQueue.sync { self.processes[safe: row] }
             guard let process = process else { return nil }
             return (process.pid, process.name)
+        }
+        table.pauseCallback = { [weak self] in
+            self?.isRefreshPaused = true
+        }
+        table.resumeCallback = { [weak self] in
+            self?.isRefreshPaused = false
         }
 
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
@@ -344,38 +337,23 @@ final class GPUModule: NSObject, StatusModule {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.refreshDetail()
-            self?.startDetailTimer()
         }
 
         return container
     }
 
-    private func startDetailTimer() {
-        detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.refreshDetail()
-        }
-    }
-
     func cleanup() {
-        detailTimer?.invalidate()
-        detailTimer = nil
         chartView?.stopAnimation()
     }
 
-    private func refreshDetail() {
-        // Run heavy data collection on background thread
+    func refreshDetail() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
+
             let info = self.getGPUInfo()
             let procs = self.getGPUProcesses(limit: 100)
-            let deviceHist = self.deviceHistory
-            let rendererHist = self.rendererHistory
-            let tilerHist = self.tilerHistory
-            let aneHist = self.aneHistory
             let ane = self.aneUtilization
-            
+
             DispatchQueue.main.async {
                 self.gpuUsage = info.device
                 self.rendererUtil = info.renderer
@@ -389,10 +367,13 @@ final class GPUModule: NSObject, StatusModule {
 
                 self.processQueue.sync { self.processes = procs }
 
+                // Chart reads data directly from module's history arrays via closures
+                // Just update current values for display
                 self.chartView?.setValues(device: info.device, renderer: info.renderer, tiler: info.tiler, ane: ane)
-                self.chartView?.setHistory(device: deviceHist, renderer: rendererHist, tiler: tilerHist, ane: aneHist)
 
-                self.tableView?.reloadData()
+                if !self.isRefreshPaused {
+                    self.tableView?.reloadData()
+                }
 
                 NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "gpu"])
             }
@@ -779,23 +760,14 @@ extension GPUModule: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
-// MARK: - GPU Line Chart View (with smooth scrolling animation)
-
-private class WeakBox<T: AnyObject> {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
-}
+// MARK: - GPU Line Chart View
 
 private final class GPULineChartView: NSView {
-    private var points: [Double?] = []
+    private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
-    private let sampleInterval: TimeInterval = 2.0
-    private var displayLink: CVDisplayLink?
-    private var lastUpdateTime: Date = Date()
-    private var weakBox: WeakBox<GPULineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
-        self.points = Array(repeating: nil, count: max(num, 2))
+    init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
+        self.dataProvider = dataProvider
         self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
@@ -805,75 +777,23 @@ private final class GPULineChartView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        stopAnimation()
-    }
-
-    func addValue(_ value: Double) {
-        for i in 0..<(points.count - 1) {
-            points[i] = points[i + 1]
-        }
-        points[points.count - 1] = value
-        lastUpdateTime = Date()
-    }
-
-    func reinit(_ num: Int) {
-        points = Array(repeating: nil, count: max(num, 2))
-        lastUpdateTime = Date()
-        needsDisplay = true
-    }
-
-    func startAnimation() {
-        guard displayLink == nil else { return }
-
-        var link: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        guard let link else { return }
-
-        let box = WeakBox(self)
-        weakBox = box
-
-        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo = userInfo else { return kCVReturnSuccess }
-            let box = Unmanaged<WeakBox<GPULineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
-            guard let view = box.value else { return kCVReturnSuccess }
-            DispatchQueue.main.async {
-                guard box.value?.displayLink != nil else { return }
-                view.needsDisplay = true
-            }
-            return kCVReturnSuccess
-        }, Unmanaged.passUnretained(box).toOpaque())
-
-        CVDisplayLinkStart(link)
-        displayLink = link
-    }
-
-    func stopAnimation() {
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-            displayLink = nil
-        }
-    }
-
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        let height = self.frame.height
-        let xRatio = self.frame.width / CGFloat(points.count - 1)
+        let points = dataProvider()
+        let maxCount = 60
+        guard points.count > 1 else { return }
 
-        let elapsed = Date().timeIntervalSince(lastUpdateTime)
-        let progress = min(elapsed / sampleInterval, 1.0)
-        let xOffset = progress * xRatio
+        let height = self.frame.height
+        let stepX = self.frame.width / CGFloat(maxCount - 1)
 
         var linePoints: [CGPoint] = []
         for (i, v) in points.enumerated() {
-            guard let v else { continue }
-
             let y = v / 100.0 * height
-            let x = CGFloat(i) * xRatio - xOffset
+            let x = self.frame.width - CGFloat(points.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 
@@ -895,22 +815,25 @@ private final class GPULineChartView: NSView {
     }
 }
 
-// MARK: - GPU Chart View (circles + line charts)
+// MARK: - GPU Chart View
 
 final class GPUChartView: NSView {
     private let deviceChart: GPULineChartView
     private let rendererChart: GPULineChartView
     private let tilerChart: GPULineChartView
     private let aneChart: GPULineChartView
-
-    private let maxHistoryCount = 60
+    private var timer: Timer?
 
     private var currentDevice: Double = 0
     private var currentRenderer: Double = 0
     private var currentTiler: Double = 0
     private var currentANE: Double = 0
 
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect,
+         deviceHistoryProvider: @escaping () -> [Double],
+         rendererHistoryProvider: @escaping () -> [Double],
+         tilerHistoryProvider: @escaping () -> [Double],
+         aneHistoryProvider: @escaping () -> [Double]) {
         let circleRadius: CGFloat = 22
         let circleCenterY = frameRect.height - 15 - circleRadius
         let labelY = circleCenterY - circleRadius - 18
@@ -919,10 +842,10 @@ final class GPUChartView: NSView {
 
         let lineFrame = NSRect(x: 0, y: 4, width: frameRect.width, height: lineChartHeight)
 
-        self.deviceChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemPurple.withAlphaComponent(0.8) }
-        self.rendererChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.6) }
-        self.tilerChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemOrange.withAlphaComponent(0.6) }
-        self.aneChart = GPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemPink.withAlphaComponent(0.8) }
+        self.deviceChart = GPULineChartView(frame: lineFrame, dataProvider: deviceHistoryProvider, colorProvider: { NSColor.systemPurple.withAlphaComponent(0.8) })
+        self.rendererChart = GPULineChartView(frame: lineFrame, dataProvider: rendererHistoryProvider, colorProvider: { NSColor.systemBlue.withAlphaComponent(0.6) })
+        self.tilerChart = GPULineChartView(frame: lineFrame, dataProvider: tilerHistoryProvider, colorProvider: { NSColor.systemOrange.withAlphaComponent(0.6) })
+        self.aneChart = GPULineChartView(frame: lineFrame, dataProvider: aneHistoryProvider, colorProvider: { NSColor.systemPink.withAlphaComponent(0.8) })
 
         super.init(frame: frameRect)
 
@@ -940,10 +863,7 @@ final class GPUChartView: NSView {
     }
 
     deinit {
-        deviceChart.stopAnimation()
-        rendererChart.stopAnimation()
-        tilerChart.stopAnimation()
-        aneChart.stopAnimation()
+        stopAnimation()
     }
 
     func setValues(device: Double, renderer: Double, tiler: Double, ane: Double = 0) {
@@ -954,33 +874,22 @@ final class GPUChartView: NSView {
         needsDisplay = true
     }
 
-    func setHistory(device: [Double], renderer: [Double], tiler: [Double], ane: [Double] = []) {
-        deviceChart.reinit(maxHistoryCount)
-        rendererChart.reinit(maxHistoryCount)
-        tilerChart.reinit(maxHistoryCount)
-        aneChart.reinit(maxHistoryCount)
-
-        let count = min(device.count, min(renderer.count, min(tiler.count, ane.count)))
-        for i in 0..<count {
-            deviceChart.addValue(device[i])
-            rendererChart.addValue(renderer[i])
-            tilerChart.addValue(tiler[i])
-            aneChart.addValue(ane[i])
-        }
-    }
-
     func startAnimation() {
-        deviceChart.startAnimation()
-        rendererChart.startAnimation()
-        tilerChart.startAnimation()
-        aneChart.startAnimation()
+        guard timer == nil else { return }
+        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.needsDisplay = true
+            self?.deviceChart.needsDisplay = true
+            self?.rendererChart.needsDisplay = true
+            self?.tilerChart.needsDisplay = true
+            self?.aneChart.needsDisplay = true
+        }
+        RunLoop.current.add(t, forMode: .common)
+        timer = t
     }
 
     func stopAnimation() {
-        deviceChart.stopAnimation()
-        rendererChart.stopAnimation()
-        tilerChart.stopAnimation()
-        aneChart.stopAnimation()
+        timer?.invalidate()
+        timer = nil
     }
 
     override func draw(_ dirtyRect: NSRect) {

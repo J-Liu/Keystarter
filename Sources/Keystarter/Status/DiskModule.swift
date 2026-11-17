@@ -32,7 +32,7 @@ final class DiskModule: NSObject, StatusModule {
     var readSpeedText: String { formatSpeed(readSpeed) }
     var writeSpeedText: String { formatSpeed(writeSpeed) }
 
-    var refreshInterval: TimeInterval { 1.0 }
+    var refreshInterval: TimeInterval { 2.0 }
 
     private var previousReadBytes: Int64 = 0
     private var previousWriteBytes: Int64 = 0
@@ -49,18 +49,15 @@ final class DiskModule: NSObject, StatusModule {
 
     private var processes: [DiskProcessInfo] = []
     private let processQueue = DispatchQueue(label: "com.keystarter.disk.processes", qos: .userInitiated)
+    private var isRefreshPaused: Bool = false
     private var readSpeed: Double = 0
     private var writeSpeed: Double = 0
 
     private weak var chartView: DiskChartView?
     private weak var tableView: NSTableView?
-    private var detailTimer: Timer?
     private var lastProcessDataTime: Date?
 
     func refreshSummary() {
-        // Only update from summary if detail view is not open
-        guard detailTimer == nil else { return }
-
         // Fetch process data periodically (every 5 seconds) to keep it fresh
         let now = Date()
         let shouldFetchProcesses: Bool
@@ -120,9 +117,12 @@ final class DiskModule: NSObject, StatusModule {
 
                 // Update UI if we have process data (detail view requested it)
                 if includeProcesses {
-                    self.chartView?.setReadHistory(self.readHistory, writeHistory: self.writeHistory)
-                    self.chartView?.needsDisplay = true
-                    self.tableView?.reloadData()
+                    // Chart reads data directly from module's history arrays via closures
+                    // Just update current speeds for display
+                    self.chartView?.updateCurrentSpeeds(read: newReadSpeed, write: newWriteSpeed)
+                    if !self.isRefreshPaused {
+                        self.tableView?.reloadData()
+                    }
                     NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "disk"])
                 }
             }
@@ -154,9 +154,11 @@ final class DiskModule: NSObject, StatusModule {
 
         // Disk I/O chart (mirrored read/write)
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = DiskChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
-        // Set existing history immediately
-        chart.setReadHistory(readHistory, writeHistory: writeHistory)
+        let chart = DiskChartView(
+            frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight),
+            readHistoryProvider: { [weak self] in self?.readHistory ?? [] },
+            writeHistoryProvider: { [weak self] in self?.writeHistory ?? [] }
+        )
         chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
@@ -183,6 +185,12 @@ final class DiskModule: NSObject, StatusModule {
             let process = self.processQueue.sync { self.processes[safe: row] }
             guard let process = process else { return nil }
             return (process.pid, process.name)
+        }
+        table.pauseCallback = { [weak self] in
+            self?.isRefreshPaused = true
+        }
+        table.resumeCallback = { [weak self] in
+            self?.isRefreshPaused = false
         }
 
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
@@ -217,28 +225,18 @@ final class DiskModule: NSObject, StatusModule {
         tableView = table
         container.addSubview(scrollView)
 
-        // Show existing data immediately, then refresh
+        // Show existing data immediately
         tableView?.reloadData()
         refreshDetail()
-        startDetailTimer()
 
         return container
     }
 
-    private func startDetailTimer() {
-        detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.refreshDetail()
-        }
-    }
-
     func cleanup() {
-        detailTimer?.invalidate()
-        detailTimer = nil
         chartView?.stopAnimation()
     }
 
-    private func refreshDetail() {
+    func refreshDetail() {
         updateDiskData(includeProcesses: true)
     }
 
@@ -595,25 +593,16 @@ extension DiskModule: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
-// MARK: - Disk Chart View (Stats-style with two internal charts)
+// MARK: - Disk Chart View
 
-private class WeakBox<T: AnyObject> {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
-}
-
-/// Single line chart view with smooth Bezier curves and animated scrolling
+/// Single line chart view
 private final class DiskLineChartView: NSView {
-    private var points: [Double?] = []
+    private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
     private var flipY: Bool = false
-    private var lastUpdateTime: Date = Date()
-    private var displayLink: CVDisplayLink?
-    private let sampleInterval: TimeInterval = 2.0
-    private var weakBox: WeakBox<DiskLineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
-        self.points = Array(repeating: nil, count: max(num, 2))
+    init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
+        self.dataProvider = dataProvider
         self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
@@ -623,58 +612,8 @@ private final class DiskLineChartView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        stopAnimation()
-    }
-
-    func addValue(_ value: Double) {
-        for i in 0..<(points.count - 1) {
-            points[i] = points[i + 1]
-        }
-        points[points.count - 1] = value
-        lastUpdateTime = Date()
-    }
-
-    func reinit(_ num: Int) {
-        points = Array(repeating: nil, count: max(num, 2))
-        lastUpdateTime = Date()
-        needsDisplay = true
-    }
-
     func setFlipY(_ value: Bool) {
         flipY = value
-    }
-
-    func startAnimation() {
-        guard displayLink == nil else { return }
-
-        var link: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        guard let link else { return }
-
-        let box = WeakBox(self)
-        weakBox = box
-
-        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo = userInfo else { return kCVReturnSuccess }
-            let box = Unmanaged<WeakBox<DiskLineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
-            guard let view = box.value else { return kCVReturnSuccess }
-            DispatchQueue.main.async {
-                guard box.value?.displayLink != nil else { return }
-                view.needsDisplay = true
-            }
-            return kCVReturnSuccess
-        }, Unmanaged.passUnretained(box).toOpaque())
-
-        CVDisplayLinkStart(link)
-        displayLink = link
-    }
-
-    func stopAnimation() {
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-            displayLink = nil
-        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -683,32 +622,28 @@ private final class DiskLineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
+        let points = dataProvider()
+        let maxCount = 60
+        guard points.count > 1 else { return }
+
         var maxValue: Double = 0
-        for opt in points {
-            if let p = opt, p > maxValue { maxValue = p }
+        for p in points {
+            if p > maxValue { maxValue = p }
         }
         if maxValue == 0 { maxValue = 1 }
 
         let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let height = self.frame.height - offset
-        let xRatio = self.frame.width / CGFloat(points.count - 1)
+        let stepX = self.frame.width / CGFloat(maxCount - 1)
         let zero = flipY ? 0 : self.frame.height
-
-        // Smooth scroll animation
-        let elapsed = Date().timeIntervalSince(lastUpdateTime)
-        let progress = min(elapsed / sampleInterval, 1.0)
-        let xOffset = progress * xRatio
 
         var linePoints: [CGPoint] = []
         for (i, v) in points.enumerated() {
-            guard let v else { continue }
-
             var y = (v / maxValue) * height
             if !flipY {
                 y = height - y
             }
-
-            let x = CGFloat(i) * xRatio - xOffset
+            let x = self.frame.width - CGFloat(points.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 
@@ -742,33 +677,29 @@ private final class DiskLineChartView: NSView {
     }
 }
 
-/// Disk chart view with two internal charts - write on top, read on bottom
+/// Disk chart view with two internal charts
 final class DiskChartView: NSView {
     private let writeChart: DiskLineChartView
     private let readChart: DiskLineChartView
-
-    private let maxHistoryCount = 60
+    private var timer: Timer?
 
     private var currentReadSpeed: Double = 0
     private var currentWriteSpeed: Double = 0
 
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect, readHistoryProvider: @escaping () -> [Double], writeHistoryProvider: @escaping () -> [Double]) {
         let safeHeight = max(frameRect.height, 2)
         let topFrame = NSRect(x: 0, y: safeHeight / 2, width: frameRect.width, height: safeHeight / 2)
         let bottomFrame = NSRect(x: 0, y: 0, width: frameRect.width, height: safeHeight / 2)
 
-        // Write chart is on top (topFrame), read chart is on bottom (bottomFrame)
-        self.writeChart = DiskLineChartView(frame: topFrame, num: maxHistoryCount) { NSColor.systemOrange.withAlphaComponent(0.8) }
-        self.readChart = DiskLineChartView(frame: bottomFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.8) }
+        self.writeChart = DiskLineChartView(frame: topFrame, dataProvider: writeHistoryProvider, colorProvider: { NSColor.systemOrange.withAlphaComponent(0.8) })
+        self.readChart = DiskLineChartView(frame: bottomFrame, dataProvider: readHistoryProvider, colorProvider: { NSColor.systemBlue.withAlphaComponent(0.8) })
 
         super.init(frame: frameRect)
 
         wantsLayer = true
         layer?.cornerRadius = 4
 
-        // Write chart grows down from top (flipY = true)
         self.writeChart.setFlipY(true)
-        // Read chart grows up from bottom (flipY = false)
         self.readChart.setFlipY(false)
 
         addSubview(self.writeChart)
@@ -784,30 +715,24 @@ final class DiskChartView: NSView {
     }
 
     func startAnimation() {
-        writeChart.startAnimation()
-        readChart.startAnimation()
+        guard timer == nil else { return }
+        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.needsDisplay = true
+            self?.writeChart.needsDisplay = true
+            self?.readChart.needsDisplay = true
+        }
+        RunLoop.current.add(t, forMode: .common)
+        timer = t
     }
 
     func stopAnimation() {
-        writeChart.stopAnimation()
-        readChart.stopAnimation()
+        timer?.invalidate()
+        timer = nil
     }
 
-    func setReadHistory(_ read: [Double], writeHistory write: [Double]) {
-        // Store current speeds for display
-        currentReadSpeed = read.last ?? 0
-        currentWriteSpeed = write.last ?? 0
-
-        // Clear and reinitialize charts
-        self.writeChart.reinit(maxHistoryCount)
-        self.readChart.reinit(maxHistoryCount)
-
-        // Add all values
-        for i in 0..<min(read.count, write.count) {
-            self.readChart.addValue(read[i])
-            self.writeChart.addValue(write[i])
-        }
-
+    func updateCurrentSpeeds(read: Double, write: Double) {
+        currentReadSpeed = read
+        currentWriteSpeed = write
         needsDisplay = true
     }
 

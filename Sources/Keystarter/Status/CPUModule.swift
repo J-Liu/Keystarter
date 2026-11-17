@@ -18,6 +18,7 @@ final class CPUModule: NSObject, StatusModule {
     private var processes: [AppProcessInfo] = []
     private let processQueue = DispatchQueue(label: "com.keystarter.cpu.processes", qos: .userInitiated)
     private var coreUsages: [CoreUsage] = []
+    private var isRefreshPaused: Bool = false
 
     // History for line chart
     private var totalCPUHistory: [Double] = []
@@ -27,7 +28,6 @@ final class CPUModule: NSObject, StatusModule {
 
     private weak var chartView: CPUChartView?
     private weak var tableView: NSTableView?
-    private var detailTimer: Timer?
 
     func refreshSummary() {
         let usage = ProcessInfoProvider.shared.getTotalCPUUsage()
@@ -83,9 +83,12 @@ final class CPUModule: NSObject, StatusModule {
         container.addSubview(headerView)
 
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = CPUChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
+        let chart = CPUChartView(
+            frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight),
+            systemHistoryProvider: { [weak self] in self?.systemCPUHistory ?? [] },
+            userHistoryProvider: { [weak self] in self?.userCPUHistory ?? [] }
+        )
         chart.setCoreUsages(coreUsages)
-        chart.setHistory(total: totalCPUHistory, system: systemCPUHistory, user: userCPUHistory)
         chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
@@ -110,6 +113,12 @@ final class CPUModule: NSObject, StatusModule {
             let process = self.processQueue.sync { self.processes[safe: row] }
             guard let process = process else { return nil }
             return (process.pid, process.name)
+        }
+        table.pauseCallback = { [weak self] in
+            self?.isRefreshPaused = true
+        }
+        table.resumeCallback = { [weak self] in
+            self?.isRefreshPaused = false
         }
 
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
@@ -146,44 +155,29 @@ final class CPUModule: NSObject, StatusModule {
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.refreshDetail()
-            self?.startDetailTimer()
         }
 
         return container
     }
 
-    private func startDetailTimer() {
-        detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.refreshDetail()
-        }
-    }
-
     func cleanup() {
-        detailTimer?.invalidate()
-        detailTimer = nil
         chartView?.stopAnimation()
     }
 
-    private func refreshDetail() {
-        // Run heavy data collection on background thread
+    func refreshDetail() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
-            
+
             let cores = ProcessInfoProvider.shared.getPerCoreCPUUsage()
             let procs = ProcessInfoProvider.shared.getProcessesByCPU(limit: 100)
-            let totalHist = self.totalCPUHistory
-            let systemHist = self.systemCPUHistory
-            let userHist = self.userCPUHistory
-            
+
             DispatchQueue.main.async {
                 self.coreUsages = cores
                 self.processQueue.sync { self.processes = procs }
-
                 self.chartView?.setCoreUsages(cores)
-                self.chartView?.setHistory(total: totalHist, system: systemHist, user: userHist)
-
-                self.tableView?.reloadData()
+                if !self.isRefreshPaused {
+                    self.tableView?.reloadData()
+                }
             }
         }
     }
@@ -275,24 +269,14 @@ extension CPUModule: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
-// MARK: - CPU Line Chart View (with smooth scrolling animation)
-
-private class WeakBox<T: AnyObject> {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
-}
+// MARK: - CPU Line Chart View
 
 private final class CPULineChartView: NSView {
-    private var points: [Double?] = []
+    private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
-    private let sampleInterval: TimeInterval = 2.0
-    private var displayLink: CVDisplayLink?
-    private var lastUpdateTime: Date = Date()
-    private var isRunning = false
-    private var weakBox: WeakBox<CPULineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
-        self.points = Array(repeating: nil, count: max(num, 2))
+    init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
+        self.dataProvider = dataProvider
         self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
@@ -302,81 +286,23 @@ private final class CPULineChartView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        isRunning = false
-        stopAnimation()
-    }
-
-    func addValue(_ value: Double) {
-        for i in 0..<(points.count - 1) {
-            points[i] = points[i + 1]
-        }
-        points[points.count - 1] = value
-        lastUpdateTime = Date()
-    }
-
-    func reinit(_ num: Int) {
-        points = Array(repeating: nil, count: max(num, 2))
-        lastUpdateTime = Date()
-        needsDisplay = true
-    }
-
-    func startAnimation() {
-        guard displayLink == nil else { return }
-        isRunning = true
-
-        var link: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        guard let link else { return }
-
-        // Create a box that holds a weak reference to self
-        let box = WeakBox(self)
-        weakBox = box  // Keep box alive
-        
-        let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo = userInfo else { return kCVReturnSuccess }
-            let box = Unmanaged<WeakBox<CPULineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
-            guard let view = box.value, view.isRunning else { return kCVReturnSuccess }
-            DispatchQueue.main.async {
-                guard box.value?.isRunning == true else { return }
-                view.needsDisplay = true
-            }
-            return kCVReturnSuccess
-        }
-
-        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(box).toOpaque())
-        CVDisplayLinkStart(link)
-        displayLink = link
-    }
-
-    func stopAnimation() {
-        isRunning = false
-        if let link = displayLink {
-            // Stop the display link first to prevent callbacks after cleanup
-            CVDisplayLinkStop(link)
-            displayLink = nil
-        }
-    }
-
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        let height = self.frame.height
-        let xRatio = self.frame.width / CGFloat(points.count - 1)
+        let points = dataProvider()
+        let maxCount = 60
+        guard points.count > 1 else { return }
 
-        let elapsed = Date().timeIntervalSince(lastUpdateTime)
-        let progress = min(elapsed / sampleInterval, 1.0)
-        let xOffset = progress * xRatio
+        let height = self.frame.height
+        let stepX = self.frame.width / CGFloat(maxCount - 1)
 
         var linePoints: [CGPoint] = []
         for (i, v) in points.enumerated() {
-            guard let v else { continue }
-
             let y = v / 100.0 * height
-            let x = CGFloat(i) * xRatio - xOffset
+            let x = self.frame.width - CGFloat(points.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 
@@ -403,19 +329,19 @@ private final class CPULineChartView: NSView {
 final class CPUChartView: NSView {
     private let systemChart: CPULineChartView
     private let userChart: CPULineChartView
-
-    private let maxHistoryCount = 60
+    private var timer: Timer?
     private var currentCoreUsages: [CoreUsage] = []
 
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect, systemHistoryProvider: @escaping () -> [Double], userHistoryProvider: @escaping () -> [Double]) {
         let barChartHeight: CGFloat = 70
         let dividerY = frameRect.height - barChartHeight - 12
         let lineChartHeight = dividerY - 8
 
         let lineFrame = NSRect(x: 0, y: 4, width: frameRect.width, height: lineChartHeight)
 
-        self.systemChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemRed.withAlphaComponent(0.6) }
-        self.userChart = CPULineChartView(frame: lineFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.6) }
+        // Initialize charts with data providers that read from module
+        self.systemChart = CPULineChartView(frame: lineFrame, dataProvider: systemHistoryProvider, colorProvider: { NSColor.systemRed.withAlphaComponent(0.6) })
+        self.userChart = CPULineChartView(frame: lineFrame, dataProvider: userHistoryProvider, colorProvider: { NSColor.systemBlue.withAlphaComponent(0.6) })
 
         super.init(frame: frameRect)
 
@@ -431,8 +357,7 @@ final class CPUChartView: NSView {
     }
 
     deinit {
-        systemChart.stopAnimation()
-        userChart.stopAnimation()
+        stopAnimation()
     }
 
     func setCoreUsages(_ usages: [CoreUsage]) {
@@ -440,24 +365,20 @@ final class CPUChartView: NSView {
         needsDisplay = true
     }
 
-    func setHistory(total: [Double], system: [Double], user: [Double]) {
-        systemChart.reinit(maxHistoryCount)
-        userChart.reinit(maxHistoryCount)
-
-        for i in 0..<min(system.count, user.count) {
-            systemChart.addValue(system[i])
-            userChart.addValue(user[i])
-        }
-    }
-
     func startAnimation() {
-        systemChart.startAnimation()
-        userChart.startAnimation()
+        guard timer == nil else { return }
+        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.needsDisplay = true
+            self?.systemChart.needsDisplay = true
+            self?.userChart.needsDisplay = true
+        }
+        RunLoop.current.add(t, forMode: .common)
+        timer = t
     }
 
     func stopAnimation() {
-        systemChart.stopAnimation()
-        userChart.stopAnimation()
+        timer?.invalidate()
+        timer = nil
     }
 
     override func draw(_ dirtyRect: NSRect) {

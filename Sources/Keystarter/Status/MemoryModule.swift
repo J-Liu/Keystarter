@@ -65,6 +65,7 @@ final class MemoryModule: NSObject, StatusModule {
 
     private var processes: [MemoryProcessInfo] = []
     private let processQueue = DispatchQueue(label: "com.keystarter.memory.processes", qos: .userInitiated)
+    private var isRefreshPaused: Bool = false
     private var usedMemory: UInt64 = 0
     private var totalMemory: UInt64 = 0
 
@@ -74,7 +75,6 @@ final class MemoryModule: NSObject, StatusModule {
 
     private weak var chartView: MemoryChartView?
     private weak var tableView: NSTableView?
-    private var detailTimer: Timer?
 
     func refreshSummary() {
         let (used, total) = getMemoryUsage()
@@ -127,9 +127,13 @@ final class MemoryModule: NSObject, StatusModule {
 
         // Memory usage area chart
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = MemoryChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight)) { NSColor.systemPink.withAlphaComponent(0.7) }
+        let chart = MemoryChartView(
+            frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight),
+            historyProvider: { [weak self] in self?.memoryHistory ?? [] },
+            usedMemoryProvider: { [weak self] in self?.usedMemory ?? 0 },
+            colorProvider: { NSColor.systemPink.withAlphaComponent(0.7) }
+        )
         chart.setTotalMemory(totalMemory)
-        chart.setHistory(memoryHistory, usedMemory: usedMemory)
         chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
@@ -156,6 +160,12 @@ final class MemoryModule: NSObject, StatusModule {
             let process = self.processQueue.sync { self.processes[safe: row] }
             guard let process = process else { return nil }
             return (process.pid, process.name)
+        }
+        table.pauseCallback = { [weak self] in
+            self?.isRefreshPaused = true
+        }
+        table.resumeCallback = { [weak self] in
+            self?.isRefreshPaused = false
         }
 
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
@@ -190,30 +200,19 @@ final class MemoryModule: NSObject, StatusModule {
         tableView = table
         container.addSubview(scrollView)
 
-        // Refresh immediately on open, then start timer
+        // Refresh immediately on open
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.refreshDetail()
-            self?.startDetailTimer()
         }
 
         return container
     }
 
-    private func startDetailTimer() {
-        detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.refreshDetail()
-        }
-    }
-
     func cleanup() {
-        detailTimer?.invalidate()
-        detailTimer = nil
         chartView?.stopAnimation()
     }
 
-    private func refreshDetail() {
-        // Run heavy data collection on background thread
+    func refreshDetail() {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
 
@@ -225,9 +224,10 @@ final class MemoryModule: NSObject, StatusModule {
                 self.totalMemory = total
                 self.processQueue.sync { self.processes = procs }
 
-                // Use current history (already updated in refreshSummary)
-                self.chartView?.setHistory(self.memoryHistory, usedMemory: used)
-                self.tableView?.reloadData()
+                // Chart reads data directly from module's arrays via closures
+                if !self.isRefreshPaused {
+                    self.tableView?.reloadData()
+                }
             }
         }
     }
@@ -554,27 +554,17 @@ final class MemoryBarView: NSView {
 
 // MARK: - Memory Chart View with smooth curves
 
-private class WeakBox<T: AnyObject> {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
-}
-
-/// Memory chart view with smooth Bezier curves
+/// Memory chart view
 final class MemoryChartView: NSView {
-    private var history: [Double] = []
+    private let historyProvider: () -> [Double]
+    private let usedMemoryProvider: () -> UInt64
     private var totalMemory: UInt64 = 0
-    private var usedMemory: UInt64 = 0
-    private let maxHistoryCount = 60
-
     private let chartColorProvider: () -> NSColor
+    private var timer: Timer?
 
-    // Animation
-    private var displayLink: CVDisplayLink?
-    private var lastUpdateTime: Date = Date()
-    private let sampleInterval: TimeInterval = 2.0
-    private var weakBox: WeakBox<MemoryChartView>?  // Keep box alive for callback
-
-    init(frame frameRect: NSRect, colorProvider: @escaping () -> NSColor) {
+    init(frame frameRect: NSRect, historyProvider: @escaping () -> [Double], usedMemoryProvider: @escaping () -> UInt64, colorProvider: @escaping () -> NSColor) {
+        self.historyProvider = historyProvider
+        self.usedMemoryProvider = usedMemoryProvider
         self.chartColorProvider = colorProvider
         super.init(frame: frameRect)
         wantsLayer = true
@@ -589,52 +579,30 @@ final class MemoryChartView: NSView {
     }
     
     func startAnimation() {
-        guard displayLink == nil else { return }
-        
-        var link: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        
-        guard let link = link else { return }
-        displayLink = link
-        
-        let box = WeakBox(self)
-        weakBox = box
-        
-        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo in
-            guard let userInfo = userInfo else { return kCVReturnSuccess }
-            let box = Unmanaged<WeakBox<MemoryChartView>>.fromOpaque(userInfo).takeUnretainedValue()
-            guard let view = box.value else { return kCVReturnSuccess }
-            DispatchQueue.main.async {
-                guard box.value?.displayLink != nil else { return }
-                view.needsDisplay = true
-            }
-            return kCVReturnSuccess
-        }, Unmanaged.passUnretained(box).toOpaque())
-        
-        CVDisplayLinkStart(link)
-        lastUpdateTime = Date()
+        guard timer == nil else { return }
+        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.needsDisplay = true
+        }
+        RunLoop.current.add(t, forMode: .common)
+        timer = t
     }
     
     func stopAnimation() {
-        guard let link = displayLink else { return }
-        CVDisplayLinkStop(link)
-        displayLink = nil
+        timer?.invalidate()
+        timer = nil
     }
     
     func setTotalMemory(_ total: UInt64) {
         self.totalMemory = total
     }
     
-    func setHistory(_ history: [Double], usedMemory: UInt64) {
-        self.history = history
-        self.usedMemory = usedMemory
-        lastUpdateTime = Date()
-        needsDisplay = true
-    }
-    
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         
+        let history = historyProvider()
+        let usedMemory = usedMemoryProvider()
+        
+        let maxHistoryCount = 60
         guard history.count > 1 else { return }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
@@ -646,20 +614,11 @@ final class MemoryChartView: NSView {
         let labelHeight: CGFloat = 24
         let height = bounds.height - labelHeight - padding
         let width = bounds.width - padding * 2
-        let xRatio = width / CGFloat(maxHistoryCount - 1)
+        let stepX = width / CGFloat(maxHistoryCount - 1)
         
-        // Calculate smooth scroll offset
-        let elapsed = Date().timeIntervalSince(lastUpdateTime)
-        let progress = min(elapsed / sampleInterval, 1.0)
-        let xOffset = progress * xRatio  // Smoothly scroll left
-        
-        // Build line points - newest on right edge, grows from right to left
         var linePoints: [CGPoint] = []
         for (i, value) in history.enumerated() {
-            // i=0 is oldest, i=count-1 is newest
-            // Newest should be at right edge (bounds.width - padding)
-            // Oldest moves left as more data comes in
-            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio - xOffset
+            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * stepX
             let y = padding + min(value / totalGB, 1.0) * height
             linePoints.append(CGPoint(x: x, y: y))
         }

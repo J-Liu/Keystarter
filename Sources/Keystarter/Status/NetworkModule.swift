@@ -37,7 +37,7 @@ final class NetworkModule: NSObject, StatusModule {
     var downloadSpeedText: String { formatSpeed(downloadSpeed) }
     var uploadSpeedText: String { formatSpeed(uploadSpeed) }
 
-    var refreshInterval: TimeInterval { 1.0 }
+    var refreshInterval: TimeInterval { 2.0 }
 
     // Shared cache with IPPlugin
     private let cacheKey = "keystarter.publicIP.cache"
@@ -55,6 +55,7 @@ final class NetworkModule: NSObject, StatusModule {
 
     private var processes: [NetworkProcessInfo] = []
     private let processQueue = DispatchQueue(label: "com.keystarter.network.processes", qos: .userInitiated)
+    private var isRefreshPaused: Bool = false
     private var downloadSpeed: Double = 0
     private var uploadSpeed: Double = 0
     
@@ -67,7 +68,6 @@ final class NetworkModule: NSObject, StatusModule {
 
     private weak var chartView: NetworkChartView?
     private weak var tableView: NSTableView?
-    private var detailTimer: Timer?
     private var lastProcessDataTime: Date?
     
     // MARK: - Init
@@ -93,9 +93,6 @@ final class NetworkModule: NSObject, StatusModule {
     }
 
     func refreshSummary() {
-        // Only update from summary if detail view is not open
-        guard detailTimer == nil else { return }
-
         // Fetch process data every 2 seconds to keep it fresh for detail view
         let now = Date()
         let shouldFetchProcesses: Bool
@@ -156,9 +153,12 @@ final class NetworkModule: NSObject, StatusModule {
 
                 // Update UI if we have process data (detail view requested it)
                 if includeProcesses {
-                    self.chartView?.setDownloadHistory(self.downloadHistory, uploadHistory: self.uploadHistory)
-                    self.chartView?.needsDisplay = true
-                    self.tableView?.reloadData()
+                    // Chart reads data directly from module's history arrays via closures
+                    // Just update current speeds for display
+                    self.chartView?.updateCurrentSpeeds(download: newDownSpeed, upload: newUpSpeed)
+                    if !self.isRefreshPaused {
+                        self.tableView?.reloadData()
+                    }
                     NotificationCenter.default.post(name: .moduleDataUpdated, object: nil, userInfo: ["module": "network"])
                 }
             }
@@ -191,9 +191,11 @@ final class NetworkModule: NSObject, StatusModule {
 
         // Network chart (mirrored download/upload)
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
-        let chart = NetworkChartView(frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight))
-        // Set existing history immediately
-        chart.setDownloadHistory(downloadHistory, uploadHistory: uploadHistory)
+        let chart = NetworkChartView(
+            frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight),
+            downloadHistoryProvider: { [weak self] in self?.downloadHistory ?? [] },
+            uploadHistoryProvider: { [weak self] in self?.uploadHistory ?? [] }
+        )
         chart.startAnimation()
         chartView = chart
         container.addSubview(chart)
@@ -290,6 +292,12 @@ final class NetworkModule: NSObject, StatusModule {
             guard let process = process else { return nil }
             return (process.pid, process.name)
         }
+        table.pauseCallback = { [weak self] in
+            self?.isRefreshPaused = true
+        }
+        table.resumeCallback = { [weak self] in
+            self?.isRefreshPaused = false
+        }
 
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         nameColumn.width = 150
@@ -323,30 +331,18 @@ final class NetworkModule: NSObject, StatusModule {
         tableView = table
         container.addSubview(scrollView)
 
-        // Show existing data immediately, then refresh
+        // Show existing data immediately
         tableView?.reloadData()
-        // Immediately fetch process data for detail view (don't wait for timer)
         updateNetworkData(includeProcesses: true)
-        startDetailTimer()
 
         return container
     }
 
-    private func startDetailTimer() {
-        detailTimer?.invalidate()
-        // Use 5-second interval for nettop (expensive operation)
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { [weak self] _ in
-            self?.refreshDetail()
-        }
-    }
-
     func cleanup() {
-        detailTimer?.invalidate()
-        detailTimer = nil
         chartView?.stopAnimation()
     }
 
-    private func refreshDetail() {
+    func refreshDetail() {
         updateNetworkData(includeProcesses: true)
     }
 
@@ -775,25 +771,16 @@ extension NetworkModule: NSTableViewDataSource, NSTableViewDelegate {
     }
 }
 
-// MARK: - Network Chart View (Stats-style with two internal charts)
+// MARK: - Network Chart View
 
-private class WeakBox<T: AnyObject> {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
-}
-
-/// Single line chart view with smooth Bezier curves and animated scrolling
+/// Single line chart view
 private final class NetworkLineChartView: NSView {
-    private var points: [Double?] = []
+    private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
     private var flipY: Bool = false
-    private var lastUpdateTime: Date = Date()
-    private var displayLink: CVDisplayLink?
-    private let sampleInterval: TimeInterval = 2.0  // Match the 2-second sampling rate
-    private var weakBox: WeakBox<NetworkLineChartView>?  // Keep box alive for callback
 
-    init(frame: NSRect, num: Int, colorProvider: @escaping () -> NSColor) {
-        self.points = Array(repeating: nil, count: max(num, 2))
+    init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
+        self.dataProvider = dataProvider
         self.colorProvider = colorProvider
         super.init(frame: frame)
         wantsLayer = true
@@ -803,59 +790,8 @@ private final class NetworkLineChartView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        stopAnimation()
-    }
-
-    func addValue(_ value: Double) {
-        // Shift all points left and add new value at the end
-        for i in 0..<(points.count - 1) {
-            points[i] = points[i + 1]
-        }
-        points[points.count - 1] = value
-        lastUpdateTime = Date()
-    }
-
-    func reinit(_ num: Int) {
-        points = Array(repeating: nil, count: max(num, 2))
-        lastUpdateTime = Date()
-        needsDisplay = true
-    }
-
     func setFlipY(_ value: Bool) {
         flipY = value
-    }
-
-    func startAnimation() {
-        guard displayLink == nil else { return }
-
-        var link: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        guard let link else { return }
-
-        let box = WeakBox(self)
-        weakBox = box
-
-        CVDisplayLinkSetOutputCallback(link, { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo = userInfo else { return kCVReturnSuccess }
-            let box = Unmanaged<WeakBox<NetworkLineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
-            guard let view = box.value else { return kCVReturnSuccess }
-            DispatchQueue.main.async {
-                guard box.value?.displayLink != nil else { return }
-                view.needsDisplay = true
-            }
-            return kCVReturnSuccess
-        }, Unmanaged.passUnretained(box).toOpaque())
-
-        CVDisplayLinkStart(link)
-        displayLink = link
-    }
-
-    func stopAnimation() {
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-            displayLink = nil
-        }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -864,35 +800,28 @@ private final class NetworkLineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        // Find max value
+        let points = dataProvider()
+        let maxCount = 60
+        guard points.count > 1 else { return }
+
         var maxValue: Double = 0
-        for opt in points {
-            if let p = opt, p > maxValue { maxValue = p }
+        for p in points {
+            if p > maxValue { maxValue = p }
         }
         if maxValue == 0 { maxValue = 1 }
 
         let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let height = self.frame.height - offset
-        let xRatio = self.frame.width / CGFloat(points.count - 1)
+        let stepX = self.frame.width / CGFloat(maxCount - 1)
         let zero = flipY ? 0 : self.frame.height
 
-        // Calculate animation progress for smooth scrolling
-        let elapsed = Date().timeIntervalSince(lastUpdateTime)
-        let progress = min(elapsed / sampleInterval, 1.0)
-        let xOffset = progress * xRatio  // Smoothly scroll left
-
-        // Build line points with animation offset
         var linePoints: [CGPoint] = []
         for (i, v) in points.enumerated() {
-            guard let v else { continue }
-
             var y = (v / maxValue) * height
             if !flipY {
                 y = height - y
             }
-
-            // Apply smooth scroll offset: points move left continuously
-            let x = CGFloat(i) * xRatio - xOffset
+            let x = self.frame.width - CGFloat(points.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 
@@ -930,32 +859,28 @@ private final class NetworkLineChartView: NSView {
     }
 }
 
-/// Network chart view with two internal charts - upload on top, download on bottom
+/// Network chart view with two internal charts
 final class NetworkChartView: NSView {
     private let uploadChart: NetworkLineChartView
     private let downloadChart: NetworkLineChartView
-
-    private let maxHistoryCount = 60
+    private var timer: Timer?
 
     private var currentUploadSpeed: Double = 0
     private var currentDownloadSpeed: Double = 0
 
-    override init(frame frameRect: NSRect) {
+    init(frame frameRect: NSRect, downloadHistoryProvider: @escaping () -> [Double], uploadHistoryProvider: @escaping () -> [Double]) {
         let safeHeight = max(frameRect.height, 2)
         let topFrame = NSRect(x: 0, y: safeHeight / 2, width: frameRect.width, height: safeHeight / 2)
         let bottomFrame = NSRect(x: 0, y: 0, width: frameRect.width, height: safeHeight / 2)
 
-        // Upload chart is on top (topFrame), download chart is on bottom (bottomFrame)
-        self.uploadChart = NetworkLineChartView(frame: topFrame, num: maxHistoryCount) { NSColor.systemPurple.withAlphaComponent(0.8) }
-        self.downloadChart = NetworkLineChartView(frame: bottomFrame, num: maxHistoryCount) { NSColor.systemBlue.withAlphaComponent(0.6) }
+        self.uploadChart = NetworkLineChartView(frame: topFrame, dataProvider: uploadHistoryProvider, colorProvider: { NSColor.systemPurple.withAlphaComponent(0.8) })
+        self.downloadChart = NetworkLineChartView(frame: bottomFrame, dataProvider: downloadHistoryProvider, colorProvider: { NSColor.systemBlue.withAlphaComponent(0.6) })
 
         super.init(frame: frameRect)
 
         wantsLayer = true
 
-        // Upload chart grows down from top (flipY = true)
         self.uploadChart.setFlipY(true)
-        // Download chart grows up from bottom (flipY = false)
         self.downloadChart.setFlipY(false)
 
         addSubview(self.uploadChart)
@@ -971,30 +896,24 @@ final class NetworkChartView: NSView {
     }
 
     func startAnimation() {
-        uploadChart.startAnimation()
-        downloadChart.startAnimation()
+        guard timer == nil else { return }
+        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.needsDisplay = true
+            self?.uploadChart.needsDisplay = true
+            self?.downloadChart.needsDisplay = true
+        }
+        RunLoop.current.add(t, forMode: .common)
+        timer = t
     }
 
     func stopAnimation() {
-        uploadChart.stopAnimation()
-        downloadChart.stopAnimation()
+        timer?.invalidate()
+        timer = nil
     }
 
-    func setDownloadHistory(_ download: [Double], uploadHistory upload: [Double]) {
-        // Store current speeds for display
-        currentDownloadSpeed = download.last ?? 0
-        currentUploadSpeed = upload.last ?? 0
-
-        // Clear and reinitialize charts
-        self.uploadChart.reinit(maxHistoryCount)
-        self.downloadChart.reinit(maxHistoryCount)
-
-        // Add all values
-        for i in 0..<min(download.count, upload.count) {
-            self.downloadChart.addValue(download[i])
-            self.uploadChart.addValue(upload[i])
-        }
-
+    func updateCurrentSpeeds(download: Double, upload: Double) {
+        currentDownloadSpeed = download
+        currentUploadSpeed = upload
         needsDisplay = true
     }
 

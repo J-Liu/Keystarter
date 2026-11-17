@@ -11,12 +11,13 @@ final class StatusItemController: NSObject {
     private var statusItems: [String: NSStatusItem] = [:]
     private var popover: NSPopover?
     private var currentPopoverModule: String?
-    private var memoryBarView: MemoryBarView?  // Custom view for memory bar
+    private var closingModuleId: String?  // Track which module is being closed (for async popoverDidClose)
+    private var memoryBarView: MemoryBarView?
 
     var modules: [StatusModule] = []
 
     private var refreshTimer: Timer?
-    private var lastRefreshTimes: [String: Date] = [:]
+    private var detailTimer: Timer?
     private let dataQueue = DispatchQueue(label: "com.keystarter.status.data", qos: .utility)
     private var eventMonitor: Any?
 
@@ -86,7 +87,6 @@ final class StatusItemController: NSObject {
                     module.refreshSummary()
                     DispatchQueue.main.async {
                         self.updateModuleLabel(module)
-                        self.lastRefreshTimes[module.identifier] = Date()
                     }
                 }
             }
@@ -445,38 +445,42 @@ final class StatusItemController: NSObject {
 
     private func startRefreshTimer() {
         refreshTimer?.invalidate()
-        // Use 1 second timer, check each module's interval
-        refreshTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            self?.refreshIfNeeded()
+        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.refreshAll()
         }
+        RunLoop.current.add(timer, forMode: .common)
+        refreshTimer = timer
     }
 
-    private func refreshIfNeeded() {
-        let now = Date()
-        let modulesToRefresh = modules.filter { module in
-            let lastRefresh = lastRefreshTimes[module.identifier] ?? .distantPast
-            let elapsed = now.timeIntervalSince(lastRefresh)
-            return elapsed >= module.refreshInterval
-        }
-
-        guard !modulesToRefresh.isEmpty else { return }
-
-        // Collect data on background queue
+    private func refreshAll() {
         dataQueue.async { [weak self] in
             guard let self = self else { return }
-
-            for module in modulesToRefresh {
+            for module in self.modules {
                 module.refreshSummary()
             }
-
-            // Update UI on main queue
             DispatchQueue.main.async {
-                for module in modulesToRefresh {
+                for module in self.modules {
                     self.updateModuleLabel(module)
-                    self.lastRefreshTimes[module.identifier] = now
                 }
             }
         }
+    }
+
+    private func startDetailTimer() {
+        detailTimer?.invalidate()
+        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+            guard let self = self, let moduleId = self.currentPopoverModule else { return }
+            if let module = self.modules.first(where: { $0.identifier == moduleId }) {
+                module.refreshDetail()
+            }
+        }
+        RunLoop.current.add(timer, forMode: .common)
+        detailTimer = timer
+    }
+
+    private func stopDetailTimer() {
+        detailTimer?.invalidate()
+        detailTimer = nil
     }
 
     private func updateModuleLabel(_ module: StatusModule) {
@@ -667,6 +671,8 @@ final class StatusItemController: NSObject {
     // MARK: - Actions
 
     private func showPopover(for module: StatusModule, from view: NSView) {
+        // Track which module is being closed (popoverDidClose is async)
+        closingModuleId = currentPopoverModule
         popover?.close()
 
         let newPopover = NSPopover()
@@ -683,6 +689,7 @@ final class StatusItemController: NSObject {
         newPopover.show(relativeTo: view.bounds, of: view, preferredEdge: .minY)
         self.popover = newPopover
         self.currentPopoverModule = module.identifier
+        startDetailTimer()
         log("Popover shown for: \(module.identifier)")
     }
 
@@ -711,7 +718,6 @@ final class StatusItemController: NSObject {
             module.refreshSummary()
             updateModuleLabel(module)
         }
-        lastRefreshTimes.removeAll()
     }
 
     @objc private func moduleDataUpdated(_ notification: Notification) {
@@ -735,11 +741,14 @@ extension Notification.Name {
 
 extension StatusItemController: NSPopoverDelegate {
     func popoverDidClose(_ notification: Notification) {
-        // Cleanup the current module's detail timer
-        if let moduleId = currentPopoverModule,
+        // Cleanup the module that was being closed (use closingModuleId, not currentPopoverModule)
+        // because popoverDidClose is triggered asynchronously after currentPopoverModule is updated
+        if let moduleId = closingModuleId,
            let module = modules.first(where: { $0.identifier == moduleId }) {
             module.cleanup()
         }
+        stopDetailTimer()
+        closingModuleId = nil
         currentPopoverModule = nil
     }
 }

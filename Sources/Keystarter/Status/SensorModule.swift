@@ -211,9 +211,11 @@ final class SensorModule: NSObject, StatusModule {
 
     private func startDetailTimer() {
         detailTimer?.invalidate()
-        detailTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.refreshDetail()
         }
+        RunLoop.current.add(timer, forMode: .common)
+        detailTimer = timer
     }
 
     func cleanup() {
