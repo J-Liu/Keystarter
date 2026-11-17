@@ -292,17 +292,17 @@ private final class CPULineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        let points = dataProvider()
+        let values = dataProvider()
         let maxCount = 60
-        guard points.count > 1 else { return }
+        guard values.count > 1 else { return }
 
         let height = self.frame.height
         let stepX = self.frame.width / CGFloat(maxCount - 1)
 
         var linePoints: [CGPoint] = []
-        for (i, v) in points.enumerated() {
+        for (i, v) in values.enumerated() {
             let y = v / 100.0 * height
-            let x = self.frame.width - CGFloat(points.count - 1 - i) * stepX
+            let x = self.frame.width - CGFloat(values.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 

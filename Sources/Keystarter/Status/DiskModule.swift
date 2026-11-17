@@ -690,8 +690,8 @@ final class DiskChartView: NSView {
         let topFrame = NSRect(x: 0, y: safeHeight / 2, width: frameRect.width, height: safeHeight / 2)
         let bottomFrame = NSRect(x: 0, y: 0, width: frameRect.width, height: safeHeight / 2)
 
-        self.writeChart = DiskLineChartView(frame: topFrame, dataProvider: writeHistoryProvider, colorProvider: { NSColor.systemOrange.withAlphaComponent(0.8) })
-        self.readChart = DiskLineChartView(frame: bottomFrame, dataProvider: readHistoryProvider, colorProvider: { NSColor.systemBlue.withAlphaComponent(0.8) })
+        self.writeChart = DiskLineChartView(frame: topFrame, dataProvider: writeHistoryProvider, colorProvider: { NSColor.systemPurple.withAlphaComponent(0.8) })
+        self.readChart = DiskLineChartView(frame: bottomFrame, dataProvider: readHistoryProvider, colorProvider: { NSColor.systemBlue.withAlphaComponent(0.6) })
 
         super.init(frame: frameRect)
 
@@ -745,8 +745,8 @@ final class DiskChartView: NSView {
         let padding: CGFloat = 6
         let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
 
-        let writeColor = NSColor.systemOrange.withAlphaComponent(0.8)
-        let readColor = NSColor.systemBlue.withAlphaComponent(0.8)
+        let writeColor = NSColor.systemPurple.withAlphaComponent(0.8)
+        let readColor = NSColor.systemBlue.withAlphaComponent(0.6)
 
         // Write label (top right)
         let writeLabel = "W \(formatSpeed(currentWriteSpeed))"

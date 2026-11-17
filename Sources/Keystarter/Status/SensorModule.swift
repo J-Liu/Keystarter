@@ -57,7 +57,7 @@ final class SensorModule: NSObject, StatusModule {
 
     private weak var chartView: NSView?
     private weak var tableView: NSTableView?
-    private var detailTimer: Timer?
+    private weak var lineChart: FanLineChartView?
 
     override init() {
         super.init()
@@ -200,30 +200,22 @@ final class SensorModule: NSObject, StatusModule {
         tableView = table
         container.addSubview(scrollView)
 
-        // Refresh immediately on open, then start timer
+        // Show existing data immediately
+        updateTempComponents()
+        tableView?.reloadData()
+        updateFanChart()
+
+        // Then refresh
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
             self?.refreshDetail()
-            self?.startDetailTimer()
         }
 
         return container
     }
 
-    private func startDetailTimer() {
-        detailTimer?.invalidate()
-        let timer = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
-            self?.refreshDetail()
-        }
-        RunLoop.current.add(timer, forMode: .common)
-        detailTimer = timer
-    }
-
     func cleanup() {
-        detailTimer?.invalidate()
-        detailTimer = nil
-        if let fanChart = chartView as? FanLineChartView {
-            fanChart.stopAnimation()
-        }
+        lineChart?.stopAnimation()
+        lineChart = nil
     }
 
     func refreshDetail() {
@@ -306,14 +298,23 @@ final class SensorModule: NSObject, StatusModule {
 
         // Line chart at bottom
         let lineChartHeight = dividerY - 8
-        let lineChart = FanLineChartView(
-            frame: NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight),
-            leftColor: { NSColor.systemPurple.withAlphaComponent(0.8) },
-            rightColor: { NSColor.systemBlue.withAlphaComponent(0.7) }
-        )
-        lineChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
-        lineChart.startAnimation()
-        chart.addSubview(lineChart)
+        let lineChartFrame = NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight)
+
+        if let existing = lineChart {
+            existing.frame = lineChartFrame
+            existing.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
+            chart.addSubview(existing)
+        } else {
+            let newChart = FanLineChartView(
+                frame: lineChartFrame,
+                leftColor: { NSColor.systemPurple.withAlphaComponent(0.8) },
+                rightColor: { NSColor.systemBlue.withAlphaComponent(0.7) }
+            )
+            newChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
+            newChart.startAnimation()
+            lineChart = newChart
+            chart.addSubview(newChart)
+        }
     }
 
     private func createFanCircle(in parent: NSView, center: NSPoint, radius: CGFloat,
@@ -841,21 +842,11 @@ private struct SMCKeyData {
 
 // MARK: - Fan Line Chart View
 
-private class WeakBox<T: AnyObject> {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
-}
-
-/// Fan speed line chart with smooth curves and scrolling animation
+/// Fan speed line chart
 final class FanLineChartView: NSView {
     private var leftHistory: [Int] = []
     private var rightHistory: [Int] = []
     private var maxSpeed: Int = 6000
-    private var displayLink: CVDisplayLink?
-    private var lastUpdateTime: Date = Date()
-    private let sampleInterval: TimeInterval = 2.0
-    private var isRunning = false
-    private var weakBox: WeakBox<FanLineChartView>?  // Keep box alive for callback
 
     private let leftColorProvider: () -> NSColor
     private let rightColorProvider: () -> NSColor
@@ -872,7 +863,6 @@ final class FanLineChartView: NSView {
     }
 
     deinit {
-        isRunning = false
         stopAnimation()
     }
 
@@ -880,43 +870,15 @@ final class FanLineChartView: NSView {
         self.leftHistory = left
         self.rightHistory = right
         self.maxSpeed = maxSpeed > 0 ? maxSpeed : 6000
-        lastUpdateTime = Date()
         needsDisplay = true
     }
 
     func startAnimation() {
-        guard displayLink == nil else { return }
-        isRunning = true
-
-        var link: CVDisplayLink?
-        CVDisplayLinkCreateWithActiveCGDisplays(&link)
-        guard let link else { return }
-
-        let box = WeakBox(self)
-        weakBox = box
-        
-        let callback: CVDisplayLinkOutputCallback = { _, _, _, _, _, userInfo -> CVReturn in
-            guard let userInfo = userInfo else { return kCVReturnSuccess }
-            let box = Unmanaged<WeakBox<FanLineChartView>>.fromOpaque(userInfo).takeUnretainedValue()
-            guard let view = box.value, view.isRunning else { return kCVReturnSuccess }
-            DispatchQueue.main.async {
-                guard box.value?.isRunning == true else { return }
-                view.needsDisplay = true
-            }
-            return kCVReturnSuccess
-        }
-
-        CVDisplayLinkSetOutputCallback(link, callback, Unmanaged.passUnretained(box).toOpaque())
-        CVDisplayLinkStart(link)
-        displayLink = link
+        ChartTimerManager.shared.register(self)
     }
 
     func stopAnimation() {
-        isRunning = false
-        if let link = displayLink {
-            CVDisplayLinkStop(link)
-            displayLink = nil
-        }
+        ChartTimerManager.shared.unregister(self)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -931,27 +893,22 @@ final class FanLineChartView: NSView {
         let width = bounds.width - padding * 2
         let xRatio = width / CGFloat(60 - 1)
 
-        // Smooth scroll animation
-        let elapsed = Date().timeIntervalSince(lastUpdateTime)
-        let progress = min(elapsed / sampleInterval, 1.0)
-        let xOffset = progress * xRatio
-
         // Draw left fan line (purple)
         if leftHistory.count > 1 {
-            drawLine(history: leftHistory, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio, xOffset: xOffset)
+            drawLine(history: leftHistory, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
 
         // Draw right fan line (blue)
         if rightHistory.count > 1 {
-            drawLine(history: rightHistory, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio, xOffset: xOffset)
+            drawLine(history: rightHistory, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
     }
 
-    private func drawLine(history: [Int], color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat, xOffset: CGFloat) {
+    private func drawLine(history: [Int], color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat) {
         var points: [CGPoint] = []
 
         for (i, speed) in history.enumerated() {
-            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio - xOffset
+            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio
             let bottomPadding: CGFloat = 4
             let y = padding + CGFloat(speed) / CGFloat(maxSpeed) * (height - bottomPadding)
             points.append(CGPoint(x: x, y: y))

@@ -23,7 +23,7 @@ final class ChartTimerManager {
     /// Unregister a view from receiving redraw notifications.
     func unregister(_ view: NSView) {
         registeredViews.remove(view)
-        stopTimerIfEmpty()
+        stopTimersIfEmpty()
     }
 
     private func startTimerIfNeeded() {
@@ -35,7 +35,7 @@ final class ChartTimerManager {
         timer = t
     }
 
-    private func stopTimerIfEmpty() {
+    private func stopTimersIfEmpty() {
         if registeredViews.allObjects.isEmpty {
             timer?.invalidate()
             timer = nil
