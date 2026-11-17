@@ -280,10 +280,16 @@ final class NetworkModule: NSObject, StatusModule {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
 
-        let table = NSTableView(frame: NSRect(x: 0, y: 0, width: viewWidth - 16, height: CGFloat(rowCount) * rowHeight * 2))
+        let table = ProcessTableView(frame: NSRect(x: 0, y: 0, width: viewWidth - 16, height: CGFloat(rowCount) * rowHeight * 2))
         table.backgroundColor = .clear
         table.rowHeight = rowHeight
         table.intercellSpacing = NSSize(width: 0, height: 0)
+        table.getProcessInfo = { [weak self] row in
+            guard let self = self else { return nil }
+            let process = self.processQueue.sync { self.processes[safe: row] }
+            guard let process = process else { return nil }
+            return (process.pid, process.name)
+        }
 
         let nameColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         nameColumn.width = 150
