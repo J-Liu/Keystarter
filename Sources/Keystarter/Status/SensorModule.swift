@@ -264,34 +264,26 @@ final class SensorModule: NSObject, StatusModule {
     private func updateFanChart() {
         guard let chart = chartView else { return }
 
-        // Only remove non-chart subviews (fan circles, divider)
-        chart.subviews.forEach { subview in
-            if !(subview is FanLineChartView) {
-                subview.removeFromSuperview()
-            }
-        }
+        // Clear subviews and sublayers
+        chart.subviews.forEach { $0.removeFromSuperview() }
         chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
 
         let chartWidth = chart.bounds.width
         let chartHeight = chart.bounds.height
 
-        // Fan circles at top (radius = 25)
+        // Fan circles at top
         let circleRadius: CGFloat = 25
         let circleCenterY = chartHeight - 25 - circleRadius
 
-        // Left fan
         let leftX = chartWidth / 2 - circleRadius - 30
         let leftPercent = fanLeftMax > 0 ? Double(fanLeft) / Double(fanLeftMax) * 100 : 0
-        let leftColor = NSColor.systemPurple.withAlphaComponent(0.3)
         createFanCircle(in: chart, center: NSPoint(x: leftX, y: circleCenterY), radius: circleRadius,
-                       percent: leftPercent, speed: fanLeft, color: leftColor, label: "L")
+                       percent: leftPercent, speed: fanLeft, color: NSColor.systemPurple.withAlphaComponent(0.3), label: "L")
 
-        // Right fan
         let rightX = chartWidth / 2 + circleRadius + 30
         let rightPercent = fanRightMax > 0 ? Double(fanRight) / Double(fanRightMax) * 100 : 0
-        let rightColor = NSColor.systemBlue.withAlphaComponent(0.3)
         createFanCircle(in: chart, center: NSPoint(x: rightX, y: circleCenterY), radius: circleRadius,
-                       percent: rightPercent, speed: fanRight, color: rightColor, label: "R")
+                       percent: rightPercent, speed: fanRight, color: NSColor.systemBlue.withAlphaComponent(0.3), label: "R")
 
         // Divider
         let lrLabelY = circleCenterY - circleRadius - 20
@@ -300,24 +292,21 @@ final class SensorModule: NSObject, StatusModule {
         divider.boxType = .separator
         chart.addSubview(divider)
 
-        // Line chart - only update data, don't recreate
+        // Line chart
         let lineChartHeight = dividerY - 8
         let lineChartFrame = NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight)
 
-        if let existing = lineChart {
-            existing.frame = lineChartFrame
-            existing.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
-        } else {
-            let newChart = FanLineChartView(
-                frame: lineChartFrame,
-                leftColor: { NSColor.systemPurple.withAlphaComponent(0.8) },
-                rightColor: { NSColor.systemBlue.withAlphaComponent(0.7) }
-            )
-            newChart.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
-            newChart.startAnimation()
-            lineChart = newChart
-            chart.addSubview(newChart)
-        }
+        let newChart = FanLineChartView(
+            frame: lineChartFrame,
+            leftProvider: { [weak self] in self?.fanLeftHistory ?? [] },
+            rightProvider: { [weak self] in self?.fanRightHistory ?? [] },
+            maxSpeedProvider: { [weak self] in max(self?.fanLeftMax ?? 6000, self?.fanRightMax ?? 6000) },
+            leftColor: { NSColor.systemPurple.withAlphaComponent(0.8) },
+            rightColor: { NSColor.systemBlue.withAlphaComponent(0.7) }
+        )
+        newChart.startAnimation()
+        lineChart = newChart
+        chart.addSubview(newChart)
     }
 
     private func createFanCircle(in parent: NSView, center: NSPoint, radius: CGFloat,
@@ -846,17 +835,25 @@ private struct SMCKeyData {
 // MARK: - Fan Line Chart View
 
 final class FanLineChartView: NSView {
-    private var leftHistory: [Int] = []
-    private var rightHistory: [Int] = []
+    private let leftProvider: () -> [Int]
+    private let rightProvider: () -> [Int]
+    private let maxSpeedProvider: () -> Int
     private var oldLeft: [Int] = []
     private var oldRight: [Int] = []
-    private var maxSpeed: Int = 6000
     private var lastUpdateTime: Date = Date()
 
     private let leftColorProvider: () -> NSColor
     private let rightColorProvider: () -> NSColor
 
-    init(frame frameRect: NSRect, leftColor: @escaping () -> NSColor, rightColor: @escaping () -> NSColor) {
+    init(frame frameRect: NSRect,
+         leftProvider: @escaping () -> [Int],
+         rightProvider: @escaping () -> [Int],
+         maxSpeedProvider: @escaping () -> Int,
+         leftColor: @escaping () -> NSColor,
+         rightColor: @escaping () -> NSColor) {
+        self.leftProvider = leftProvider
+        self.rightProvider = rightProvider
+        self.maxSpeedProvider = maxSpeedProvider
         self.leftColorProvider = leftColor
         self.rightColorProvider = rightColor
         super.init(frame: frameRect)
@@ -869,15 +866,6 @@ final class FanLineChartView: NSView {
 
     deinit {
         stopAnimation()
-    }
-
-    func setHistory(_ left: [Int], _ right: [Int], maxSpeed: Int) {
-        oldLeft = leftHistory
-        oldRight = rightHistory
-        leftHistory = left
-        rightHistory = right
-        self.maxSpeed = maxSpeed > 0 ? maxSpeed : 6000
-        lastUpdateTime = Date()
     }
 
     func startAnimation() {
@@ -894,6 +882,19 @@ final class FanLineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
+        let leftHistory = leftProvider()
+        let rightHistory = rightProvider()
+        let maxSpeed = maxSpeedProvider()
+
+        // Detect change
+        if leftHistory != oldLeft {
+            oldLeft = leftHistory
+            lastUpdateTime = Date()
+        }
+        if rightHistory != oldRight {
+            oldRight = rightHistory
+        }
+
         let padding: CGFloat = 8
         let height = bounds.height - padding * 2
         let width = bounds.width - padding * 2
@@ -902,23 +903,20 @@ final class FanLineChartView: NSView {
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
 
-        // Draw left fan line
         if leftHistory.count > 1 {
             let displayLeft = interpolate(from: oldLeft, to: leftHistory, progress: progress)
-            drawLine(history: displayLeft, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            drawLine(history: displayLeft, maxSpeed: maxSpeed, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
 
-        // Draw right fan line
         if rightHistory.count > 1 {
             let displayRight = interpolate(from: oldRight, to: rightHistory, progress: progress)
-            drawLine(history: displayRight, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            drawLine(history: displayRight, maxSpeed: maxSpeed, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
     }
 
     private func interpolate(from old: [Int], to new: [Int], progress: Double) -> [Int] {
         guard !new.isEmpty else { return [] }
         if old.isEmpty { return new }
-
         var result: [Int] = []
         for i in 0..<new.count {
             let newVal = new[i]
@@ -928,16 +926,14 @@ final class FanLineChartView: NSView {
         return result
     }
 
-    private func drawLine(history: [Int], color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat) {
+    private func drawLine(history: [Int], maxSpeed: Int, color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat) {
         var points: [CGPoint] = []
         for (i, speed) in history.enumerated() {
             let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio
-            let y = padding + CGFloat(speed) / CGFloat(maxSpeed) * (height - 4)
+            let y = padding + CGFloat(speed) / CGFloat(maxSpeed > 0 ? maxSpeed : 6000) * (height - 4)
             points.append(CGPoint(x: x, y: y))
         }
-
         guard points.count > 1 else { return }
-
         let path = NSBezierPath()
         path.move(to: points[0])
         for i in 1..<points.count {
