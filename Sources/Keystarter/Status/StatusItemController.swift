@@ -26,14 +26,14 @@ final class StatusItemController: NSObject {
         log("StatusItemController started")
         loadEnabledModules()
         log("Loaded \(modules.count) modules: \(modules.map { $0.identifier }.joined(separator: ", "))")
-        
+
         // Check if monitor is enabled
         let monitorEnabled = UserDefaults.standard.object(forKey: "status.monitor.enabled") as? Bool ?? true
         guard monitorEnabled else {
             log("Monitor is disabled")
             return
         }
-        
+
         setupStatusItem()
         initialRefresh()
         startRefreshTimer()
@@ -108,7 +108,7 @@ final class StatusItemController: NSObject {
             case "memory":
                 itemWidth = 7   // Segmented bar
             case "network", "disk":
-                itemWidth = 50  // Speed format like "123.4K"
+                itemWidth = 45  // Speed format like "123.4K"
             default:
                 itemWidth = 16
             }
@@ -143,7 +143,7 @@ final class StatusItemController: NSObject {
                     let valueText = module.summaryValue
                     var numericPart = "--"
                     var unitPart = "W"
-                    
+
                     if valueText.count > 1 {
                         let lastChar = valueText.last!
                         if lastChar.isLetter || lastChar == "°" {
@@ -249,7 +249,7 @@ final class StatusItemController: NSObject {
             case "memory":
                 itemWidth = 7  // Segmented bar
             case "network", "disk":
-                itemWidth = 50  // Speed format like "123.4K"
+                itemWidth = 45  // Speed format like "123.4K"
             default:
                 itemWidth = 16
             }
@@ -284,7 +284,7 @@ final class StatusItemController: NSObject {
                     let valueText = module.summaryValue
                     var numericPart = "--"
                     var unitPart = "W"
-                    
+
                     if valueText.count > 1 {
                         let lastChar = valueText.last!
                         if lastChar.isLetter || lastChar == "°" {
@@ -433,7 +433,7 @@ final class StatusItemController: NSObject {
     func stopMonitoring() {
         refreshTimer?.invalidate()
         refreshTimer = nil
-        
+
         // Remove all status items from the system bar
         for (_, item) in statusItems {
             NSStatusBar.system.removeStatusItem(item)
@@ -511,7 +511,7 @@ final class StatusItemController: NSObject {
             let valueText = module.summaryValue
             var numericPart = "--"
             var unitPart = "W"
-            
+
             // Parse the value (e.g., "15W", "42°", "--W")
             if valueText.count > 1 {
                 let lastChar = valueText.last!
@@ -533,10 +533,10 @@ final class StatusItemController: NSObject {
             ]
             attrString.append(NSAttributedString(string: numericPart + "\n", attributes: valueAttrs))
             attrString.append(NSAttributedString(string: unitPart, attributes: unitAttrs))
-            
+
             // Calculate adaptive width for sensor based on value length
             let valueWidth = numericPart.size(withAttributes: [.font: NSFont(name: "Tahoma", size: 11)!]).width
-            calculatedWidth = valueWidth + 4  // Small padding
+            calculatedWidth = valueWidth
             calculatedWidth = max(calculatedWidth, 15)  // Minimum width for 2 digits
         } else if module.identifier == "disk", let diskModule = module as? DiskModule {
             // Disk: two colored dots + speed values
@@ -549,12 +549,13 @@ final class StatusItemController: NSObject {
             let writeColor = NSColor.systemOrange
             let readColor = NSColor.systemBlue
 
-            // Write line: ● + speed (smaller dot)
-            let dotFont = NSFont.systemFont(ofSize: 5, weight: .regular)
+            // Write line: ● + speed
+            let dotFont = NSFont.systemFont(ofSize: 6, weight: .regular)
             let writeAttrs: [NSAttributedString.Key: Any] = [
                 .font: dotFont,
                 .foregroundColor: writeColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: 1
             ]
             let writeValueAttrs: [NSAttributedString.Key: Any] = [
                 .font: font,
@@ -564,11 +565,12 @@ final class StatusItemController: NSObject {
             attrString.append(NSAttributedString(string: "● ", attributes: writeAttrs))
             attrString.append(NSAttributedString(string: diskModule.writeSpeedText + "\n", attributes: writeValueAttrs))
 
-            // Read line: ● + speed (smaller dot)
+            // Read line: ● + speed
             let readAttrs: [NSAttributedString.Key: Any] = [
                 .font: dotFont,
                 .foregroundColor: readColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: 1
             ]
             let readValueAttrs: [NSAttributedString.Key: Any] = [
                 .font: font,
@@ -581,8 +583,8 @@ final class StatusItemController: NSObject {
             // Calculate adaptive width for disk
             let writeWidth = ("● " + diskModule.writeSpeedText).size(withAttributes: [.font: font]).width
             let readWidth = ("● " + diskModule.readSpeedText).size(withAttributes: [.font: font]).width
-            calculatedWidth = max(writeWidth, readWidth) + 8  // Add padding
-            calculatedWidth = max(calculatedWidth, 50)  // Minimum width for "123.4K" format
+            calculatedWidth = max(writeWidth, readWidth)
+            calculatedWidth = max(calculatedWidth, 45)  // Minimum width for "123.4K" format
         } else if module.identifier == "network", let networkModule = module as? NetworkModule {
             // Network: colored arrows + speed values
             let paraStyle = NSMutableParagraphStyle()
@@ -599,12 +601,14 @@ final class StatusItemController: NSObject {
             let uploadAttrs: [NSAttributedString.Key: Any] = [
                 .font: arrowFont,
                 .foregroundColor: uploadColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: -7
             ]
             let uploadValueAttrs: [NSAttributedString.Key: Any] = [
                 .font: font,
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: -7
             ]
             attrString.append(NSAttributedString(string: "↑ ", attributes: uploadAttrs))
             attrString.append(NSAttributedString(string: networkModule.uploadSpeedText + "\n", attributes: uploadValueAttrs))
@@ -613,12 +617,14 @@ final class StatusItemController: NSObject {
             let downloadAttrs: [NSAttributedString.Key: Any] = [
                 .font: arrowFont,
                 .foregroundColor: downloadColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: 0
             ]
             let downloadValueAttrs: [NSAttributedString.Key: Any] = [
                 .font: font,
                 .foregroundColor: NSColor.labelColor,
-                .paragraphStyle: paraStyle
+                .paragraphStyle: paraStyle,
+                .baselineOffset: 0
             ]
             attrString.append(NSAttributedString(string: "↓ ", attributes: downloadAttrs))
             attrString.append(NSAttributedString(string: networkModule.downloadSpeedText, attributes: downloadValueAttrs))
@@ -626,8 +632,8 @@ final class StatusItemController: NSObject {
             // Calculate adaptive width for network
             let uploadWidth = ("↑ " + networkModule.uploadSpeedText).size(withAttributes: [.font: font]).width
             let downloadWidth = ("↓ " + networkModule.downloadSpeedText).size(withAttributes: [.font: font]).width
-            calculatedWidth = max(uploadWidth, downloadWidth) + 8  // Add padding
-            calculatedWidth = max(calculatedWidth, 50)  // Minimum width for "123.4K" format
+            calculatedWidth = max(uploadWidth, downloadWidth)
+            calculatedWidth = max(calculatedWidth, 45)  // Minimum width for "123.4K" format
         } else {
             // Other modules: two lines (name + value)
             let paraStyle = NSMutableParagraphStyle()
@@ -648,11 +654,11 @@ final class StatusItemController: NSObject {
 
             attrString.append(NSAttributedString(string: module.shortName + "\n", attributes: nameAttrs))
             attrString.append(NSAttributedString(string: module.summaryValue, attributes: valueAttrs))
-            
+
             // Calculate adaptive width for CPU/GPU based on value length
             if module.identifier == "cpu" || module.identifier == "gpu" {
                 let valueWidth = module.summaryValue.size(withAttributes: [.font: NSFont(name: "Tahoma", size: 11)!]).width
-                calculatedWidth = valueWidth + 4  // Small padding
+                calculatedWidth = valueWidth
                 calculatedWidth = max(calculatedWidth, 16)  // Minimum width for 2 digits
             }
         }
