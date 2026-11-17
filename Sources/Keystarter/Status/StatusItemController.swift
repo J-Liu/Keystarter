@@ -578,12 +578,9 @@ final class StatusItemController: NSObject {
             attrString.append(NSAttributedString(string: "● ", attributes: readAttrs))
             attrString.append(NSAttributedString(string: diskModule.readSpeedText, attributes: readValueAttrs))
 
-            // Calculate adaptive width for disk (need to account for dot font)
-            let dotWidth = "● ".size(withAttributes: [.font: dotFont]).width
-            let writeValueWidth = diskModule.writeSpeedText.size(withAttributes: [.font: font]).width
-            let readValueWidth = diskModule.readSpeedText.size(withAttributes: [.font: font]).width
-            let writeWidth = dotWidth + writeValueWidth
-            let readWidth = dotWidth + readValueWidth
+            // Calculate adaptive width for disk
+            let writeWidth = ("● " + diskModule.writeSpeedText).size(withAttributes: [.font: font]).width
+            let readWidth = ("● " + diskModule.readSpeedText).size(withAttributes: [.font: font]).width
             calculatedWidth = max(writeWidth, readWidth) + 8  // Add padding
             calculatedWidth = max(calculatedWidth, 50)  // Minimum width for "123.4K" format
         } else if module.identifier == "network", let networkModule = module as? NetworkModule {
@@ -626,12 +623,9 @@ final class StatusItemController: NSObject {
             attrString.append(NSAttributedString(string: "↓ ", attributes: downloadAttrs))
             attrString.append(NSAttributedString(string: networkModule.downloadSpeedText, attributes: downloadValueAttrs))
 
-            // Calculate adaptive width for network (need to account for arrow font being larger)
-            let arrowWidth = "↑ ".size(withAttributes: [.font: arrowFont]).width
-            let uploadValueWidth = networkModule.uploadSpeedText.size(withAttributes: [.font: font]).width
-            let downloadValueWidth = networkModule.downloadSpeedText.size(withAttributes: [.font: font]).width
-            let uploadWidth = arrowWidth + uploadValueWidth
-            let downloadWidth = arrowWidth + downloadValueWidth
+            // Calculate adaptive width for network
+            let uploadWidth = ("↑ " + networkModule.uploadSpeedText).size(withAttributes: [.font: font]).width
+            let downloadWidth = ("↓ " + networkModule.downloadSpeedText).size(withAttributes: [.font: font]).width
             calculatedWidth = max(uploadWidth, downloadWidth) + 8  // Add padding
             calculatedWidth = max(calculatedWidth, 50)  // Minimum width for "123.4K" format
         } else {
