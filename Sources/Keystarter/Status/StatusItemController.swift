@@ -597,8 +597,8 @@ final class StatusItemController: NSObject {
             let uploadColor = NSColor.systemRed
             let downloadColor = NSColor.systemBlue
 
-            // Upload line: colored ↑ + speed (bolder arrow)
-            let arrowFont = NSFont.systemFont(ofSize: 10, weight: .bold)
+            // Upload line: colored ↑ + speed
+            let arrowFont = NSFont.systemFont(ofSize: 9, weight: .bold)
             let uploadAttrs: [NSAttributedString.Key: Any] = [
                 .font: arrowFont,
                 .foregroundColor: uploadColor,
@@ -612,7 +612,7 @@ final class StatusItemController: NSObject {
             attrString.append(NSAttributedString(string: "↑ ", attributes: uploadAttrs))
             attrString.append(NSAttributedString(string: networkModule.uploadSpeedText + "\n", attributes: uploadValueAttrs))
 
-            // Download line: colored ↓ + speed (bolder arrow)
+            // Download line: colored ↓ + speed
             let downloadAttrs: [NSAttributedString.Key: Any] = [
                 .font: arrowFont,
                 .foregroundColor: downloadColor,
