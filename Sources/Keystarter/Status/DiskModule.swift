@@ -600,6 +600,10 @@ private final class DiskLineChartView: NSView {
     private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
     private var flipY: Bool = false
+    private var displayValues: [Double] = []
+    private var targetValues: [Double] = []
+    private var lastDataTime: Date = Date()
+    private let updateInterval: TimeInterval = 2.0
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -622,12 +626,30 @@ private final class DiskLineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        let points = dataProvider()
+        let newValues = dataProvider()
         let maxCount = 60
-        guard points.count > 1 else { return }
+        guard newValues.count > 1 else { return }
+
+        // Detect data change
+        if targetValues != newValues {
+            displayValues = displayValues.isEmpty ? newValues : targetValues
+            targetValues = newValues
+            lastDataTime = Date()
+        }
+
+        let elapsed = Date().timeIntervalSince(lastDataTime)
+        let progress = min(elapsed / updateInterval, 1.0)
+
+        // Interpolate
+        var valuesToDraw: [Double] = []
+        for i in 0..<targetValues.count {
+            let newVal = targetValues[i]
+            let oldVal = i < displayValues.count ? displayValues[i] : newVal
+            valuesToDraw.append(oldVal + (newVal - oldVal) * progress)
+        }
 
         var maxValue: Double = 0
-        for p in points {
+        for p in valuesToDraw {
             if p > maxValue { maxValue = p }
         }
         if maxValue == 0 { maxValue = 1 }
@@ -638,12 +660,12 @@ private final class DiskLineChartView: NSView {
         let zero = flipY ? 0 : self.frame.height
 
         var linePoints: [CGPoint] = []
-        for (i, v) in points.enumerated() {
+        for (i, v) in valuesToDraw.enumerated() {
             var y = (v / maxValue) * height
             if !flipY {
                 y = height - y
             }
-            let x = self.frame.width - CGFloat(points.count - 1 - i) * stepX
+            let x = self.frame.width - CGFloat(valuesToDraw.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 

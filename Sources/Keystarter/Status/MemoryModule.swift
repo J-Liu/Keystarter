@@ -554,12 +554,16 @@ final class MemoryBarView: NSView {
 
 // MARK: - Memory Chart View with smooth curves
 
-/// Memory chart view
+/// Memory chart view with smooth interpolation
 final class MemoryChartView: NSView {
     private let historyProvider: () -> [Double]
     private let usedMemoryProvider: () -> UInt64
     private var totalMemory: UInt64 = 0
     private let chartColorProvider: () -> NSColor
+    private var displayHistory: [Double] = []
+    private var targetHistory: [Double] = []
+    private var lastDataTime: Date = Date()
+    private let updateInterval: TimeInterval = 2.0
 
     init(frame frameRect: NSRect, historyProvider: @escaping () -> [Double], usedMemoryProvider: @escaping () -> UInt64, colorProvider: @escaping () -> NSColor) {
         self.historyProvider = historyProvider
@@ -584,53 +588,71 @@ final class MemoryChartView: NSView {
     func stopAnimation() {
         ChartTimerManager.shared.unregister(self)
     }
-    
+
     func setTotalMemory(_ total: UInt64) {
         self.totalMemory = total
     }
-    
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        
-        let history = historyProvider()
+
+        let newHistory = historyProvider()
         let usedMemory = usedMemoryProvider()
-        
+
         let maxHistoryCount = 60
-        guard history.count > 1 else { return }
+        guard newHistory.count > 1 else { return }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
-        
+
+        // Detect data change
+        if targetHistory != newHistory {
+            displayHistory = displayHistory.isEmpty ? newHistory : targetHistory
+            targetHistory = newHistory
+            lastDataTime = Date()
+        }
+
+        let elapsed = Date().timeIntervalSince(lastDataTime)
+        let progress = min(elapsed / updateInterval, 1.0)
+
+        // Interpolate
+        var historyToDraw: [Double] = []
+        for i in 0..<targetHistory.count {
+            let newVal = targetHistory[i]
+            let oldVal = i < displayHistory.count ? displayHistory[i] : newVal
+            historyToDraw.append(oldVal + (newVal - oldVal) * progress)
+        }
+
         let totalGB = Double(totalMemory) / 1_073_741_824.0
         let usedGB = Double(usedMemory) / 1_073_741_824.0
-        
+
         let padding: CGFloat = 8
         let labelHeight: CGFloat = 24
         let height = bounds.height - labelHeight - padding
         let width = bounds.width - padding * 2
         let stepX = width / CGFloat(maxHistoryCount - 1)
-        
+
         var linePoints: [CGPoint] = []
-        for (i, value) in history.enumerated() {
-            let x = bounds.width - padding - CGFloat(history.count - 1 - i) * stepX
+        for (i, value) in historyToDraw.enumerated() {
+            let x = bounds.width - padding - CGFloat(historyToDraw.count - 1 - i) * stepX
             let y = padding + min(value / totalGB, 1.0) * height
             linePoints.append(CGPoint(x: x, y: y))
         }
-        
+
         guard linePoints.count > 1 else { return }
-        
+
         // Draw smooth curve using quadratic Bezier
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
-        
+
         for i in 1..<linePoints.count {
             let prev = linePoints[i - 1]
             let curr = linePoints[i]
-            
+
             // Control point at midpoint creates smooth curve
             let midX = (prev.x + curr.x) / 2
             linePath.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
         }
-        
+
         // Draw filled area with gradient
         let areaPath = linePath.copy() as! NSBezierPath
         areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: padding))

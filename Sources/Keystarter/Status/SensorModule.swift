@@ -264,46 +264,49 @@ final class SensorModule: NSObject, StatusModule {
     private func updateFanChart() {
         guard let chart = chartView else { return }
 
-        chart.subviews.forEach { $0.removeFromSuperview() }
+        // Only remove non-chart subviews (fan circles, divider)
+        chart.subviews.forEach { subview in
+            if !(subview is FanLineChartView) {
+                subview.removeFromSuperview()
+            }
+        }
         chart.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
 
         let chartWidth = chart.bounds.width
         let chartHeight = chart.bounds.height
 
         // Fan circles at top (radius = 25)
-        // Leave space for RPM label above circle (radius + 6 + 12 + padding = ~45 from top)
         let circleRadius: CGFloat = 25
-        let circleCenterY = chartHeight - 25 - circleRadius  // 25px from top for RPM label
+        let circleCenterY = chartHeight - 25 - circleRadius
 
-        // Left fan (purple-ish)
+        // Left fan
         let leftX = chartWidth / 2 - circleRadius - 30
         let leftPercent = fanLeftMax > 0 ? Double(fanLeft) / Double(fanLeftMax) * 100 : 0
         let leftColor = NSColor.systemPurple.withAlphaComponent(0.3)
         createFanCircle(in: chart, center: NSPoint(x: leftX, y: circleCenterY), radius: circleRadius,
                        percent: leftPercent, speed: fanLeft, color: leftColor, label: "L")
 
-        // Right fan (blue-ish)
+        // Right fan
         let rightX = chartWidth / 2 + circleRadius + 30
         let rightPercent = fanRightMax > 0 ? Double(fanRight) / Double(fanRightMax) * 100 : 0
         let rightColor = NSColor.systemBlue.withAlphaComponent(0.3)
         createFanCircle(in: chart, center: NSPoint(x: rightX, y: circleCenterY), radius: circleRadius,
                        percent: rightPercent, speed: fanRight, color: rightColor, label: "R")
 
-        // Divider below circles (L/R label is at circleCenterY - radius - 20)
+        // Divider
         let lrLabelY = circleCenterY - circleRadius - 20
-        let dividerY = lrLabelY - 12  // 12px space between L/R and divider
+        let dividerY = lrLabelY - 12
         let divider = NSBox(frame: NSRect(x: 12, y: dividerY, width: chartWidth - 24, height: 1))
         divider.boxType = .separator
         chart.addSubview(divider)
 
-        // Line chart at bottom
+        // Line chart - only update data, don't recreate
         let lineChartHeight = dividerY - 8
         let lineChartFrame = NSRect(x: 12, y: 4, width: chartWidth - 24, height: lineChartHeight)
 
         if let existing = lineChart {
             existing.frame = lineChartFrame
             existing.setHistory(fanLeftHistory, fanRightHistory, maxSpeed: max(fanLeftMax, fanRightMax))
-            chart.addSubview(existing)
         } else {
             let newChart = FanLineChartView(
                 frame: lineChartFrame,
@@ -842,11 +845,17 @@ private struct SMCKeyData {
 
 // MARK: - Fan Line Chart View
 
-/// Fan speed line chart
+/// Fan speed line chart with smooth interpolation
 final class FanLineChartView: NSView {
     private var leftHistory: [Int] = []
     private var rightHistory: [Int] = []
+    private var displayLeftHistory: [Int] = []
+    private var displayRightHistory: [Int] = []
+    private var targetLeftHistory: [Int] = []
+    private var targetRightHistory: [Int] = []
     private var maxSpeed: Int = 6000
+    private var lastDataTime: Date = Date()
+    private let updateInterval: TimeInterval = 2.0
 
     private let leftColorProvider: () -> NSColor
     private let rightColorProvider: () -> NSColor
@@ -867,10 +876,22 @@ final class FanLineChartView: NSView {
     }
 
     func setHistory(_ left: [Int], _ right: [Int], maxSpeed: Int) {
-        self.leftHistory = left
-        self.rightHistory = right
+        // When new data arrives, save the current history as the interpolation starting point
+        if !leftHistory.isEmpty {
+            displayLeftHistory = leftHistory
+        } else {
+            displayLeftHistory = left
+        }
+        if !rightHistory.isEmpty {
+            displayRightHistory = rightHistory
+        } else {
+            displayRightHistory = right
+        }
+        // Update history with new data
+        leftHistory = left
+        rightHistory = right
         self.maxSpeed = maxSpeed > 0 ? maxSpeed : 6000
-        needsDisplay = true
+        lastDataTime = Date()
     }
 
     func startAnimation() {
@@ -884,7 +905,6 @@ final class FanLineChartView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        guard leftHistory.count > 1 || rightHistory.count > 1 else { return }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
@@ -893,15 +913,35 @@ final class FanLineChartView: NSView {
         let width = bounds.width - padding * 2
         let xRatio = width / CGFloat(60 - 1)
 
+        // Calculate interpolation progress
+        let elapsed = Date().timeIntervalSince(lastDataTime)
+        let progress = min(elapsed / updateInterval, 1.0)
+
         // Draw left fan line (purple)
         if leftHistory.count > 1 {
-            drawLine(history: leftHistory, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            let displayHistory = interpolate(from: displayLeftHistory, to: leftHistory, progress: progress)
+            drawLine(history: displayHistory, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
 
         // Draw right fan line (blue)
         if rightHistory.count > 1 {
-            drawLine(history: rightHistory, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            let displayHistory = interpolate(from: displayRightHistory, to: rightHistory, progress: progress)
+            drawLine(history: displayHistory, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
+    }
+
+    private func interpolate(from old: [Int], to new: [Int], progress: Double) -> [Int] {
+        guard !new.isEmpty else { return new }
+        if old.isEmpty { return new }
+
+        var result: [Int] = []
+        for i in 0..<new.count {
+            let newVal = new[i]
+            let oldVal = i < old.count ? old[i] : newVal
+            let interpolated = Double(oldVal) + (Double(newVal) - Double(oldVal)) * progress
+            result.append(Int(interpolated))
+        }
+        return result
     }
 
     private func drawLine(history: [Int], color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat) {

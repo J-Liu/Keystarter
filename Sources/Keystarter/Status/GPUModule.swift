@@ -765,6 +765,10 @@ extension GPUModule: NSTableViewDataSource, NSTableViewDelegate {
 private final class GPULineChartView: NSView {
     private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
+    private var displayValues: [Double] = []
+    private var targetValues: [Double] = []
+    private var lastDataTime: Date = Date()
+    private let updateInterval: TimeInterval = 2.0
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -783,17 +787,35 @@ private final class GPULineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        let points = dataProvider()
+        let newValues = dataProvider()
         let maxCount = 60
-        guard points.count > 1 else { return }
+        guard newValues.count > 1 else { return }
+
+        // Detect data change
+        if targetValues != newValues {
+            displayValues = displayValues.isEmpty ? newValues : targetValues
+            targetValues = newValues
+            lastDataTime = Date()
+        }
+
+        let elapsed = Date().timeIntervalSince(lastDataTime)
+        let progress = min(elapsed / updateInterval, 1.0)
+
+        // Interpolate
+        var valuesToDraw: [Double] = []
+        for i in 0..<targetValues.count {
+            let newVal = targetValues[i]
+            let oldVal = i < displayValues.count ? displayValues[i] : newVal
+            valuesToDraw.append(oldVal + (newVal - oldVal) * progress)
+        }
 
         let height = self.frame.height
         let stepX = self.frame.width / CGFloat(maxCount - 1)
 
         var linePoints: [CGPoint] = []
-        for (i, v) in points.enumerated() {
+        for (i, v) in valuesToDraw.enumerated() {
             let y = v / 100.0 * height
-            let x = self.frame.width - CGFloat(points.count - 1 - i) * stepX
+            let x = self.frame.width - CGFloat(valuesToDraw.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 

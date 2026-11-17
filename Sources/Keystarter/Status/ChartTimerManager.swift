@@ -28,7 +28,8 @@ final class ChartTimerManager {
 
     private func startTimerIfNeeded() {
         guard timer == nil else { return }
-        let t = Timer(timeInterval: 2.0, repeats: true) { [weak self] _ in
+        // 30fps for smooth animation
+        let t = Timer(timeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
             self?.notifyAll()
         }
         RunLoop.current.add(t, forMode: .common)
