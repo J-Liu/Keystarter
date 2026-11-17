@@ -845,17 +845,13 @@ private struct SMCKeyData {
 
 // MARK: - Fan Line Chart View
 
-/// Fan speed line chart with smooth interpolation
 final class FanLineChartView: NSView {
     private var leftHistory: [Int] = []
     private var rightHistory: [Int] = []
-    private var displayLeftHistory: [Int] = []
-    private var displayRightHistory: [Int] = []
-    private var targetLeftHistory: [Int] = []
-    private var targetRightHistory: [Int] = []
+    private var oldLeft: [Int] = []
+    private var oldRight: [Int] = []
     private var maxSpeed: Int = 6000
-    private var lastDataTime: Date = Date()
-    private let updateInterval: TimeInterval = 2.0
+    private var lastUpdateTime: Date = Date()
 
     private let leftColorProvider: () -> NSColor
     private let rightColorProvider: () -> NSColor
@@ -876,22 +872,12 @@ final class FanLineChartView: NSView {
     }
 
     func setHistory(_ left: [Int], _ right: [Int], maxSpeed: Int) {
-        // When new data arrives, save the current history as the interpolation starting point
-        if !leftHistory.isEmpty {
-            displayLeftHistory = leftHistory
-        } else {
-            displayLeftHistory = left
-        }
-        if !rightHistory.isEmpty {
-            displayRightHistory = rightHistory
-        } else {
-            displayRightHistory = right
-        }
-        // Update history with new data
+        oldLeft = leftHistory
+        oldRight = rightHistory
         leftHistory = left
         rightHistory = right
         self.maxSpeed = maxSpeed > 0 ? maxSpeed : 6000
-        lastDataTime = Date()
+        lastUpdateTime = Date()
     }
 
     func startAnimation() {
@@ -913,44 +899,40 @@ final class FanLineChartView: NSView {
         let width = bounds.width - padding * 2
         let xRatio = width / CGFloat(60 - 1)
 
-        // Calculate interpolation progress
-        let elapsed = Date().timeIntervalSince(lastDataTime)
-        let progress = min(elapsed / updateInterval, 1.0)
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / 2.0, 1.0)
 
-        // Draw left fan line (purple)
+        // Draw left fan line
         if leftHistory.count > 1 {
-            let displayHistory = interpolate(from: displayLeftHistory, to: leftHistory, progress: progress)
-            drawLine(history: displayHistory, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            let displayLeft = interpolate(from: oldLeft, to: leftHistory, progress: progress)
+            drawLine(history: displayLeft, color: leftColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
 
-        // Draw right fan line (blue)
+        // Draw right fan line
         if rightHistory.count > 1 {
-            let displayHistory = interpolate(from: displayRightHistory, to: rightHistory, progress: progress)
-            drawLine(history: displayHistory, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
+            let displayRight = interpolate(from: oldRight, to: rightHistory, progress: progress)
+            drawLine(history: displayRight, color: rightColorProvider(), padding: padding, height: height, xRatio: xRatio)
         }
     }
 
     private func interpolate(from old: [Int], to new: [Int], progress: Double) -> [Int] {
-        guard !new.isEmpty else { return new }
+        guard !new.isEmpty else { return [] }
         if old.isEmpty { return new }
 
         var result: [Int] = []
         for i in 0..<new.count {
             let newVal = new[i]
             let oldVal = i < old.count ? old[i] : newVal
-            let interpolated = Double(oldVal) + (Double(newVal) - Double(oldVal)) * progress
-            result.append(Int(interpolated))
+            result.append(Int(Double(oldVal) + Double(newVal - oldVal) * progress))
         }
         return result
     }
 
     private func drawLine(history: [Int], color: NSColor, padding: CGFloat, height: CGFloat, xRatio: CGFloat) {
         var points: [CGPoint] = []
-
         for (i, speed) in history.enumerated() {
             let x = bounds.width - padding - CGFloat(history.count - 1 - i) * xRatio
-            let bottomPadding: CGFloat = 4
-            let y = padding + CGFloat(speed) / CGFloat(maxSpeed) * (height - bottomPadding)
+            let y = padding + CGFloat(speed) / CGFloat(maxSpeed) * (height - 4)
             points.append(CGPoint(x: x, y: y))
         }
 
@@ -958,14 +940,12 @@ final class FanLineChartView: NSView {
 
         let path = NSBezierPath()
         path.move(to: points[0])
-
         for i in 1..<points.count {
             let prev = points[i - 1]
             let curr = points[i]
             let midX = (prev.x + curr.x) / 2
             path.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
         }
-
         path.lineWidth = 1.5
         color.setStroke()
         path.stroke()

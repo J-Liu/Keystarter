@@ -778,10 +778,8 @@ private final class NetworkLineChartView: NSView {
     private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
     private var flipY: Bool = false
-    private var displayValues: [Double] = []
-    private var targetValues: [Double] = []
-    private var lastDataTime: Date = Date()
-    private let updateInterval: TimeInterval = 2.0
+    private var oldValues: [Double] = []
+    private var lastUpdateTime: Date = Date()
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -804,31 +802,32 @@ private final class NetworkLineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        let newValues = dataProvider()
+        let values = dataProvider()
         let maxCount = 60
-        guard newValues.count > 1 else { return }
+        guard values.count > 1 else { return }
 
         // Detect data change
-        if targetValues != newValues {
-            displayValues = displayValues.isEmpty ? newValues : targetValues
-            targetValues = newValues
-            lastDataTime = Date()
+        if values != oldValues && !oldValues.isEmpty {
+            oldValues = values
+            lastUpdateTime = Date()
+        } else if oldValues.isEmpty {
+            oldValues = values
         }
 
-        let elapsed = Date().timeIntervalSince(lastDataTime)
-        let progress = min(elapsed / updateInterval, 1.0)
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / 2.0, 1.0)
 
         // Interpolate
-        var valuesToDraw: [Double] = []
-        for i in 0..<targetValues.count {
-            let newVal = targetValues[i]
-            let oldVal = i < displayValues.count ? displayValues[i] : newVal
-            valuesToDraw.append(oldVal + (newVal - oldVal) * progress)
+        var displayValues: [Double] = []
+        for i in 0..<values.count {
+            let newVal = values[i]
+            let oldVal = i < oldValues.count ? oldValues[i] : newVal
+            displayValues.append(oldVal + (newVal - oldVal) * progress)
         }
 
         var maxValue: Double = 0
-        for p in valuesToDraw {
-            if p > maxValue { maxValue = p }
+        for v in displayValues {
+            if v > maxValue { maxValue = v }
         }
         if maxValue == 0 { maxValue = 1 }
 
@@ -838,26 +837,22 @@ private final class NetworkLineChartView: NSView {
         let zero = flipY ? 0 : self.frame.height
 
         var linePoints: [CGPoint] = []
-        for (i, v) in valuesToDraw.enumerated() {
+        for (i, v) in displayValues.enumerated() {
             var y = (v / maxValue) * height
             if !flipY {
                 y = height - y
             }
-            let x = self.frame.width - CGFloat(valuesToDraw.count - 1 - i) * stepX
+            let x = self.frame.width - CGFloat(displayValues.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 
         guard linePoints.count > 1 else { return }
 
-        // Draw smooth curve using quadratic Bezier
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
-
         for i in 1..<linePoints.count {
             let prev = linePoints[i - 1]
             let curr = linePoints[i]
-
-            // Control point at midpoint creates smooth curve
             let midX = (prev.x + curr.x) / 2
             linePath.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
         }
@@ -866,17 +861,13 @@ private final class NetworkLineChartView: NSView {
         colorProvider().setStroke()
         linePath.stroke()
 
-        // Draw filled area with gradient
         let areaPath = linePath.copy() as! NSBezierPath
         areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: zero))
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
         areaPath.close()
 
         let color = colorProvider()
-        let gradient = NSGradient(colors: [
-            color.withAlphaComponent(0.3),
-            color.withAlphaComponent(0.5)
-        ])
+        let gradient = NSGradient(colors: [color.withAlphaComponent(0.3), color.withAlphaComponent(0.5)])
         gradient?.draw(in: areaPath, angle: flipY ? 0 : 90)
     }
 }

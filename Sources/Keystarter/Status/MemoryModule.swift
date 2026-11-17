@@ -552,18 +552,15 @@ final class MemoryBarView: NSView {
     }
 }
 
-// MARK: - Memory Chart View with smooth curves
+// MARK: - Memory Chart View
 
-/// Memory chart view with smooth interpolation
 final class MemoryChartView: NSView {
     private let historyProvider: () -> [Double]
     private let usedMemoryProvider: () -> UInt64
     private var totalMemory: UInt64 = 0
     private let chartColorProvider: () -> NSColor
-    private var displayHistory: [Double] = []
-    private var targetHistory: [Double] = []
-    private var lastDataTime: Date = Date()
-    private let updateInterval: TimeInterval = 2.0
+    private var oldHistory: [Double] = []
+    private var lastUpdateTime: Date = Date()
 
     init(frame frameRect: NSRect, historyProvider: @escaping () -> [Double], usedMemoryProvider: @escaping () -> UInt64, colorProvider: @escaping () -> NSColor) {
         self.historyProvider = historyProvider
@@ -596,30 +593,31 @@ final class MemoryChartView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let newHistory = historyProvider()
+        let history = historyProvider()
         let usedMemory = usedMemoryProvider()
 
         let maxHistoryCount = 60
-        guard newHistory.count > 1 else { return }
+        guard history.count > 1 else { return }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
         // Detect data change
-        if targetHistory != newHistory {
-            displayHistory = displayHistory.isEmpty ? newHistory : targetHistory
-            targetHistory = newHistory
-            lastDataTime = Date()
+        if history != oldHistory && !oldHistory.isEmpty {
+            oldHistory = history
+            lastUpdateTime = Date()
+        } else if oldHistory.isEmpty {
+            oldHistory = history
         }
 
-        let elapsed = Date().timeIntervalSince(lastDataTime)
-        let progress = min(elapsed / updateInterval, 1.0)
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / 2.0, 1.0)
 
         // Interpolate
-        var historyToDraw: [Double] = []
-        for i in 0..<targetHistory.count {
-            let newVal = targetHistory[i]
-            let oldVal = i < displayHistory.count ? displayHistory[i] : newVal
-            historyToDraw.append(oldVal + (newVal - oldVal) * progress)
+        var displayHistory: [Double] = []
+        for i in 0..<history.count {
+            let newVal = history[i]
+            let oldVal = i < oldHistory.count ? oldHistory[i] : newVal
+            displayHistory.append(oldVal + (newVal - oldVal) * progress)
         }
 
         let totalGB = Double(totalMemory) / 1_073_741_824.0
@@ -632,63 +630,46 @@ final class MemoryChartView: NSView {
         let stepX = width / CGFloat(maxHistoryCount - 1)
 
         var linePoints: [CGPoint] = []
-        for (i, value) in historyToDraw.enumerated() {
-            let x = bounds.width - padding - CGFloat(historyToDraw.count - 1 - i) * stepX
+        for (i, value) in displayHistory.enumerated() {
+            let x = bounds.width - padding - CGFloat(displayHistory.count - 1 - i) * stepX
             let y = padding + min(value / totalGB, 1.0) * height
             linePoints.append(CGPoint(x: x, y: y))
         }
 
         guard linePoints.count > 1 else { return }
 
-        // Draw smooth curve using quadratic Bezier
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
-
         for i in 1..<linePoints.count {
             let prev = linePoints[i - 1]
             let curr = linePoints[i]
-
-            // Control point at midpoint creates smooth curve
             let midX = (prev.x + curr.x) / 2
             linePath.curve(to: curr, controlPoint1: CGPoint(x: midX, y: prev.y), controlPoint2: CGPoint(x: midX, y: curr.y))
         }
 
-        // Draw filled area with gradient
         let areaPath = linePath.copy() as! NSBezierPath
         areaPath.line(to: CGPoint(x: linePoints[linePoints.count - 1].x, y: padding))
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: padding))
         areaPath.close()
 
         let chartColor = chartColorProvider()
-        let gradient = NSGradient(colors: [
-            chartColor.withAlphaComponent(0.2),
-            chartColor.withAlphaComponent(0.4)
-        ])
+        let gradient = NSGradient(colors: [chartColor.withAlphaComponent(0.2), chartColor.withAlphaComponent(0.4)])
         gradient?.draw(in: areaPath, angle: 90)
 
-        // Draw line
         linePath.lineWidth = 1.5
         chartColor.withAlphaComponent(0.9).setStroke()
         linePath.stroke()
-        
-        // Draw labels
-        let labelFont = NSFont.systemFont(ofSize: 10, weight: .medium)
-        let valueAttrs: [NSAttributedString.Key: Any] = [
-            .font: labelFont,
+
+        // Labels
+        let usageLabel = NSAttributedString(string: String(format: "%.1f GB", usedGB), attributes: [
+            .font: NSFont.systemFont(ofSize: 10, weight: .medium),
             .foregroundColor: NSColor.secondaryLabelColor
-        ]
-        let totalAttrs: [NSAttributedString.Key: Any] = [
+        ])
+        let totalLabel = NSAttributedString(string: String(format: "/ %.0f GB", totalGB), attributes: [
             .font: NSFont.systemFont(ofSize: 9),
             .foregroundColor: NSColor.tertiaryLabelColor
-        ]
-        
-        let usageLabel = NSAttributedString(string: String(format: "%.1f GB", usedGB), attributes: valueAttrs)
-        let totalLabel = NSAttributedString(string: String(format: "/ %.0f GB", totalGB), attributes: totalAttrs)
-        
-        let usageSize = usageLabel.size()
-        let totalSize = totalLabel.size()
-        
-        usageLabel.draw(at: CGPoint(x: bounds.width - padding - usageSize.width, y: bounds.height - padding - usageSize.height))
-        totalLabel.draw(at: CGPoint(x: bounds.width - padding - totalSize.width, y: bounds.height - padding - usageSize.height - totalSize.height - 2))
+        ])
+        usageLabel.draw(at: CGPoint(x: bounds.width - padding - usageLabel.size().width, y: bounds.height - padding - usageLabel.size().height))
+        totalLabel.draw(at: CGPoint(x: bounds.width - padding - totalLabel.size().width, y: bounds.height - padding - usageLabel.size().height - totalLabel.size().height - 2))
     }
 }

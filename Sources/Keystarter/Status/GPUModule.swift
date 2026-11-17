@@ -765,10 +765,8 @@ extension GPUModule: NSTableViewDataSource, NSTableViewDelegate {
 private final class GPULineChartView: NSView {
     private let dataProvider: () -> [Double]
     private let colorProvider: () -> NSColor
-    private var displayValues: [Double] = []
-    private var targetValues: [Double] = []
-    private var lastDataTime: Date = Date()
-    private let updateInterval: TimeInterval = 2.0
+    private var oldValues: [Double] = []
+    private var lastUpdateTime: Date = Date()
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -787,35 +785,36 @@ private final class GPULineChartView: NSView {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
 
-        let newValues = dataProvider()
+        let values = dataProvider()
         let maxCount = 60
-        guard newValues.count > 1 else { return }
+        guard values.count > 1 else { return }
 
         // Detect data change
-        if targetValues != newValues {
-            displayValues = displayValues.isEmpty ? newValues : targetValues
-            targetValues = newValues
-            lastDataTime = Date()
+        if values != oldValues && !oldValues.isEmpty {
+            oldValues = values
+            lastUpdateTime = Date()
+        } else if oldValues.isEmpty {
+            oldValues = values
         }
 
-        let elapsed = Date().timeIntervalSince(lastDataTime)
-        let progress = min(elapsed / updateInterval, 1.0)
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / 2.0, 1.0)
 
         // Interpolate
-        var valuesToDraw: [Double] = []
-        for i in 0..<targetValues.count {
-            let newVal = targetValues[i]
-            let oldVal = i < displayValues.count ? displayValues[i] : newVal
-            valuesToDraw.append(oldVal + (newVal - oldVal) * progress)
+        var displayValues: [Double] = []
+        for i in 0..<values.count {
+            let newVal = values[i]
+            let oldVal = i < oldValues.count ? oldValues[i] : newVal
+            displayValues.append(oldVal + (newVal - oldVal) * progress)
         }
 
         let height = self.frame.height
         let stepX = self.frame.width / CGFloat(maxCount - 1)
 
         var linePoints: [CGPoint] = []
-        for (i, v) in valuesToDraw.enumerated() {
+        for (i, v) in displayValues.enumerated() {
             let y = v / 100.0 * height
-            let x = self.frame.width - CGFloat(valuesToDraw.count - 1 - i) * stepX
+            let x = self.frame.width - CGFloat(displayValues.count - 1 - i) * stepX
             linePoints.append(CGPoint(x: x, y: y))
         }
 
@@ -823,7 +822,6 @@ private final class GPULineChartView: NSView {
 
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
-
         for i in 1..<linePoints.count {
             let prev = linePoints[i - 1]
             let curr = linePoints[i]
