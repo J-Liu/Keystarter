@@ -848,8 +848,10 @@ private final class NetworkLineChartView: NSView {
             linePoints.append(CGPoint(x: x, y: y))
         }
 
-        // Draw leftmost point sliding out
-        if leftShiftOffset > 0 && currentLeftShift > 0 {
+        let color = colorProvider()
+
+        // Draw leftmost area sliding out (before main area)
+        if leftShiftOffset > 0 && currentLeftShift > 0 && linePoints.count > 0 {
             let leftAlpha = 1.0 - leftProgress
             var leftY = (leftShiftValue / maxValue) * height
             if !flipY {
@@ -857,16 +859,27 @@ private final class NetworkLineChartView: NSView {
             }
             let leftX = -currentLeftShift
             let leftPoint = CGPoint(x: leftX, y: leftY)
-            if linePoints.count > 0 {
-                let firstPoint = linePoints[0]
-                let leftPath = NSBezierPath()
-                leftPath.move(to: leftPoint)
-                let midX = (leftPoint.x + firstPoint.x) / 2
-                leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
-                colorProvider().withAlphaComponent(leftAlpha).setStroke()
-                leftPath.lineWidth = offset
-                leftPath.stroke()
-            }
+            let firstPoint = linePoints[0]
+            let midX = (leftPoint.x + firstPoint.x) / 2
+
+            // Left area path
+            let leftAreaPath = NSBezierPath()
+            leftAreaPath.move(to: leftPoint)
+            leftAreaPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+            leftAreaPath.line(to: CGPoint(x: firstPoint.x, y: zero))
+            leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: zero))
+            leftAreaPath.close()
+
+            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.3 * leftAlpha), color.withAlphaComponent(0.5 * leftAlpha)])
+            leftGradient?.draw(in: leftAreaPath, angle: flipY ? 0 : 90)
+
+            // Left line
+            let leftPath = NSBezierPath()
+            leftPath.move(to: leftPoint)
+            leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+            color.withAlphaComponent(leftAlpha).setStroke()
+            leftPath.lineWidth = offset
+            leftPath.stroke()
         }
 
         guard linePoints.count > 1 else { return }
@@ -881,7 +894,7 @@ private final class NetworkLineChartView: NSView {
         }
 
         linePath.lineWidth = offset
-        colorProvider().setStroke()
+        color.setStroke()
         linePath.stroke()
 
         let areaPath = linePath.copy() as! NSBezierPath
@@ -889,7 +902,6 @@ private final class NetworkLineChartView: NSView {
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
         areaPath.close()
 
-        let color = colorProvider()
         let gradient = NSGradient(colors: [color.withAlphaComponent(0.3), color.withAlphaComponent(0.5)])
         gradient?.draw(in: areaPath, angle: flipY ? 0 : 90)
     }

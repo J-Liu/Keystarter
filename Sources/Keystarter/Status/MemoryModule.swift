@@ -643,6 +643,38 @@ final class MemoryChartView: NSView {
 
         guard linePoints.count > 1 else { return }
 
+        let chartColor = chartColorProvider()
+
+        // Draw leftmost area sliding out (before main area)
+        if leftShiftOffset > 0 && currentLeftShift > 0 {
+            let leftAlpha = 1.0 - leftProgress
+            let leftX = -currentLeftShift
+            let leftY = padding + min(leftShiftValue / totalGB, 1.0) * height
+            let leftPoint = CGPoint(x: leftX, y: leftY)
+            let firstPoint = linePoints[0]
+
+            // Left area path
+            let leftAreaPath = NSBezierPath()
+            leftAreaPath.move(to: leftPoint)
+            let midX = (leftPoint.x + firstPoint.x) / 2
+            leftAreaPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+            leftAreaPath.line(to: CGPoint(x: firstPoint.x, y: padding))
+            leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: padding))
+            leftAreaPath.close()
+
+            let leftGradient = NSGradient(colors: [chartColor.withAlphaComponent(0.2 * leftAlpha), chartColor.withAlphaComponent(0.4 * leftAlpha)])
+            leftGradient?.draw(in: leftAreaPath, angle: 90)
+
+            // Left line path
+            let leftPath = NSBezierPath()
+            leftPath.move(to: leftPoint)
+            leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+            chartColor.withAlphaComponent(0.9 * leftAlpha).setStroke()
+            leftPath.lineWidth = 1.5
+            leftPath.stroke()
+        }
+
+        // Main line and area
         let linePath = NSBezierPath()
         linePath.move(to: linePoints[0])
         for i in 1..<linePoints.count {
@@ -657,31 +689,12 @@ final class MemoryChartView: NSView {
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: padding))
         areaPath.close()
 
-        let chartColor = chartColorProvider()
         let gradient = NSGradient(colors: [chartColor.withAlphaComponent(0.2), chartColor.withAlphaComponent(0.4)])
         gradient?.draw(in: areaPath, angle: 90)
 
         linePath.lineWidth = 1.5
         chartColor.withAlphaComponent(0.9).setStroke()
         linePath.stroke()
-
-        // Draw leftmost point sliding out
-        if leftShiftOffset > 0 && currentLeftShift > 0 {
-            let leftAlpha = 1.0 - leftProgress
-            let leftX = -currentLeftShift
-            let leftY = padding + min(leftShiftValue / totalGB, 1.0) * height
-            let leftPoint = CGPoint(x: leftX, y: leftY)
-            if linePoints.count > 0 {
-                let firstPoint = linePoints[0]
-                let leftPath = NSBezierPath()
-                leftPath.move(to: leftPoint)
-                let midX = (leftPoint.x + firstPoint.x) / 2
-                leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
-                chartColor.withAlphaComponent(0.9 * leftAlpha).setStroke()
-                leftPath.lineWidth = 1.5
-                leftPath.stroke()
-            }
-        }
 
         let usageLabel = NSAttributedString(string: String(format: "%.1f GB", usedGB), attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),
