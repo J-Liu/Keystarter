@@ -814,8 +814,8 @@ private final class NetworkLineChartView: NSView {
 
         let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let height = self.frame.height - offset
-        // Dynamic stepX: expand chart as data grows, fixed width when full
-        let stepX = self.frame.width / CGFloat(min(values.count, displayCount) - 1)
+        // Fixed stepX for consistent animation
+        let stepX = self.frame.width / CGFloat(displayCount - 1)
         let zero = flipY ? 0 : self.frame.height
 
         // Detect data change
@@ -852,7 +852,7 @@ private final class NetworkLineChartView: NSView {
 
         let color = colorProvider()
 
-        // Draw leftmost point sliding out (line only, no area to avoid double-draw)
+        // Draw leftmost point sliding out (lower alpha to avoid double-draw deepening)
         if leftShiftOffset > 0 && currentLeftShift > 0 && linePoints.count > 0 {
             let normalizedLeftY = log10(leftShiftValue + 1) / logMax
             var leftY = normalizedLeftY * height
@@ -863,6 +863,17 @@ private final class NetworkLineChartView: NSView {
             let leftPoint = CGPoint(x: leftX, y: leftY)
             let firstPoint = linePoints[0]
             let midX = (leftPoint.x + firstPoint.x) / 2
+
+            // Left area with lower alpha
+            let leftAreaPath = NSBezierPath()
+            leftAreaPath.move(to: leftPoint)
+            leftAreaPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+            leftAreaPath.line(to: CGPoint(x: firstPoint.x, y: zero))
+            leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: zero))
+            leftAreaPath.close()
+
+            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.15), color.withAlphaComponent(0.25)])
+            leftGradient?.draw(in: leftAreaPath, angle: flipY ? 0 : 90)
 
             let leftPath = NSBezierPath()
             leftPath.move(to: leftPoint)
