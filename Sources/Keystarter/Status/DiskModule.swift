@@ -672,10 +672,6 @@ private final class DiskLineChartView: NSView {
 
         let currentShift = shiftOffset * (1.0 - progress)
         let currentLeftShift = leftShiftOffset * (1.0 - min(elapsed / 2.0, 1.0))
-        if dataChanged || elapsed < 0.1 || (Int(elapsed * 10) % 5 == 0 && Int(elapsed * 10) != Int((elapsed - 0.033) * 10)) {
-            let timestamp = Date().timeIntervalSince1970
-            LogSettings.write("[DiskChart] DRAW time=\(String(format: "%.3f", timestamp)) elapsed=\(String(format: "%.3f", elapsed)) shiftOffset=\(String(format: "%.2f", shiftOffset)) currentShift=\(String(format: "%.2f", currentShift)) progress=\(String(format: "%.2f", progress))", to: LogSettings.shared.monitorLogPath)
-        }
 
         // Logarithmic scale: y = log10(v+1) / log10(M+1) * height
         let logMax = log10(maxValue + 1)

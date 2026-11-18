@@ -850,8 +850,6 @@ private final class NetworkLineChartView: NSView {
 
         let currentShift = shiftOffset * (1.0 - progress)
         let currentLeftShift = leftShiftOffset * (1.0 - min(elapsed / 2.0, 1.0))
-            LogSettings.write("[NetworkChart] DRAW time=\(String(format: "%.3f", timestamp)) elapsed=\(String(format: "%.3f", elapsed)) shiftOffset=\(String(format: "%.2f", shiftOffset)) currentShift=\(String(format: "%.2f", currentShift)) progress=\(String(format: "%.2f", progress))", to: LogSettings.shared.monitorLogPath)
-        }
 
         // Logarithmic scale: y = log10(v+1) / log10(M+1) * height
         let logMax = log10(maxValue + 1)
