@@ -72,6 +72,7 @@ final class MemoryModule: NSObject, StatusModule {
     // Memory history for area chart (last 60 samples = 2 minutes)
     private var memoryHistory: [Double] = []
     private let maxHistoryCount = 60
+    private let historyQueue = DispatchQueue(label: "com.keystarter.memory.history", qos: .userInitiated)
 
     private weak var chartView: MemoryChartView?
     private weak var tableView: NSTableView?
@@ -83,9 +84,11 @@ final class MemoryModule: NSObject, StatusModule {
 
         // Add to history
         let usedGB = Double(used) / 1_073_741_824.0
-        memoryHistory.append(usedGB)
-        if memoryHistory.count > maxHistoryCount {
-            memoryHistory.removeFirst()
+        historyQueue.sync {
+            memoryHistory.append(usedGB)
+            if memoryHistory.count > maxHistoryCount {
+                memoryHistory.removeFirst()
+            }
         }
 
         let value = String(format: "%.1f", usedGB)
@@ -129,7 +132,7 @@ final class MemoryModule: NSObject, StatusModule {
         let chartY = totalHeight - toolbarHeight - headerHeight - chartHeight
         let chart = MemoryChartView(
             frame: NSRect(x: 12, y: chartY, width: viewWidth - 24, height: chartHeight),
-            historyProvider: { [weak self] in self?.memoryHistory ?? [] },
+            historyProvider: { [weak self] in self?.historyQueue.sync { self?.memoryHistory ?? [] } ?? [] },
             usedMemoryProvider: { [weak self] in self?.usedMemory ?? 0 },
             colorProvider: { NSColor.systemPink.withAlphaComponent(0.7) }
         )
@@ -559,7 +562,7 @@ final class MemoryChartView: NSView {
     private let usedMemoryProvider: () -> UInt64
     private var totalMemory: UInt64 = 0
     private let chartColorProvider: () -> NSColor
-    private var oldHistory: [Double] = []
+    private var oldValues: [Double] = []
     private var lastUpdateTime: Date = Date()
     private var shiftOffset: CGFloat = 0
 
@@ -605,34 +608,26 @@ final class MemoryChartView: NSView {
         let padding: CGFloat = 8
         let labelHeight: CGFloat = 24
         let height = bounds.height - labelHeight - padding
-        let width = bounds.width - padding * 2
-        let stepX = width / CGFloat(maxHistoryCount - 1)
+        let stepX = bounds.width / CGFloat(maxHistoryCount - 1)
 
-        // Detect data change
-        if history != oldHistory {
-            if !oldHistory.isEmpty { shiftOffset = stepX }
-            oldHistory = history
+        // Detect data change FIRST (like GPU)
+        if history != oldValues {
+            if !oldValues.isEmpty { shiftOffset = stepX }
+            oldValues = history
             lastUpdateTime = Date()
         }
 
+        // Calculate animation AFTER state update (like GPU)
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
         let currentShift = shiftOffset * (1.0 - progress)
-
-        // Interpolate y values
-        var displayHistory: [Double] = []
-        for i in 0..<history.count {
-            let newVal = history[i]
-            let oldVal = i < oldHistory.count ? oldHistory[i] : newVal
-            displayHistory.append(oldVal + (newVal - oldVal) * progress)
-        }
 
         let totalGB = Double(totalMemory) / 1_073_741_824.0
         let usedGB = Double(usedMemory) / 1_073_741_824.0
 
         var linePoints: [CGPoint] = []
-        for (i, value) in displayHistory.enumerated() {
-            let x = bounds.width - padding - CGFloat(displayHistory.count - 1 - i) * stepX + currentShift
+        for (i, value) in history.enumerated() {
+            let x = bounds.width - CGFloat(history.count - 1 - i) * stepX + currentShift
             let y = padding + min(value / totalGB, 1.0) * height
             linePoints.append(CGPoint(x: x, y: y))
         }
