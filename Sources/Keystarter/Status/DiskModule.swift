@@ -643,10 +643,6 @@ private final class DiskLineChartView: NSView {
         // Detect data change
         let dataChanged = values != oldValues
         if dataChanged {
-            // Log data change
-            let timestamp = Date().timeIntervalSince1970
-            LogSettings.write("[DiskChart] DATA_CHANGED count=\(values.count) time=\(String(format: "%.3f", timestamp))", to: LogSettings.shared.monitorLogPath)
-
             // Check if leftmost point is being removed (only when data is full)
             if !oldValues.isEmpty && oldValues.count == displayCount && values.count == displayCount && oldValues.first != values.first {
                 leftShiftOffset = stepX
@@ -662,12 +658,6 @@ private final class DiskLineChartView: NSView {
         let currentShift = shiftOffset * (1.0 - progress)
         let leftProgress = min(elapsed / 2.0, 1.0)
         let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
-
-        // Log animation state every 0.5 seconds
-        if dataChanged || elapsed < 0.1 || (Int(elapsed * 10) % 5 == 0 && Int(elapsed * 10) != Int((elapsed - 0.033) * 10)) {
-            let timestamp = Date().timeIntervalSince1970
-            LogSettings.write("[DiskChart] DRAW time=\(String(format: "%.3f", timestamp)) elapsed=\(String(format: "%.3f", elapsed)) shiftOffset=\(String(format: "%.2f", shiftOffset)) currentShift=\(String(format: "%.2f", currentShift)) progress=\(String(format: "%.2f", progress))", to: LogSettings.shared.monitorLogPath)
-        }
 
         // Logarithmic scale: y = log10(v+1) / log10(M+1) * height
         let logMax = log10(maxValue + 1)
@@ -697,17 +687,17 @@ private final class DiskLineChartView: NSView {
             let firstPoint = linePoints[0]
             let midX = (leftPoint.x + firstPoint.x) / 2
 
-            // Left area with lower alpha
+            // Left area with same alpha as main area
             let leftAreaPath = NSBezierPath()
             leftAreaPath.move(to: leftPoint)
             leftAreaPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
             leftAreaPath.line(to: CGPoint(x: firstPoint.x, y: zero))
             leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: zero))
             leftAreaPath.close()
+            color.withAlphaComponent(0.3).setFill()
+            leftAreaPath.fill()
 
-            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.15), color.withAlphaComponent(0.25)])
-            leftGradient?.draw(in: leftAreaPath, angle: flipY ? 0 : 90)
-
+            // Left line
             let leftPath = NSBezierPath()
             leftPath.move(to: leftPoint)
             leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
@@ -736,8 +726,8 @@ private final class DiskLineChartView: NSView {
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
         areaPath.close()
 
-        let gradient = NSGradient(colors: [color.withAlphaComponent(0.3), color.withAlphaComponent(0.5)])
-        gradient?.draw(in: areaPath, angle: flipY ? 0 : 90)
+        color.withAlphaComponent(0.3).setFill()
+        areaPath.fill()
     }
 }
 

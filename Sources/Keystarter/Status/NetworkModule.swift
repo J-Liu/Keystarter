@@ -864,17 +864,17 @@ private final class NetworkLineChartView: NSView {
             let firstPoint = linePoints[0]
             let midX = (leftPoint.x + firstPoint.x) / 2
 
-            // Left area with lower alpha
+            // Left area with same alpha as main area
             let leftAreaPath = NSBezierPath()
             leftAreaPath.move(to: leftPoint)
             leftAreaPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
             leftAreaPath.line(to: CGPoint(x: firstPoint.x, y: zero))
             leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: zero))
             leftAreaPath.close()
+            color.withAlphaComponent(0.3).setFill()
+            leftAreaPath.fill()
 
-            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.15), color.withAlphaComponent(0.25)])
-            leftGradient?.draw(in: leftAreaPath, angle: flipY ? 0 : 90)
-
+            // Left line
             let leftPath = NSBezierPath()
             leftPath.move(to: leftPoint)
             leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
@@ -903,8 +903,8 @@ private final class NetworkLineChartView: NSView {
         areaPath.line(to: CGPoint(x: linePoints[0].x, y: zero))
         areaPath.close()
 
-        let gradient = NSGradient(colors: [color.withAlphaComponent(0.3), color.withAlphaComponent(0.5)])
-        gradient?.draw(in: areaPath, angle: flipY ? 0 : 90)
+        color.withAlphaComponent(0.3).setFill()
+        areaPath.fill()
     }
 }
 
