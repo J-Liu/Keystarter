@@ -652,9 +652,16 @@ private final class DiskLineChartView: NSView {
                 leftShiftOffset = stepX
                 leftShiftValue = oldValues.first ?? 0
             }
-            if !oldValues.isEmpty { shiftOffset = stepX }
+
+            // Only reset animation if previous animation completed
+            // Otherwise, let current animation continue with new data
+            let currentProgress = min(Date().timeIntervalSince(lastUpdateTime) / 2.0, 1.0)
+            if currentProgress >= 1.0 {
+                if !oldValues.isEmpty { shiftOffset = stepX }
+                lastUpdateTime = Date()
+            }
+
             oldValues = values
-            lastUpdateTime = Date()
         }
 
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
@@ -705,7 +712,7 @@ private final class DiskLineChartView: NSView {
             leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: zero))
             leftAreaPath.close()
 
-            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.15), color.withAlphaComponent(0.25)])
+            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.25), color.withAlphaComponent(0.4)])
             leftGradient?.draw(in: leftAreaPath, angle: flipY ? 0 : 90)
 
             let leftPath = NSBezierPath()

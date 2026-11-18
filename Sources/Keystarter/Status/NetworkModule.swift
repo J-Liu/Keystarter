@@ -14,10 +14,10 @@ struct NetworkProcessInfo: Codable {
     let ppid: Int32
     var downloadSpeed: Double
     var uploadSpeed: Double
-    
+
     // Not encoded - loaded on demand from running apps
     var icon: NSImage? = nil
-    
+
     enum CodingKeys: String, CodingKey {
         case pid, name, isApp, user, ppid, downloadSpeed, uploadSpeed
     }
@@ -58,7 +58,7 @@ final class NetworkModule: NSObject, StatusModule {
     private var isRefreshPaused: Bool = false
     private var downloadSpeed: Double = 0
     private var uploadSpeed: Double = 0
-    
+
     // Cache for instant popup display
     private let processCachePath = (NSHomeDirectory() as NSString).appendingPathComponent("Library/Application Support/Keystarter/network_processes.cache")
 
@@ -69,14 +69,14 @@ final class NetworkModule: NSObject, StatusModule {
     private weak var chartView: NetworkChartView?
     private weak var tableView: NSTableView?
     private var lastProcessDataTime: Date?
-    
+
     // MARK: - Init
-    
+
     override init() {
         super.init()
         loadCachedProcesses()
     }
-    
+
     private func loadCachedProcesses() {
         guard let data = FileManager.default.contents(atPath: processCachePath),
               let cached = try? JSONDecoder().decode([NetworkProcessInfo].self, from: data) else {
@@ -84,7 +84,7 @@ final class NetworkModule: NSObject, StatusModule {
         }
         processQueue.sync { processes = cached }
     }
-    
+
     private func saveCachedProcesses() {
         let data = processQueue.sync { processes }
         guard let encoded = try? JSONEncoder().encode(data) else { return }
@@ -819,15 +819,27 @@ private final class NetworkLineChartView: NSView {
         let zero = flipY ? 0 : self.frame.height
 
         // Detect data change
-        if values != oldValues {
+        let dataChanged = values != oldValues
+        if dataChanged {
+            // Log data change
+            let timestamp = Date().timeIntervalSince1970
+            LogSettings.write("[NetworkChart] DATA_CHANGED count=\(values.count) time=\(String(format: "%.3f", timestamp))", to: LogSettings.shared.monitorLogPath)
+
             // Check if leftmost point is being removed (only when data is full)
             if !oldValues.isEmpty && oldValues.count == displayCount && values.count == displayCount && oldValues.first != values.first {
                 leftShiftOffset = stepX
                 leftShiftValue = oldValues.first ?? 0
             }
-            if !oldValues.isEmpty { shiftOffset = stepX }
+
+            // Only reset animation if previous animation completed
+            // Otherwise, let current animation continue with new data
+            let currentProgress = min(Date().timeIntervalSince(lastUpdateTime) / 2.0, 1.0)
+            if currentProgress >= 1.0 {
+                if !oldValues.isEmpty { shiftOffset = stepX }
+                lastUpdateTime = Date()
+            }
+
             oldValues = values
-            lastUpdateTime = Date()
         }
 
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
@@ -835,6 +847,12 @@ private final class NetworkLineChartView: NSView {
         let currentShift = shiftOffset * (1.0 - progress)
         let leftProgress = min(elapsed / 2.0, 1.0)
         let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
+
+        // Log animation state every 0.5 seconds
+        if dataChanged || elapsed < 0.1 || (Int(elapsed * 10) % 5 == 0 && Int(elapsed * 10) != Int((elapsed - 0.033) * 10)) {
+            let timestamp = Date().timeIntervalSince1970
+            LogSettings.write("[NetworkChart] DRAW time=\(String(format: "%.3f", timestamp)) elapsed=\(String(format: "%.3f", elapsed)) shiftOffset=\(String(format: "%.2f", shiftOffset)) currentShift=\(String(format: "%.2f", currentShift)) progress=\(String(format: "%.2f", progress))", to: LogSettings.shared.monitorLogPath)
+        }
 
         // Logarithmic scale: y = log10(v+1) / log10(M+1) * height
         let logMax = log10(maxValue + 1)
@@ -872,7 +890,7 @@ private final class NetworkLineChartView: NSView {
             leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: zero))
             leftAreaPath.close()
 
-            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.15), color.withAlphaComponent(0.25)])
+            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.25), color.withAlphaComponent(0.4)])
             leftGradient?.draw(in: leftAreaPath, angle: flipY ? 0 : 90)
 
             let leftPath = NSBezierPath()
