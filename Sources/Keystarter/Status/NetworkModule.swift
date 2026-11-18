@@ -783,7 +783,9 @@ private final class NetworkLineChartView: NSView {
     private var shiftOffset: CGFloat = 0
     private var leftShiftOffset: CGFloat = 0
     private var leftShiftValue: Double = 0
-    private var cachedMaxValue: Double = 1
+
+    // Logarithmic scale: 100 MB/s limit
+    private let maxValue: Double = 100_000_000
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -833,23 +835,13 @@ private final class NetworkLineChartView: NSView {
         let leftProgress = min(elapsed / 2.0, 1.0)
         let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
 
-        var currentMax: Double = 0
-        for v in values {
-            if v > currentMax { currentMax = v }
-        }
-        if currentMax == 0 { currentMax = 1 }
-
-        // Smooth transition for maxValue
-        if currentMax > cachedMaxValue {
-            cachedMaxValue = currentMax
-        } else {
-            cachedMaxValue = cachedMaxValue * 0.95 + currentMax * 0.05
-        }
-        let maxValue = cachedMaxValue
+        // Logarithmic scale: y = log10(v+1) / log10(M+1) * height
+        let logMax = log10(maxValue + 1)
 
         var linePoints: [CGPoint] = []
         for (i, v) in values.enumerated() {
-            var y = (v / maxValue) * height
+            let normalizedY = log10(v + 1) / logMax
+            var y = normalizedY * height
             if !flipY {
                 y = height - y
             }
@@ -861,7 +853,8 @@ private final class NetworkLineChartView: NSView {
 
         // Draw leftmost area sliding out (before main area)
         if leftShiftOffset > 0 && currentLeftShift > 0 && linePoints.count > 0 {
-            var leftY = (leftShiftValue / maxValue) * height
+            let normalizedLeftY = log10(leftShiftValue + 1) / logMax
+            var leftY = normalizedLeftY * height
             if !flipY {
                 leftY = height - leftY
             }
