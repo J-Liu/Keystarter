@@ -647,7 +647,6 @@ final class MemoryChartView: NSView {
 
         // Draw leftmost area sliding out (before main area)
         if leftShiftOffset > 0 && currentLeftShift > 0 {
-            let leftAlpha = 1.0 - leftProgress
             let leftX = -currentLeftShift
             let leftY = padding + min(leftShiftValue / totalGB, 1.0) * height
             let leftPoint = CGPoint(x: leftX, y: leftY)
@@ -662,14 +661,14 @@ final class MemoryChartView: NSView {
             leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: padding))
             leftAreaPath.close()
 
-            let leftGradient = NSGradient(colors: [chartColor.withAlphaComponent(0.2 * leftAlpha), chartColor.withAlphaComponent(0.4 * leftAlpha)])
+            let leftGradient = NSGradient(colors: [chartColor.withAlphaComponent(0.2), chartColor.withAlphaComponent(0.4)])
             leftGradient?.draw(in: leftAreaPath, angle: 90)
 
             // Left line path
             let leftPath = NSBezierPath()
             leftPath.move(to: leftPoint)
             leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
-            chartColor.withAlphaComponent(0.9 * leftAlpha).setStroke()
+            chartColor.withAlphaComponent(0.9).setStroke()
             leftPath.lineWidth = 1.5
             leftPath.stroke()
         }

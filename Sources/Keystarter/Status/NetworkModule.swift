@@ -852,7 +852,6 @@ private final class NetworkLineChartView: NSView {
 
         // Draw leftmost area sliding out (before main area)
         if leftShiftOffset > 0 && currentLeftShift > 0 && linePoints.count > 0 {
-            let leftAlpha = 1.0 - leftProgress
             var leftY = (leftShiftValue / maxValue) * height
             if !flipY {
                 leftY = height - leftY
@@ -870,14 +869,14 @@ private final class NetworkLineChartView: NSView {
             leftAreaPath.line(to: CGPoint(x: leftPoint.x, y: zero))
             leftAreaPath.close()
 
-            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.3 * leftAlpha), color.withAlphaComponent(0.5 * leftAlpha)])
+            let leftGradient = NSGradient(colors: [color.withAlphaComponent(0.3), color.withAlphaComponent(0.5)])
             leftGradient?.draw(in: leftAreaPath, angle: flipY ? 0 : 90)
 
             // Left line
             let leftPath = NSBezierPath()
             leftPath.move(to: leftPoint)
             leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
-            color.withAlphaComponent(leftAlpha).setStroke()
+            color.setStroke()
             leftPath.lineWidth = offset
             leftPath.stroke()
         }
