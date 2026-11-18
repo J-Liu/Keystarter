@@ -565,6 +565,8 @@ final class MemoryChartView: NSView {
     private var oldValues: [Double] = []
     private var lastUpdateTime: Date = Date()
     private var shiftOffset: CGFloat = 0
+    private var leftShiftOffset: CGFloat = 0
+    private var leftShiftValue: Double = 0
 
     init(frame frameRect: NSRect, historyProvider: @escaping () -> [Double], usedMemoryProvider: @escaping () -> UInt64, colorProvider: @escaping () -> NSColor) {
         self.historyProvider = historyProvider
@@ -600,7 +602,7 @@ final class MemoryChartView: NSView {
         let history = historyProvider()
         let usedMemory = usedMemoryProvider()
 
-        let maxHistoryCount = 60
+        let displayCount = 60
         guard history.count > 1 else { return }
         guard let context = NSGraphicsContext.current?.cgContext else { return }
         context.setShouldAntialias(true)
@@ -608,10 +610,15 @@ final class MemoryChartView: NSView {
         let padding: CGFloat = 8
         let labelHeight: CGFloat = 24
         let height = bounds.height - labelHeight - padding
-        let stepX = bounds.width / CGFloat(maxHistoryCount - 1)
+        let stepX = bounds.width / CGFloat(displayCount - 1)
 
         // Detect data change FIRST (like GPU)
         if history != oldValues {
+            // Check if leftmost point is being removed
+            if !oldValues.isEmpty && oldValues.count == displayCount && history.count == displayCount && oldValues.first != history.first {
+                leftShiftOffset = stepX
+                leftShiftValue = oldValues.first ?? 0
+            }
             if !oldValues.isEmpty { shiftOffset = stepX }
             oldValues = history
             lastUpdateTime = Date()
@@ -621,6 +628,8 @@ final class MemoryChartView: NSView {
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
         let currentShift = shiftOffset * (1.0 - progress)
+        let leftProgress = min(elapsed / 2.0, 1.0)
+        let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
 
         let totalGB = Double(totalMemory) / 1_073_741_824.0
         let usedGB = Double(usedMemory) / 1_073_741_824.0
@@ -655,6 +664,24 @@ final class MemoryChartView: NSView {
         linePath.lineWidth = 1.5
         chartColor.withAlphaComponent(0.9).setStroke()
         linePath.stroke()
+
+        // Draw leftmost point sliding out
+        if leftShiftOffset > 0 && currentLeftShift > 0 {
+            let leftAlpha = 1.0 - leftProgress
+            let leftX = -currentLeftShift
+            let leftY = padding + min(leftShiftValue / totalGB, 1.0) * height
+            let leftPoint = CGPoint(x: leftX, y: leftY)
+            if linePoints.count > 0 {
+                let firstPoint = linePoints[0]
+                let leftPath = NSBezierPath()
+                leftPath.move(to: leftPoint)
+                let midX = (leftPoint.x + firstPoint.x) / 2
+                leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+                chartColor.withAlphaComponent(0.9 * leftAlpha).setStroke()
+                leftPath.lineWidth = 1.5
+                leftPath.stroke()
+            }
+        }
 
         let usageLabel = NSAttributedString(string: String(format: "%.1f GB", usedGB), attributes: [
             .font: NSFont.systemFont(ofSize: 10, weight: .medium),

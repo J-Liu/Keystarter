@@ -860,6 +860,10 @@ final class FanLineChartView: NSView {
     private var oldRight: [Int] = []
     private var lastUpdateTime: Date = Date()
     private var shiftOffset: CGFloat = 0
+    private var leftShiftOffset: CGFloat = 0
+    private var rightShiftOffset: CGFloat = 0
+    private var leftShiftValue: Int = 0
+    private var rightShiftValue: Int = 0
 
     private let leftColorProvider: () -> NSColor
     private let rightColorProvider: () -> NSColor
@@ -905,12 +909,22 @@ final class FanLineChartView: NSView {
         let rightHistory = rightProvider()
         let maxSpeed = maxSpeedProvider()
 
+        let displayCount = 60
         let padding: CGFloat = 8
         let height = bounds.height - padding * 2
-        let stepX = bounds.width / CGFloat(60 - 1)
+        let stepX = bounds.width / CGFloat(displayCount - 1)
 
         // Detect data change FIRST (like GPU)
         if leftHistory != oldLeft || rightHistory != oldRight {
+            // Check if leftmost points are being removed
+            if !oldLeft.isEmpty && oldLeft.count == displayCount && leftHistory.count == displayCount && oldLeft.first != leftHistory.first {
+                leftShiftOffset = stepX
+                leftShiftValue = oldLeft.first ?? 0
+            }
+            if !oldRight.isEmpty && oldRight.count == displayCount && rightHistory.count == displayCount && oldRight.first != rightHistory.first {
+                rightShiftOffset = stepX
+                rightShiftValue = oldRight.first ?? 0
+            }
             if !oldLeft.isEmpty { shiftOffset = stepX }
             oldLeft = leftHistory
             oldRight = rightHistory
@@ -921,22 +935,43 @@ final class FanLineChartView: NSView {
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
         let currentShift = shiftOffset * (1.0 - progress)
+        let leftProgress = min(elapsed / 2.0, 1.0)
+        let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
+        let currentRightShift = rightShiftOffset * (1.0 - leftProgress)
 
         if leftHistory.count > 1 {
-            drawLine(history: leftHistory, maxSpeed: maxSpeed, color: leftColorProvider(), padding: padding, height: height, stepX: stepX, shift: currentShift)
+            drawLine(history: leftHistory, maxSpeed: maxSpeed, color: leftColorProvider(), padding: padding, height: height, stepX: stepX, shift: currentShift, leftShift: currentLeftShift, leftShiftValue: leftShiftValue, leftProgress: leftProgress)
         }
 
         if rightHistory.count > 1 {
-            drawLine(history: rightHistory, maxSpeed: maxSpeed, color: rightColorProvider(), padding: padding, height: height, stepX: stepX, shift: currentShift)
+            drawLine(history: rightHistory, maxSpeed: maxSpeed, color: rightColorProvider(), padding: padding, height: height, stepX: stepX, shift: currentShift, leftShift: currentRightShift, leftShiftValue: rightShiftValue, leftProgress: leftProgress)
         }
     }
 
-    private func drawLine(history: [Int], maxSpeed: Int, color: NSColor, padding: CGFloat, height: CGFloat, stepX: CGFloat, shift: CGFloat) {
+    private func drawLine(history: [Int], maxSpeed: Int, color: NSColor, padding: CGFloat, height: CGFloat, stepX: CGFloat, shift: CGFloat, leftShift: CGFloat = 0, leftShiftValue: Int = 0, leftProgress: CGFloat = 0) {
         var points: [CGPoint] = []
         for (i, speed) in history.enumerated() {
             let x = bounds.width - CGFloat(history.count - 1 - i) * stepX + shift
             let y = padding + CGFloat(speed) / CGFloat(maxSpeed > 0 ? maxSpeed : 6000) * (height - 4)
             points.append(CGPoint(x: x, y: y))
+        }
+
+        // Draw leftmost point sliding out
+        if leftShift > 0 {
+            let leftAlpha = 1.0 - leftProgress
+            let leftX = -leftShift
+            let leftY = padding + CGFloat(leftShiftValue) / CGFloat(maxSpeed > 0 ? maxSpeed : 6000) * (height - 4)
+            let leftPoint = CGPoint(x: leftX, y: leftY)
+            if points.count > 0 {
+                let firstPoint = points[0]
+                let leftPath = NSBezierPath()
+                leftPath.move(to: leftPoint)
+                let midX = (leftPoint.x + firstPoint.x) / 2
+                leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+                color.withAlphaComponent(leftAlpha).setStroke()
+                leftPath.lineWidth = 1.5
+                leftPath.stroke()
+            }
         }
 
         guard points.count > 1 else { return }

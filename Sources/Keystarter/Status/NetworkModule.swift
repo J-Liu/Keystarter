@@ -781,6 +781,8 @@ private final class NetworkLineChartView: NSView {
     private var oldValues: [Double] = []
     private var lastUpdateTime: Date = Date()
     private var shiftOffset: CGFloat = 0
+    private var leftShiftOffset: CGFloat = 0
+    private var leftShiftValue: Double = 0
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -804,16 +806,21 @@ private final class NetworkLineChartView: NSView {
         context.setShouldAntialias(true)
 
         let values = dataProvider()
-        let maxCount = 60
+        let displayCount = 60
         guard values.count > 1 else { return }
 
         let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let height = self.frame.height - offset
-        let stepX = self.frame.width / CGFloat(maxCount - 1)
+        let stepX = self.frame.width / CGFloat(displayCount - 1)
         let zero = flipY ? 0 : self.frame.height
 
         // Detect data change
         if values != oldValues {
+            // Check if leftmost point is being removed
+            if !oldValues.isEmpty && oldValues.count == displayCount && values.count == displayCount && oldValues.first != values.first {
+                leftShiftOffset = stepX
+                leftShiftValue = oldValues.first ?? 0
+            }
             if !oldValues.isEmpty { shiftOffset = stepX }
             oldValues = values
             lastUpdateTime = Date()
@@ -822,29 +829,44 @@ private final class NetworkLineChartView: NSView {
         let elapsed = Date().timeIntervalSince(lastUpdateTime)
         let progress = min(elapsed / 2.0, 1.0)
         let currentShift = shiftOffset * (1.0 - progress)
-
-        // Interpolate y values
-        var displayValues: [Double] = []
-        for i in 0..<values.count {
-            let newVal = values[i]
-            let oldVal = i < oldValues.count ? oldValues[i] : newVal
-            displayValues.append(oldVal + (newVal - oldVal) * progress)
-        }
+        let leftProgress = min(elapsed / 2.0, 1.0)
+        let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
 
         var maxValue: Double = 0
-        for v in displayValues {
+        for v in values {
             if v > maxValue { maxValue = v }
         }
         if maxValue == 0 { maxValue = 1 }
 
         var linePoints: [CGPoint] = []
-        for (i, v) in displayValues.enumerated() {
+        for (i, v) in values.enumerated() {
             var y = (v / maxValue) * height
             if !flipY {
                 y = height - y
             }
-            let x = self.frame.width - CGFloat(displayValues.count - 1 - i) * stepX + currentShift
+            let x = self.frame.width - CGFloat(values.count - 1 - i) * stepX + currentShift
             linePoints.append(CGPoint(x: x, y: y))
+        }
+
+        // Draw leftmost point sliding out
+        if leftShiftOffset > 0 && currentLeftShift > 0 {
+            let leftAlpha = 1.0 - leftProgress
+            var leftY = (leftShiftValue / maxValue) * height
+            if !flipY {
+                leftY = height - leftY
+            }
+            let leftX = -currentLeftShift
+            let leftPoint = CGPoint(x: leftX, y: leftY)
+            if linePoints.count > 0 {
+                let firstPoint = linePoints[0]
+                let leftPath = NSBezierPath()
+                leftPath.move(to: leftPoint)
+                let midX = (leftPoint.x + firstPoint.x) / 2
+                leftPath.curve(to: firstPoint, controlPoint1: CGPoint(x: midX, y: leftPoint.y), controlPoint2: CGPoint(x: midX, y: firstPoint.y))
+                colorProvider().withAlphaComponent(leftAlpha).setStroke()
+                leftPath.lineWidth = offset
+                leftPath.stroke()
+            }
         }
 
         guard linePoints.count > 1 else { return }
