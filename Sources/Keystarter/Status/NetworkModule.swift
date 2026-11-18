@@ -783,6 +783,7 @@ private final class NetworkLineChartView: NSView {
     private var shiftOffset: CGFloat = 0
     private var leftShiftOffset: CGFloat = 0
     private var leftShiftValue: Double = 0
+    private var cachedMaxValue: Double = 1
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
@@ -832,11 +833,19 @@ private final class NetworkLineChartView: NSView {
         let leftProgress = min(elapsed / 2.0, 1.0)
         let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
 
-        var maxValue: Double = 0
+        var currentMax: Double = 0
         for v in values {
-            if v > maxValue { maxValue = v }
+            if v > currentMax { currentMax = v }
         }
-        if maxValue == 0 { maxValue = 1 }
+        if currentMax == 0 { currentMax = 1 }
+
+        // Smooth transition for maxValue
+        if currentMax > cachedMaxValue {
+            cachedMaxValue = currentMax
+        } else {
+            cachedMaxValue = cachedMaxValue * 0.95 + currentMax * 0.05
+        }
+        let maxValue = cachedMaxValue
 
         var linePoints: [CGPoint] = []
         for (i, v) in values.enumerated() {
