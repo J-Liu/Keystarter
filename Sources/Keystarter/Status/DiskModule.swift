@@ -601,6 +601,7 @@ private final class DiskLineChartView: NSView {
     private let colorProvider: () -> NSColor
     private var flipY: Bool = false
     private var oldValues: [Double] = []
+    private var cachedValues: [Double] = []  // Cache to avoid redraw on data change
     private var lastUpdateTime: Date = Date()
     private var shiftOffset: CGFloat = 0
     private var leftShiftOffset: CGFloat = 0
@@ -632,45 +633,45 @@ private final class DiskLineChartView: NSView {
 
         let values = dataProvider()
         let displayCount = 60
-        guard values.count > 1 else { return }
 
         let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let height = self.frame.height - offset
-        // Fixed stepX for consistent animation
         let stepX = self.frame.width / CGFloat(displayCount - 1)
         let zero = flipY ? 0 : self.frame.height
 
-        // Detect data change
-        let dataChanged = values != oldValues
-        if dataChanged {
+        // Calculate current animation progress
+        let elapsed = Date().timeIntervalSince(lastUpdateTime)
+        let progress = min(elapsed / 2.0, 1.0)
+
+        // Only update cache when animation completes
+        if progress >= 1.0 && values != cachedValues && values.count > 1 {
+            // Check if leftmost point is being removed (only when data is full)
+            if !cachedValues.isEmpty && cachedValues.count == displayCount && values.count == displayCount && cachedValues.first != values.first {
+                leftShiftOffset = stepX
+                leftShiftValue = cachedValues.first ?? 0
+            }
+
             // Log data change
             let timestamp = Date().timeIntervalSince1970
             LogSettings.write("[DiskChart] DATA_CHANGED count=\(values.count) time=\(String(format: "%.3f", timestamp))", to: LogSettings.shared.monitorLogPath)
 
-            // Check if leftmost point is being removed (only when data is full)
-            if !oldValues.isEmpty && oldValues.count == displayCount && values.count == displayCount && oldValues.first != values.first {
-                leftShiftOffset = stepX
-                leftShiftValue = oldValues.first ?? 0
-            }
-
-            // Only reset animation if previous animation completed
-            // Otherwise, let current animation continue with new data
-            let currentProgress = min(Date().timeIntervalSince(lastUpdateTime) / 2.0, 1.0)
-            if currentProgress >= 1.0 {
-                if !oldValues.isEmpty { shiftOffset = stepX }
-                lastUpdateTime = Date()
-            }
-
-            oldValues = values
+            if !cachedValues.isEmpty { shiftOffset = stepX }
+            lastUpdateTime = Date()
+            cachedValues = values
         }
 
-        let elapsed = Date().timeIntervalSince(lastUpdateTime)
-        let progress = min(elapsed / 2.0, 1.0)
-        let currentShift = shiftOffset * (1.0 - progress)
-        let leftProgress = min(elapsed / 2.0, 1.0)
-        let currentLeftShift = leftShiftOffset * (1.0 - leftProgress)
+        // Use cached data for drawing (avoids jitter from frequent data changes)
+        guard cachedValues.count > 1 else {
+            // Initial draw: use current data if cache is empty
+            if values.count > 1 {
+                cachedValues = values
+            } else {
+                return
+            }
+        }
 
-        // Log animation state every 0.5 seconds
+        let currentShift = shiftOffset * (1.0 - progress)
+        let currentLeftShift = leftShiftOffset * (1.0 - min(elapsed / 2.0, 1.0))
         if dataChanged || elapsed < 0.1 || (Int(elapsed * 10) % 5 == 0 && Int(elapsed * 10) != Int((elapsed - 0.033) * 10)) {
             let timestamp = Date().timeIntervalSince1970
             LogSettings.write("[DiskChart] DRAW time=\(String(format: "%.3f", timestamp)) elapsed=\(String(format: "%.3f", elapsed)) shiftOffset=\(String(format: "%.2f", shiftOffset)) currentShift=\(String(format: "%.2f", currentShift)) progress=\(String(format: "%.2f", progress))", to: LogSettings.shared.monitorLogPath)
@@ -680,13 +681,13 @@ private final class DiskLineChartView: NSView {
         let logMax = log10(maxValue + 1)
 
         var linePoints: [CGPoint] = []
-        for (i, v) in values.enumerated() {
+        for (i, v) in cachedValues.enumerated() {
             let normalizedY = log10(v + 1) / logMax
             var y = normalizedY * height
             if !flipY {
                 y = height - y
             }
-            let x = self.frame.width - CGFloat(values.count - 1 - i) * stepX + currentShift
+            let x = self.frame.width - CGFloat(cachedValues.count - 1 - i) * stepX + currentShift
             linePoints.append(CGPoint(x: x, y: y))
         }
 
