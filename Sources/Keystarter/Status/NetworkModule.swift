@@ -137,11 +137,11 @@ final class NetworkModule: NSObject, StatusModule {
             }
 
             DispatchQueue.main.async {
-                // Update history arrays
+                // Update history arrays - remove first if at capacity, then append
+                if self.downloadHistory.count >= self.maxHistoryCount { self.downloadHistory.removeFirst() }
+                if self.uploadHistory.count >= self.maxHistoryCount { self.uploadHistory.removeFirst() }
                 self.downloadHistory.append(newDownSpeed)
                 self.uploadHistory.append(newUpSpeed)
-                if self.downloadHistory.count > self.maxHistoryCount { self.downloadHistory.removeFirst() }
-                if self.uploadHistory.count > self.maxHistoryCount { self.uploadHistory.removeFirst() }
 
                 self.downloadSpeed = newDownSpeed
                 self.uploadSpeed = newUpSpeed

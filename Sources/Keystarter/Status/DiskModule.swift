@@ -102,11 +102,11 @@ final class DiskModule: NSObject, StatusModule {
             }
 
             DispatchQueue.main.async {
-                // Update history arrays
+                // Update history arrays - remove first if at capacity, then append
+                if self.readHistory.count >= self.maxHistoryCount { self.readHistory.removeFirst() }
+                if self.writeHistory.count >= self.maxHistoryCount { self.writeHistory.removeFirst() }
                 self.readHistory.append(newReadSpeed)
                 self.writeHistory.append(newWriteSpeed)
-                if self.readHistory.count > self.maxHistoryCount { self.readHistory.removeFirst() }
-                if self.writeHistory.count > self.maxHistoryCount { self.writeHistory.removeFirst() }
 
                 self.readSpeed = newReadSpeed
                 self.writeSpeed = newWriteSpeed
