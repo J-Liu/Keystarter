@@ -843,9 +843,8 @@ private final class NetworkLineChartView: NSView {
             // Initial draw: use current data if cache is empty
             if values.count > 1 {
                 cachedValues = values
-            } else {
-                return
             }
+            return
         }
 
         let currentShift = shiftOffset * (1.0 - progress)
