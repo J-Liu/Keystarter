@@ -606,8 +606,8 @@ private final class DiskLineChartView: NSView {
     private var leftShiftOffset: CGFloat = 0
     private var leftShiftValue: Double = 0
 
-    // Logarithmic scale: 1 GB/s limit
-    private let maxValue: Double = 1_000_000_000
+    // Logarithmic scale: 7 GB/s limit (covers high-end NVMe)
+    private let maxValue: Double = 7_000_000_000
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider

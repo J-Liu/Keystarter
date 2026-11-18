@@ -784,8 +784,8 @@ private final class NetworkLineChartView: NSView {
     private var leftShiftOffset: CGFloat = 0
     private var leftShiftValue: Double = 0
 
-    // Logarithmic scale: 100 MB/s limit
-    private let maxValue: Double = 100_000_000
+    // Logarithmic scale: 125 MB/s limit (gigabit ethernet)
+    private let maxValue: Double = 125_000_000
 
     init(frame: NSRect, dataProvider: @escaping () -> [Double], colorProvider: @escaping () -> NSColor) {
         self.dataProvider = dataProvider
