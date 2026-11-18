@@ -636,12 +636,13 @@ private final class DiskLineChartView: NSView {
 
         let offset: CGFloat = 1 / (NSScreen.main?.backingScaleFactor ?? 1)
         let height = self.frame.height - offset
-        let stepX = self.frame.width / CGFloat(displayCount - 1)
+        // Dynamic stepX: expand chart as data grows, fixed width when full
+        let stepX = self.frame.width / CGFloat(min(values.count, displayCount) - 1)
         let zero = flipY ? 0 : self.frame.height
 
         // Detect data change
         if values != oldValues {
-            // Check if leftmost point is being removed
+            // Check if leftmost point is being removed (only when data is full)
             if !oldValues.isEmpty && oldValues.count == displayCount && values.count == displayCount && oldValues.first != values.first {
                 leftShiftOffset = stepX
                 leftShiftValue = oldValues.first ?? 0
