@@ -123,6 +123,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
                     UNUserNotificationCenter.current().add(request)
                 }
+            } else {
+                // Show error notification
+                DispatchQueue.main.async {
+                    let content = UNMutableNotificationContent()
+                    content.title = L("readlater.error.title")
+                    if let error = ReadLaterManager.shared.lastError, error.contains("Not authorized") {
+                        content.body = L("readlater.error.permission")
+                    } else {
+                        content.body = ReadLaterManager.shared.lastError ?? "Unknown error"
+                    }
+                    content.sound = .default
+                    let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                    UNUserNotificationCenter.current().add(request)
+                }
             }
         }
 

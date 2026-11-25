@@ -17,6 +17,7 @@ final class ReadLaterManager {
 
     private let storageKey = "readLater.items"
     private var items: [ReadLaterItem] = []
+    private(set) var lastError: String?
 
     private init() {
         load()
@@ -238,6 +239,7 @@ final class ReadLaterManager {
     }
 
     private func runAppleScript(_ script: String) -> (url: String, title: String)? {
+        lastError = nil
         var errorInfo: NSDictionary?
         let appleScript = NSAppleScript(source: script)
         if let result = appleScript?.executeAndReturnError(&errorInfo) {
@@ -256,6 +258,7 @@ final class ReadLaterManager {
             // Log error for debugging
             if let errorMsg = error[NSAppleScript.errorMessage] as? String {
                 log("AppleScript error: \(errorMsg)")
+                lastError = errorMsg
             }
         }
         return nil

@@ -198,6 +198,8 @@ final class LocalizationManager {
             "readlater.hotkey": "Hotkey:",
             "readlater.autoDelete": "Remove after opening",
             "readlater.log.enable": "Enable Read Later log",
+            "readlater.error.title": "Failed to save URL",
+            "readlater.error.permission": "Please allow automation access in System Settings > Privacy & Security > Automation",
 
             // Menu Items
             "menu.about": "About Keystarter",
@@ -418,6 +420,8 @@ final class LocalizationManager {
             "readlater.hotkey": "快捷键：",
             "readlater.autoDelete": "打开后删除",
             "readlater.log.enable": "启用稍后再看日志",
+            "readlater.error.title": "收藏失败",
+            "readlater.error.permission": "请在系统设置 > 隐私与安全性 > 自动化中授权",
 
             // Menu Items
             "menu.about": "关于 Keystarter",
@@ -625,6 +629,8 @@ final class LocalizationManager {
             "readlater.hotkey": "快速鍵：",
             "readlater.autoDelete": "開啟後刪除",
             "readlater.log.enable": "啟用稍後再讀日誌",
+            "readlater.error.title": "收藏失敗",
+            "readlater.error.permission": "請在系統設定 > 隱私權與安全性 > 自動操作中授權",
 
             // Menu Items
             "menu.about": "關於 Keystarter",
