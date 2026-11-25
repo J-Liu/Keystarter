@@ -8,7 +8,7 @@ import AppKit
 final class ReadLaterPlugin: Plugin {
 
     let keyword = "rl"
-    let pluginDescription = "View and open saved URLs (稍后再看)"
+    var pluginDescription: String { L("readlater.pluginDescription") }
 
     init() {}
 
@@ -17,8 +17,8 @@ final class ReadLaterPlugin: Plugin {
 
         if items.isEmpty {
             return [PluginResult(
-                title: "No saved URLs",
-                subtitle: "Press Cmd+Shift+S to save current browser tab",
+                title: L("readlater.empty"),
+                subtitle: L("readlater.empty.hint"),
                 icon: NSImage(systemSymbolName: "bookmark.slash", accessibilityDescription: nil)
             )]
         }
@@ -34,7 +34,7 @@ final class ReadLaterPlugin: Plugin {
                 title: item.title,
                 subtitle: item.url,
                 icon: NSImage(systemSymbolName: "bookmark", accessibilityDescription: nil),
-                detailText: "\(item.title)\n\n\(item.url)\n\nSaved: \(formatDate(item.createdAt))",
+                detailText: "\(item.title)\n\n\(item.url)\n\n\(L("readlater.saved")): \(formatDate(item.createdAt))",
                 action: {
                     // Open URL and remove from list
                     ReadLaterManager.shared.openURL(item.url)

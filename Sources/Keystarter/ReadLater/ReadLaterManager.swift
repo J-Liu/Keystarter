@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import Carbon
 
 /// Represents a saved URL item.
 struct ReadLaterItem: Codable {
@@ -64,7 +65,7 @@ final class ReadLaterManager {
         save()
     }
 
-    /// Get current browser URL via AppleScript.
+    /// Get current browser URL via AppleScript or Accessibility API.
     func getCurrentBrowserURL() -> (url: String, title: String)? {
         // Try Safari first
         if let result = getSafariURL() {
@@ -78,8 +79,12 @@ final class ReadLaterManager {
         if let result = getEdgeURL() {
             return result
         }
-        // Try Firefox
+        // Try Firefox using Accessibility API
         if let result = getFirefoxURL() {
+            return result
+        }
+        // Try Arc
+        if let result = getArcURL() {
             return result
         }
         return nil
@@ -121,10 +126,90 @@ final class ReadLaterManager {
         return runAppleScript(script)
     }
 
+    private func getArcURL() -> (url: String, title: String)? {
+        let script = """
+        tell application "Arc"
+            if (count of windows) > 0 then
+                set currentTab to active tab of front window
+                return {URL of currentTab, title of currentTab}
+            end if
+        end tell
+        """
+        return runAppleScript(script)
+    }
+
     private func getFirefoxURL() -> (url: String, title: String)? {
         // Firefox doesn't support AppleScript for tabs
-        // We can try using Accessibility API, but it's complex
-        // For now, return nil
+        // Use Accessibility API to get URL from address bar
+        let firefoxBundleId = "org.mozilla.firefox"
+
+        // Find Firefox app
+        guard let firefoxApp = NSRunningApplication.runningApplications(withBundleIdentifier: firefoxBundleId).first else {
+            return nil
+        }
+
+        // Get the frontmost Firefox window using Accessibility API
+        let pid = firefoxApp.processIdentifier
+        let app = AXUIElementCreateApplication(pid)
+
+        // Get windows
+        var windowsRef: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windowsRef) == .success,
+              let windows = windowsRef as? [AXUIElement],
+              let window = windows.first else {
+            return nil
+        }
+
+        // Find the URL bar (search for a text field with URL)
+        var url: String?
+        var title: String?
+
+        // Get window title
+        var titleRef: CFTypeRef?
+        if AXUIElementCopyAttributeValue(window, kAXTitleAttribute as CFString, &titleRef) == .success {
+            title = (titleRef as? String)?.trimmingCharacters(in: .whitespaces)
+        }
+
+        // Search for URL text field in the window
+        func findURLField(element: AXUIElement) {
+            var roleRef: CFTypeRef?
+            AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleRef)
+            let role = roleRef as? String ?? ""
+
+            // Check if this is a text field that might be the URL bar
+            if role == kAXTextFieldRole || role == kAXTextAreaRole || role == kAXComboBoxRole {
+                var valueRef: CFTypeRef?
+                if AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &valueRef) == .success {
+                    let value = valueRef as? String ?? ""
+                    // Check if value looks like a URL
+                    if value.hasPrefix("http://") || value.hasPrefix("https://") || value.hasPrefix("moz-extension://") {
+                        if url == nil || (value.hasPrefix("http") && !value.contains("moz-extension")) {
+                            url = value
+                        }
+                    }
+                }
+            }
+
+            // Recursively search children
+            var childrenRef: CFTypeRef?
+            if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &childrenRef) == .success,
+               let children = childrenRef as? [AXUIElement] {
+                for child in children {
+                    findURLField(element: child)
+                }
+            }
+        }
+
+        findURLField(element: window)
+
+        if let url = url, !url.isEmpty {
+            // Filter out internal Firefox URLs
+            if url.hasPrefix("moz-extension://") || url.hasPrefix("about:") {
+                return nil
+            }
+            return (url, title ?? url)
+        }
+
         return nil
     }
 

@@ -2,6 +2,7 @@
 // Copyright © 2026 Jia Liu
 
 import AppKit
+import UserNotifications
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -98,17 +99,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Register read later hotkey (Cmd+Shift+S = keyCode 1)
-        HotkeyManager.shared.register(keyCode: 1, modifiers: [.command, .shift]) {
+        // Register read later hotkey (Cmd+Shift+B = keyCode 11)
+        HotkeyManager.shared.register(keyCode: 11, modifiers: [.command, .shift]) {
             if let result = ReadLaterManager.shared.getCurrentBrowserURL() {
                 ReadLaterManager.shared.add(url: result.url, title: result.title)
                 // Show confirmation notification
                 DispatchQueue.main.async {
-                    let notification = NSUserNotification()
-                    notification.title = "已收藏"
-                    notification.informativeText = result.title
-                    notification.soundName = NSUserNotificationDefaultSoundName
-                    NSUserNotificationCenter.default.deliver(notification)
+                    let content = UNMutableNotificationContent()
+                    content.title = L("readlater.saved")
+                    content.body = result.title
+                    content.sound = .default
+                    let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                    UNUserNotificationCenter.current().add(request)
                 }
             }
         }

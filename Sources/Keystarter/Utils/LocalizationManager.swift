@@ -189,6 +189,12 @@ final class LocalizationManager {
             "clipboard.settings": "Settings...",
             "clipboard.group.title": "Clipboard History",
 
+            // Read Later
+            "readlater.empty": "No saved URLs",
+            "readlater.empty.hint": "Press Cmd+Shift+B to save current browser tab",
+            "readlater.saved": "Saved",
+            "readlater.pluginDescription": "View and open saved URLs",
+
             // Menu Items
             "menu.about": "About Keystarter",
             "menu.settings": "Settings...",
@@ -399,6 +405,12 @@ final class LocalizationManager {
             "clipboard.settings": "设置...",
             "clipboard.group.title": "剪切板历史",
 
+            // Read Later
+            "readlater.empty": "没有收藏的网址",
+            "readlater.empty.hint": "按 Cmd+Shift+B 收藏当前浏览器标签页",
+            "readlater.saved": "已收藏",
+            "readlater.pluginDescription": "查看并打开收藏的网址",
+
             // Menu Items
             "menu.about": "关于 Keystarter",
             "menu.settings": "设置...",
@@ -595,6 +607,12 @@ final class LocalizationManager {
             "clipboard.clear": "清空歷史",
             "clipboard.settings": "設定...",
             "clipboard.group.title": "剪貼簿歷史",
+
+            // Read Later
+            "readlater.empty": "沒有收藏的網址",
+            "readlater.empty.hint": "按 Cmd+Shift+B 收藏目前瀏覽器分頁",
+            "readlater.saved": "已收藏",
+            "readlater.pluginDescription": "查看並開啟收藏的網址",
 
             // Menu Items
             "menu.about": "關於 Keystarter",
