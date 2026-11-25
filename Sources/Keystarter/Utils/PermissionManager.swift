@@ -73,4 +73,28 @@ final class PermissionManager {
             NSWorkspace.shared.open(url)
         }
     }
+
+    /// Open System Settings > Privacy & Security > Automation.
+    func openAutomationSettings() {
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// Check if we have automation permission for a browser by trying a simple AppleScript.
+    /// Returns nil if permission is granted, or the error message if denied.
+    func checkBrowserAutomationPermission() -> String? {
+        // Try a simple AppleScript to check if we have permission
+        let script = "tell application \"Safari\" to get name"
+        var errorInfo: NSDictionary?
+        let appleScript = NSAppleScript(source: script)
+        _ = appleScript?.executeAndReturnError(&errorInfo)
+
+        if let error = errorInfo, let errorMsg = error[NSAppleScript.errorMessage] as? String {
+            if errorMsg.contains("Not authorized") {
+                return errorMsg
+            }
+        }
+        return nil
+    }
 }

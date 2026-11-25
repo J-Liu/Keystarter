@@ -45,7 +45,7 @@ final class SetupWizardWindow: NSWindow {
         guard let contentView = contentView else { return }
 
         // Step label
-        stepLabel = NSTextField(labelWithString: "Step 1 of 3")
+        stepLabel = NSTextField(labelWithString: "Step 1 of 4")
         stepLabel.frame = NSRect(x: 20, y: 290, width: 460, height: 24)
         stepLabel.font = .systemFont(ofSize: 14, weight: .medium)
         stepLabel.textColor = .secondaryLabelColor
@@ -85,20 +85,26 @@ final class SetupWizardWindow: NSWindow {
 
         switch step {
         case 0:
-            stepLabel.stringValue = "Step 1 of 3: Hotkey"
+            stepLabel.stringValue = "Step 1 of 4: Hotkey"
             descriptionLabel.stringValue = "Set a global hotkey to open Keystarter from anywhere.\n\nDefault: ⌘ Space"
             hotkeyRecorder.isHidden = false
             hotkeyRecorder.setShortcut(keyCode: UInt16(49), modifiers: .command)
             nextButton.title = "Next"
 
         case 1:
-            stepLabel.stringValue = "Step 2 of 3: Permissions"
-            descriptionLabel.stringValue = "Keystarter needs Accessibility permission to work.\n\nClick Next to open System Settings."
+            stepLabel.stringValue = "Step 2 of 4: Accessibility"
+            descriptionLabel.stringValue = "Keystarter needs Accessibility permission for global hotkeys.\n\nClick Next to open System Settings."
             hotkeyRecorder.isHidden = true
             nextButton.title = "Grant Permission"
 
         case 2:
-            stepLabel.stringValue = "Step 3 of 3: Done"
+            stepLabel.stringValue = "Step 3 of 4: Automation"
+            descriptionLabel.stringValue = "Keystarter needs Automation permission to save browser URLs.\n\nClick Next to open System Settings and enable Safari (and other browsers)."
+            hotkeyRecorder.isHidden = true
+            nextButton.title = "Grant Permission"
+
+        case 3:
+            stepLabel.stringValue = "Step 4 of 4: Done"
             descriptionLabel.stringValue = "Setup complete!\n\nYou can now use Keystarter."
             hotkeyRecorder.isHidden = true
             nextButton.title = "Finish"
@@ -122,7 +128,7 @@ final class SetupWizardWindow: NSWindow {
             showStep(1)
 
         case 1:
-            // Directly trigger system permission dialog, no custom alert
+            // Trigger Accessibility permission dialog
             _ = AXIsProcessTrustedWithOptions([
                 kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
             ] as CFDictionary)
@@ -130,6 +136,11 @@ final class SetupWizardWindow: NSWindow {
             showStep(2)
 
         case 2:
+            // Open Automation settings
+            PermissionManager.shared.openAutomationSettings()
+            showStep(3)
+
+        case 3:
             finishSetup()
 
         default:
