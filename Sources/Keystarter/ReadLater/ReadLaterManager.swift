@@ -67,30 +67,34 @@ final class ReadLaterManager {
 
     /// Get current browser URL via AppleScript or Accessibility API.
     func getCurrentBrowserURL() -> (url: String, title: String)? {
-        // Try Safari first
-        if let result = getSafariURL() {
-            return result
+        // Get the frontmost application
+        guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
+            return nil
         }
-        // Try Chrome
-        if let result = getChromeURL() {
-            return result
+        let bundleId = frontmostApp.bundleIdentifier ?? ""
+
+        // Only try the browser that is currently frontmost
+        switch bundleId {
+        case "com.apple.Safari":
+            return getSafariURL()
+        case "com.google.Chrome":
+            return getChromeURL()
+        case "com.microsoft.edgemac":
+            return getEdgeURL()
+        case "org.mozilla.firefox":
+            return getFirefoxURL()
+        case "company.thebrowser.Browser":
+            return getArcURL()
+        default:
+            return nil
         }
-        // Try Edge
-        if let result = getEdgeURL() {
-            return result
-        }
-        // Try Firefox using Accessibility API
-        if let result = getFirefoxURL() {
-            return result
-        }
-        // Try Arc
-        if let result = getArcURL() {
-            return result
-        }
-        return nil
     }
 
     private func getSafariURL() -> (url: String, title: String)? {
+        // Check if Safari is running
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Safari").first != nil else {
+            return nil
+        }
         let script = """
         tell application "Safari"
             if (count of windows) > 0 then
@@ -103,6 +107,10 @@ final class ReadLaterManager {
     }
 
     private func getChromeURL() -> (url: String, title: String)? {
+        // Check if Chrome is running
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome").first != nil else {
+            return nil
+        }
         let script = """
         tell application "Google Chrome"
             if (count of windows) > 0 then
@@ -115,6 +123,10 @@ final class ReadLaterManager {
     }
 
     private func getEdgeURL() -> (url: String, title: String)? {
+        // Check if Edge is running
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: "com.microsoft.edgemac").first != nil else {
+            return nil
+        }
         let script = """
         tell application "Microsoft Edge"
             if (count of windows) > 0 then
@@ -127,6 +139,10 @@ final class ReadLaterManager {
     }
 
     private func getArcURL() -> (url: String, title: String)? {
+        // Check if Arc is running
+        guard NSRunningApplication.runningApplications(withBundleIdentifier: "company.thebrowser.Browser").first != nil else {
+            return nil
+        }
         let script = """
         tell application "Arc"
             if (count of windows) > 0 then
