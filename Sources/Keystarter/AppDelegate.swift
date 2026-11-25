@@ -54,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         PluginManager.shared.register(ColorPlugin())
         PluginManager.shared.register(ConvertPlugin())
         PluginManager.shared.register(StockPlugin())
+        PluginManager.shared.register(ReadLaterPlugin())
 
         // Load Alfred workflows
         AlfredWorkflowManager.shared.loadAll()
@@ -94,6 +95,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let clipboardEnabled = UserDefaults.standard.object(forKey: "clipboard.enabled") as? Bool ?? true
             if clipboardEnabled {
                 self?.clipboardPanel?.toggle()
+            }
+        }
+
+        // Register read later hotkey (Cmd+Shift+S = keyCode 1)
+        HotkeyManager.shared.register(keyCode: 1, modifiers: [.command, .shift]) {
+            if let result = ReadLaterManager.shared.getCurrentBrowserURL() {
+                ReadLaterManager.shared.add(url: result.url, title: result.title)
+                // Show confirmation notification
+                DispatchQueue.main.async {
+                    let notification = NSUserNotification()
+                    notification.title = "已收藏"
+                    notification.informativeText = result.title
+                    notification.soundName = NSUserNotificationDefaultSoundName
+                    NSUserNotificationCenter.default.deliver(notification)
+                }
             }
         }
 
