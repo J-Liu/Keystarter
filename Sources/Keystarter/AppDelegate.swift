@@ -99,8 +99,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Register read later hotkey (Cmd+Shift+B = keyCode 11)
-        HotkeyManager.shared.register(keyCode: 11, modifiers: [.command, .shift]) {
+        // Register read later hotkey (Cmd+Option+S = keyCode 1)
+        HotkeyManager.shared.register(keyCode: 1, modifiers: [.command, .option]) {
             if let result = ReadLaterManager.shared.getCurrentBrowserURL() {
                 ReadLaterManager.shared.add(url: result.url, title: result.title)
                 // Show confirmation notification

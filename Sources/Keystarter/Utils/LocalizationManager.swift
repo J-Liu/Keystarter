@@ -191,7 +191,7 @@ final class LocalizationManager {
 
             // Read Later
             "readlater.empty": "No saved URLs",
-            "readlater.empty.hint": "Press Cmd+Shift+B to save current browser tab",
+            "readlater.empty.hint": "Press Cmd+Option+S to save current browser tab",
             "readlater.saved": "Saved",
             "readlater.pluginDescription": "View and open saved URLs",
 
@@ -407,7 +407,7 @@ final class LocalizationManager {
 
             // Read Later
             "readlater.empty": "没有收藏的网址",
-            "readlater.empty.hint": "按 Cmd+Shift+B 收藏当前浏览器标签页",
+            "readlater.empty.hint": "按 Cmd+Option+S 收藏当前浏览器标签页",
             "readlater.saved": "已收藏",
             "readlater.pluginDescription": "查看并打开收藏的网址",
 
@@ -610,7 +610,7 @@ final class LocalizationManager {
 
             // Read Later
             "readlater.empty": "沒有收藏的網址",
-            "readlater.empty.hint": "按 Cmd+Shift+B 收藏目前瀏覽器分頁",
+            "readlater.empty.hint": "按 Cmd+Option+S 收藏目前瀏覽器分頁",
             "readlater.saved": "已收藏",
             "readlater.pluginDescription": "查看並開啟收藏的網址",
 
