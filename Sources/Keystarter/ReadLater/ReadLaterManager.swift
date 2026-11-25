@@ -9,6 +9,7 @@ struct ReadLaterItem: Codable {
     let url: String
     let title: String
     let createdAt: Date
+    var lastOpenedAt: Date?
 }
 
 /// Manages the list of saved URLs.
@@ -44,16 +45,27 @@ final class ReadLaterManager {
         UserDefaults.standard.set(data, forKey: storageKey)
     }
 
-    /// Get all items (most recent first).
+    /// Get all items (most recent first - by lastOpenedAt or createdAt, whichever is newer).
     func getAll() -> [ReadLaterItem] {
-        return items.sorted { $0.createdAt > $1.createdAt }
+        return items.sorted { item1, item2 in
+            let date1 = item1.lastOpenedAt ?? item1.createdAt
+            let date2 = item2.lastOpenedAt ?? item2.createdAt
+            return date1 > date2
+        }
     }
 
-    /// Add a new item.
-    func add(url: String, title: String) {
+    /// Add a new item. Returns true if added, false if already exists.
+    @discardableResult
+    func add(url: String, title: String) -> Bool {
+        // Check if URL already exists
+        if items.contains(where: { $0.url == url }) {
+            log("URL already exists, skipping: \(url)")
+            return false
+        }
         let item = ReadLaterItem(url: url, title: title, createdAt: Date())
         items.append(item)
         save()
+        return true
     }
 
     /// Remove an item by URL.
@@ -95,6 +107,25 @@ final class ReadLaterManager {
             return getArcURL()
         default:
             log("Not a supported browser: \(bundleId)")
+            return nil
+        }
+    }
+
+    /// Get URL from a specific browser by bundle ID.
+    /// This is useful when the browser is not the frontmost app.
+    func getURLFromBrowser(bundleId: String) -> (url: String, title: String)? {
+        switch bundleId {
+        case "com.apple.Safari":
+            return getSafariURL()
+        case "com.google.Chrome":
+            return getChromeURL()
+        case "com.microsoft.edgemac":
+            return getEdgeURL()
+        case "org.mozilla.firefox":
+            return getFirefoxURL()
+        case "company.thebrowser.Browser":
+            return getArcURL()
+        default:
             return nil
         }
     }
@@ -262,6 +293,65 @@ final class ReadLaterManager {
             }
         }
         return nil
+    }
+
+    /// Run AppleScript using osascript command (triggers system permission dialog).
+    func runAppleScriptViaOSA(script: String, completion: @escaping ((url: String, title: String)?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            process.arguments = ["-e", script]
+
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            let errorPipe = Pipe()
+            process.standardError = errorPipe
+
+            do {
+                try process.run()
+                process.waitUntilExit()
+
+                if process.terminationStatus == 0 {
+                    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                    let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                    // Parse output: URL, title
+                    let parts = output.components(separatedBy: ", ")
+                    if parts.count >= 2 {
+                        let url = parts[0]
+                        let title = parts.dropFirst().joined(separator: ", ")
+                        DispatchQueue.main.async {
+                            if !url.isEmpty {
+                                completion((url, title.isEmpty ? url : title))
+                            } else {
+                                completion(nil)
+                            }
+                        }
+                        return
+                    }
+                }
+
+                let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+                let errorOutput = String(data: errorData, encoding: .utf8) ?? ""
+                DispatchQueue.main.async {
+                    self.lastError = errorOutput.isEmpty ? "osascript failed" : errorOutput
+                    self.log("osascript error: \(errorOutput)")
+                    completion(nil)
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.lastError = error.localizedDescription
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    /// Update lastOpenedAt for a URL.
+    func markOpened(url: String) {
+        if let index = items.firstIndex(where: { $0.url == url }) {
+            items[index].lastOpenedAt = Date()
+            save()
+        }
     }
 
     /// Open URL in default browser.

@@ -1031,44 +1031,74 @@ final class SettingsWindow: NSWindow, NSTabViewDelegate, NSTextFieldDelegate {
     }
 
     @objc private func checkPermissions() {
-        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
-
-        if !hasAccessibility {
-            _ = AXIsProcessTrustedWithOptions([
-                kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
-            ] as CFDictionary)
-        } else {
-            showPermissionsStatus()
-        }
+        showPermissionsStatus()
     }
 
     private func showPermissionsStatus() {
         let alert = NSAlert()
         alert.messageText = L("permissions.status.title")
-        alert.informativeText = L("permissions.status.allGranted")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: L("permissions.status.ok"))
+        alert.addButton(withTitle: L("permissions.status.close"))
 
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+        // Check permissions
+        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
 
-        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 45, width: 20, height: 20))
-        accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
+        // Build status text
+        var statusText = ""
+        if hasAccessibility {
+            statusText = L("permissions.status.allGranted")
+        } else {
+            statusText = L("permissions.status.clickToGrant")
+        }
+        alert.informativeText = statusText
+
+        let containerHeight: CGFloat = 110
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 320, height: containerHeight))
+
+        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 80, width: 20, height: 20))
+        accessibilityIcon.image = NSImage(named: hasAccessibility ? NSImage.statusAvailableName : NSImage.statusUnavailableName)
         containerView.addSubview(accessibilityIcon)
 
         let accessibilityLabel = NSTextField(labelWithString: L("permissions.status.accessibility"))
-        accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
+        accessibilityLabel.frame = NSRect(x: 35, y: 80, width: 170, height: 20)
         containerView.addSubview(accessibilityLabel)
 
-        let inputIcon = NSImageView(frame: NSRect(x: 10, y: 15, width: 20, height: 20))
+        if !hasAccessibility {
+            let accessibilityButton = NSButton(frame: NSRect(x: 210, y: 78, width: 100, height: 24))
+            accessibilityButton.title = L("permissions.status.grant")
+            accessibilityButton.bezelStyle = .rounded
+            accessibilityButton.target = self
+            accessibilityButton.action = #selector(grantAccessibilityPermission)
+            containerView.addSubview(accessibilityButton)
+        }
+
+        let inputIcon = NSImageView(frame: NSRect(x: 10, y: 50, width: 20, height: 20))
         inputIcon.image = NSImage(named: NSImage.statusAvailableName)
         containerView.addSubview(inputIcon)
 
         let inputLabel = NSTextField(labelWithString: L("permissions.status.inputMonitoring"))
-        inputLabel.frame = NSRect(x: 35, y: 15, width: 250, height: 20)
+        inputLabel.frame = NSRect(x: 35, y: 50, width: 275, height: 20)
         containerView.addSubview(inputLabel)
+
+        // Automation permission - show info text
+        let automationIcon = NSImageView(frame: NSRect(x: 10, y: 20, width: 20, height: 20))
+        automationIcon.image = NSImage(named: NSImage.statusNoneName)
+        containerView.addSubview(automationIcon)
+
+        let automationLabel = NSTextField(wrappingLabelWithString: L("permissions.status.automationHint"))
+        automationLabel.frame = NSRect(x: 35, y: 5, width: 275, height: 40)
+        automationLabel.font = .systemFont(ofSize: 12)
+        automationLabel.textColor = .secondaryLabelColor
+        containerView.addSubview(automationLabel)
 
         alert.accessoryView = containerView
         alert.runModal()
+    }
+
+    @objc private func grantAccessibilityPermission() {
+        _ = AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+        ] as CFDictionary)
     }
 
     @objc private func opacityChanged(_ sender: NSSlider) {

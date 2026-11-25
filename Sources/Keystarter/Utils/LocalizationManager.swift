@@ -200,6 +200,14 @@ final class LocalizationManager {
             "readlater.log.enable": "Enable Read Later log",
             "readlater.error.title": "Failed to save URL",
             "readlater.error.permission": "Please allow automation access in System Settings > Privacy & Security > Automation",
+            "readlater.error.noBrowser": "No supported browser is active",
+
+            // Automation Permission Dialog
+            "automation.permission.title": "Permission Required",
+            "automation.permission.howto": "Keystarter needs permission to control %@ to get the current URL.",
+            "automation.permission.grant": "Grant",
+            "automation.permission.adjust": "Adjust Permissions",
+            "automation.permission.retryHint": "Please try again after granting permission in the dialog.",
 
             // Menu Items
             "menu.about": "About Keystarter",
@@ -224,9 +232,16 @@ final class LocalizationManager {
             // Permissions Status
             "permissions.status.title": "Permission Status",
             "permissions.status.allGranted": "All required permissions have been granted:",
+            "permissions.status.clickToGrant": "Click buttons to grant permissions:",
             "permissions.status.ok": "OK",
+            "permissions.status.close": "Close",
+            "permissions.status.grant": "Grant",
             "permissions.status.accessibility": "Accessibility",
             "permissions.status.inputMonitoring": "Input Monitoring",
+            "permissions.status.automation": "Automation",
+            "permissions.status.automationHint": "Automation: Requested when using Read Later",
+            "permissions.status.openAutomationSettings": "Open Automation Settings...",
+            "permissions.status.resetAutomation": "Reset All Automation",
 
             // System Commands
             "command.sleep": "Sleep",
@@ -422,6 +437,14 @@ final class LocalizationManager {
             "readlater.log.enable": "启用稍后再看日志",
             "readlater.error.title": "收藏失败",
             "readlater.error.permission": "请在系统设置 > 隐私与安全性 > 自动化中授权",
+            "readlater.error.noBrowser": "当前没有支持的浏览器",
+
+            // Automation Permission Dialog
+            "automation.permission.title": "需要权限",
+            "automation.permission.howto": "Keystarter 需要授权控制 %@ 才能获取当前网址。",
+            "automation.permission.grant": "授权",
+            "automation.permission.adjust": "调整权限",
+            "automation.permission.retryHint": "请在授权对话框中允许后重试。",
 
             // Menu Items
             "menu.about": "关于 Keystarter",
@@ -446,9 +469,16 @@ final class LocalizationManager {
             // Permissions Status
             "permissions.status.title": "权限状态",
             "permissions.status.allGranted": "所有必需权限已授予：",
+            "permissions.status.clickToGrant": "点击按钮授权所需权限：",
             "permissions.status.ok": "确定",
+            "permissions.status.close": "关闭",
+            "permissions.status.grant": "授权",
             "permissions.status.accessibility": "辅助功能",
             "permissions.status.inputMonitoring": "输入监控",
+            "permissions.status.automation": "自动化",
+            "permissions.status.automationHint": "自动化：使用稍后阅读时自动请求",
+            "permissions.status.openAutomationSettings": "打开自动化设置...",
+            "permissions.status.resetAutomation": "重置所有自动化权限",
 
             // System Commands
             "command.sleep": "睡眠",
@@ -631,6 +661,14 @@ final class LocalizationManager {
             "readlater.log.enable": "啟用稍後再讀日誌",
             "readlater.error.title": "收藏失敗",
             "readlater.error.permission": "請在系統設定 > 隱私權與安全性 > 自動操作中授權",
+            "readlater.error.noBrowser": "目前沒有支援的瀏覽器",
+
+            // Automation Permission Dialog
+            "automation.permission.title": "需要權限",
+            "automation.permission.howto": "Keystarter 需要授權控制 %@ 才能取得目前網址。",
+            "automation.permission.grant": "授權",
+            "automation.permission.adjust": "調整權限",
+            "automation.permission.retryHint": "請在授權對話框中允許後重試。",
 
             // Menu Items
             "menu.about": "關於 Keystarter",
@@ -655,9 +693,16 @@ final class LocalizationManager {
             // Permissions Status
             "permissions.status.title": "權限狀態",
             "permissions.status.allGranted": "所有必需權限已授予：",
+            "permissions.status.clickToGrant": "點擊按鈕授權所需權限：",
             "permissions.status.ok": "確定",
+            "permissions.status.close": "關閉",
+            "permissions.status.grant": "授權",
             "permissions.status.accessibility": "輔助功能",
             "permissions.status.inputMonitoring": "輸入監控",
+            "permissions.status.automation": "自動化",
+            "permissions.status.automationHint": "自動化：使用稍後閱讀時自動請求",
+            "permissions.status.openAutomationSettings": "打開自動化設定...",
+            "permissions.status.resetAutomation": "重置所有自動化權限",
 
             // System Commands
             "command.sleep": "睡眠",

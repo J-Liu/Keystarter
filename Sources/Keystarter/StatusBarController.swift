@@ -10,6 +10,7 @@ final class StatusBarController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let menu: NSMenu
     private var currentTheme: String = "system"
+    private var browserGrantButtons: [NSButton: String] = [:]
 
     override init() {
         statusItem = NSStatusBar.system.statusItem(withLength: 15)  // Width of status bar icon
@@ -214,50 +215,150 @@ final class StatusBarController: NSObject, NSMenuDelegate {
 
     @objc private func checkPermissions() {
         (NSApp.delegate as? AppDelegate)?.hideLauncher()  // Hide launcher first
-
-        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
-
-        if !hasAccessibility {
-            // No permission, show system dialog
-            _ = AXIsProcessTrustedWithOptions([
-                kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
-            ] as CFDictionary)
-        } else {
-            // Has permission, show permission status
-            showPermissionsStatus()
-        }
+        showPermissionsStatus()
     }
 
     private func showPermissionsStatus() {
         let alert = NSAlert()
         alert.messageText = L("permissions.status.title")
-        alert.informativeText = L("permissions.status.allGranted")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: L("permissions.status.ok"))
+        alert.addButton(withTitle: L("permissions.status.close"))
 
-        // Create custom view to show permission list
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+        // Check permissions
+        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
+
+        // Check automation permissions for running browsers
+        let browserPermissions = PermissionManager.shared.checkAllBrowserAutomationPermissions()
+
+        // Build status text
+        var statusText = ""
+        if hasAccessibility && browserPermissions.contains(where: { $0.hasPermission }) {
+            statusText = L("permissions.status.allGranted")
+        } else if hasAccessibility {
+            statusText = L("permissions.status.clickToGrant")
+        } else {
+            statusText = L("permissions.status.clickToGrant")
+        }
+        alert.informativeText = statusText
+
+        // Calculate container height based on browser count
+        let baseHeight: CGFloat = 60
+        let browserHeight: CGFloat = 30
+        let containerHeight = baseHeight + CGFloat(browserPermissions.count) * browserHeight + 20
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: containerHeight))
 
         // Accessibility permission
-        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 45, width: 20, height: 20))
-        accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
+        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: containerHeight - 30, width: 20, height: 20))
+        accessibilityIcon.image = NSImage(named: hasAccessibility ? NSImage.statusAvailableName : NSImage.statusUnavailableName)
         containerView.addSubview(accessibilityIcon)
 
         let accessibilityLabel = NSTextField(labelWithString: L("permissions.status.accessibility"))
-        accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
+        accessibilityLabel.frame = NSRect(x: 35, y: containerHeight - 30, width: 170, height: 20)
         containerView.addSubview(accessibilityLabel)
 
-        // Input Monitoring permission
-        let inputIcon = NSImageView(frame: NSRect(x: 10, y: 15, width: 20, height: 20))
-        inputIcon.image = NSImage(named: NSImage.statusAvailableName)
-        containerView.addSubview(inputIcon)
+        if !hasAccessibility {
+            let accessibilityButton = NSButton(frame: NSRect(x: 270, y: containerHeight - 32, width: 100, height: 24))
+            accessibilityButton.title = L("permissions.status.grant")
+            accessibilityButton.bezelStyle = .rounded
+            accessibilityButton.target = self
+            accessibilityButton.action = #selector(grantAccessibilityPermission)
+            containerView.addSubview(accessibilityButton)
+        }
 
-        let inputLabel = NSTextField(labelWithString: L("permissions.status.inputMonitoring"))
-        inputLabel.frame = NSRect(x: 35, y: 15, width: 250, height: 20)
-        containerView.addSubview(inputLabel)
+        // Automation permissions header
+        let automationHeader = NSTextField(labelWithString: L("permissions.status.automation"))
+        automationHeader.frame = NSRect(x: 10, y: containerHeight - 55, width: 200, height: 20)
+        automationHeader.font = .boldSystemFont(ofSize: 12)
+        containerView.addSubview(automationHeader)
+
+        // Automation permission - show browser list
+        var yOffset = containerHeight - 80
+        for (name, hasPermission) in browserPermissions {
+            let browserIcon = NSImageView(frame: NSRect(x: 25, y: yOffset, width: 16, height: 16))
+            browserIcon.image = NSImage(named: hasPermission ? NSImage.statusAvailableName : NSImage.statusUnavailableName)
+            containerView.addSubview(browserIcon)
+
+            let browserLabel = NSTextField(labelWithString: name)
+            browserLabel.frame = NSRect(x: 45, y: yOffset, width: 150, height: 18)
+            containerView.addSubview(browserLabel)
+
+            if !hasPermission {
+                let grantButton = NSButton(frame: NSRect(x: 270, y: yOffset - 2, width: 100, height: 24))
+                grantButton.title = L("permissions.status.grant")
+                grantButton.bezelStyle = .rounded
+                grantButton.target = self
+                grantButton.action = #selector(grantBrowserAutomationPermission(_:))
+                browserGrantButtons[grantButton] = name
+                containerView.addSubview(grantButton)
+            }
+
+            yOffset -= 28
+        }
+
+        // Open Automation Settings button
+        let openSettingsButton = NSButton(frame: NSRect(x: 10, y: 5, width: 180, height: 24))
+        openSettingsButton.title = L("permissions.status.openAutomationSettings")
+        openSettingsButton.bezelStyle = .rounded
+        openSettingsButton.target = self
+        openSettingsButton.action = #selector(openAutomationSettings)
+        containerView.addSubview(openSettingsButton)
+
+        // Reset permissions button
+        let resetButton = NSButton(frame: NSRect(x: 200, y: 5, width: 170, height: 24))
+        resetButton.title = L("permissions.status.resetAutomation")
+        resetButton.bezelStyle = .rounded
+        resetButton.target = self
+        resetButton.action = #selector(resetAutomationPermissions)
+        containerView.addSubview(resetButton)
 
         alert.accessoryView = containerView
         alert.runModal()
+    }
+
+    @objc private func resetAutomationPermissions() {
+        PermissionManager.shared.resetAppleEventsPermission {
+            DispatchQueue.main.async {
+                // Refresh the permissions dialog after reset
+                self.showPermissionsStatus()
+            }
+        }
+    }
+
+    @objc private func grantBrowserAutomationPermission(_ sender: NSButton) {
+        guard let browserName = browserGrantButtons[sender] else { return }
+
+        // Get bundle ID for browser
+        let bundleId: String
+        switch browserName {
+        case "Safari":
+            bundleId = "com.apple.Safari"
+        case "Google Chrome":
+            bundleId = "com.google.Chrome"
+        case "Microsoft Edge":
+            bundleId = "com.microsoft.edgemac"
+        case "Arc":
+            bundleId = "company.thebrowser.Browser"
+        default:
+            return
+        }
+
+        // Request automation permission
+        PermissionManager.shared.requestAutomationPermission(for: bundleId) { [weak self] success in
+            DispatchQueue.main.async {
+                // Refresh the permissions dialog
+                self?.showPermissionsStatus()
+            }
+        }
+    }
+
+    @objc private func openAutomationSettings() {
+        PermissionManager.shared.openAutomationSettings()
+    }
+
+    @objc private func grantAccessibilityPermission() {
+        _ = AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+        ] as CFDictionary)
     }
 
     @objc private func openSettings() {

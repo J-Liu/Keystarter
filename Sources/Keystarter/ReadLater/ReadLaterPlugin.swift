@@ -42,6 +42,9 @@ final class ReadLaterPlugin: Plugin {
                     let autoDelete = UserDefaults.standard.object(forKey: "readlater.autoDelete") as? Bool ?? true
                     if autoDelete {
                         ReadLaterManager.shared.remove(url: item.url)
+                    } else {
+                        // Mark as opened to move to top
+                        ReadLaterManager.shared.markOpened(url: item.url)
                     }
                 }
             )

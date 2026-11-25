@@ -81,6 +81,63 @@ final class PermissionManager {
         }
     }
 
+    /// Reset AppleEvents permission using tccutil.
+    func resetAppleEventsPermission(completion: @escaping () -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+            // Only reset for this app, not all apps
+            process.arguments = ["reset", "AppleEvents", "com.jialiu.keystarter"]
+
+            var success = false
+            do {
+                try process.run()
+                process.waitUntilExit()
+                success = process.terminationStatus == 0
+            } catch {
+                // Ignore error
+            }
+
+            DispatchQueue.main.async {
+                // Log result
+                if LogSettings.shared.readlaterLogEnabled {
+                    LogSettings.write("[ReadLater] tccutil reset result: \(success)", to: LogSettings.shared.readlaterLogPath)
+                }
+                completion()
+            }
+        }
+    }
+
+    /// Request automation permission for a browser.
+    /// This will trigger the system authorization dialog.
+    func requestAutomationPermission(for bundleId: String, completion: @escaping (Bool) -> Void) {
+        guard let targetApp = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+            completion(false)
+            return
+        }
+
+        // Get the app name for AppleScript
+        let appName = targetApp.deletingPathExtension().lastPathComponent
+
+        // Execute AppleScript to trigger permission request
+        let script = "tell application \"\(appName)\" to get name"
+        var errorInfo: NSDictionary?
+        let appleScript = NSAppleScript(source: script)
+        let result = appleScript?.executeAndReturnError(&errorInfo)
+
+        if result != nil {
+            completion(true)
+        } else if let error = errorInfo, let errorMsg = error[NSAppleScript.errorMessage] as? String {
+            if errorMsg.contains("Not authorized") {
+                completion(false)
+            } else {
+                completion(false)
+            }
+        } else {
+            completion(false)
+        }
+    }
+
     /// Check if we have automation permission for a browser by trying a simple AppleScript.
     /// Returns nil if permission is granted, or the error message if denied.
     func checkBrowserAutomationPermission() -> String? {
@@ -96,5 +153,54 @@ final class PermissionManager {
             }
         }
         return nil
+    }
+
+    /// List of supported browsers for automation.
+    static let supportedBrowsers = [
+        (name: "Safari", bundleId: "com.apple.Safari"),
+        (name: "Google Chrome", bundleId: "com.google.Chrome"),
+        (name: "Microsoft Edge", bundleId: "com.microsoft.edgemac"),
+        (name: "Arc", bundleId: "company.thebrowser.Browser")
+    ]
+
+    /// Check automation permission status for each supported browser.
+    /// Only checks browsers that are currently running.
+    func checkAllBrowserAutomationPermissions() -> [(name: String, hasPermission: Bool)] {
+        var results: [(name: String, hasPermission: Bool)] = []
+
+        for browser in PermissionManager.supportedBrowsers {
+            // Only check if browser is running
+            let isRunning = NSRunningApplication.runningApplications(withBundleIdentifier: browser.bundleId).first != nil
+            if isRunning {
+                let hasPermission = checkAutomationPermission(for: browser.name)
+                results.append((name: browser.name, hasPermission: hasPermission))
+            }
+        }
+
+        return results
+    }
+
+    /// Check automation permission for a specific browser.
+    /// Returns true only if the AppleScript executed successfully without authorization error.
+    private func checkAutomationPermission(for browserName: String) -> Bool {
+        let script = "tell application \"\(browserName)\" to get name"
+        var errorInfo: NSDictionary?
+        let appleScript = NSAppleScript(source: script)
+        let result = appleScript?.executeAndReturnError(&errorInfo)
+
+        // Only return true if we got a valid result (app name) and no error
+        if let result = result, result.stringValue != nil, errorInfo == nil {
+            return true
+        }
+
+        // Check for authorization error
+        if let error = errorInfo, let errorMsg = error[NSAppleScript.errorMessage] as? String {
+            if errorMsg.contains("Not authorized") {
+                return false
+            }
+        }
+
+        // Any other error (app not running, etc.) - permission status unknown
+        return false
     }
 }

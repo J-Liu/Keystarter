@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusBarController: StatusBarController?
     private var settingsWindow: SettingsWindow?
     var isIndexReady = false
+    private var browserGrantButtons: [NSButton: String] = [:]
 
     // Hotkey key codes for tracking
     private var launcherKeyCode: UInt16 = 49
@@ -111,7 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             readlaterModifiers = NSEvent.ModifierFlags(rawValue: UInt(savedReadlaterModifiers))
         }
 
-        HotkeyManager.shared.register(keyCode: readlaterKeyCode, modifiers: readlaterModifiers) {
+        HotkeyManager.shared.register(keyCode: readlaterKeyCode, modifiers: readlaterModifiers) { [weak self] in
             if let result = ReadLaterManager.shared.getCurrentBrowserURL() {
                 ReadLaterManager.shared.add(url: result.url, title: result.title)
                 // Show confirmation notification
@@ -124,18 +125,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     UNUserNotificationCenter.current().add(request)
                 }
             } else {
-                // Show error notification
                 DispatchQueue.main.async {
-                    let content = UNMutableNotificationContent()
-                    content.title = L("readlater.error.title")
+                    // Check if it's a permission error
                     if let error = ReadLaterManager.shared.lastError, error.contains("Not authorized") {
-                        content.body = L("readlater.error.permission")
+                        self?.showAutomationPermissionDialog()
                     } else {
-                        content.body = ReadLaterManager.shared.lastError ?? "Unknown error"
+                        // Show other errors as notification
+                        let content = UNMutableNotificationContent()
+                        content.title = L("readlater.error.title")
+                        content.body = ReadLaterManager.shared.lastError ?? L("readlater.error.noBrowser")
+                        content.sound = .default
+                        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                        UNUserNotificationCenter.current().add(request)
                     }
-                    content.sound = .default
-                    let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-                    UNUserNotificationCenter.current().add(request)
                 }
             }
         }
@@ -342,50 +344,150 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkPermissionsFromMenu() {
         launcherWindow?.hide()  // Hide launcher first
-        
-        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
-
-        if !hasAccessibility {
-            // No permission, show system dialog
-            _ = AXIsProcessTrustedWithOptions([
-                kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
-            ] as CFDictionary)
-        } else {
-            // Has permission, show permission status
-            showPermissionsStatus()
-        }
+        showPermissionsStatus()
     }
-    
+
     private func showPermissionsStatus() {
         let alert = NSAlert()
         alert.messageText = L("permissions.status.title")
-        alert.informativeText = L("permissions.status.allGranted")
         alert.alertStyle = .informational
-        alert.addButton(withTitle: L("permissions.status.ok"))
+        alert.addButton(withTitle: L("permissions.status.close"))
 
-        // Create custom view to show permission list
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 80))
+        // Check permissions
+        let hasAccessibility = PermissionManager.shared.hasAccessibilityPermission()
+
+        // Check automation permissions for running browsers
+        let browserPermissions = PermissionManager.shared.checkAllBrowserAutomationPermissions()
+
+        // Build status text
+        var statusText = ""
+        if hasAccessibility && browserPermissions.contains(where: { $0.hasPermission }) {
+            statusText = L("permissions.status.allGranted")
+        } else if hasAccessibility {
+            statusText = L("permissions.status.clickToGrant")
+        } else {
+            statusText = L("permissions.status.clickToGrant")
+        }
+        alert.informativeText = statusText
+
+        // Calculate container height based on browser count
+        let baseHeight: CGFloat = 60
+        let browserHeight: CGFloat = 30
+        let containerHeight = baseHeight + CGFloat(browserPermissions.count) * browserHeight + 20
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 380, height: containerHeight))
 
         // Accessibility permission
-        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: 45, width: 20, height: 20))
-        accessibilityIcon.image = NSImage(named: NSImage.statusAvailableName)
+        let accessibilityIcon = NSImageView(frame: NSRect(x: 10, y: containerHeight - 30, width: 20, height: 20))
+        accessibilityIcon.image = NSImage(named: hasAccessibility ? NSImage.statusAvailableName : NSImage.statusUnavailableName)
         containerView.addSubview(accessibilityIcon)
 
         let accessibilityLabel = NSTextField(labelWithString: L("permissions.status.accessibility"))
-        accessibilityLabel.frame = NSRect(x: 35, y: 45, width: 250, height: 20)
+        accessibilityLabel.frame = NSRect(x: 35, y: containerHeight - 30, width: 170, height: 20)
         containerView.addSubview(accessibilityLabel)
 
-        // Input Monitoring permission
-        let inputIcon = NSImageView(frame: NSRect(x: 10, y: 15, width: 20, height: 20))
-        inputIcon.image = NSImage(named: NSImage.statusAvailableName)
-        containerView.addSubview(inputIcon)
+        if !hasAccessibility {
+            let accessibilityButton = NSButton(frame: NSRect(x: 270, y: containerHeight - 32, width: 100, height: 24))
+            accessibilityButton.title = L("permissions.status.grant")
+            accessibilityButton.bezelStyle = .rounded
+            accessibilityButton.target = self
+            accessibilityButton.action = #selector(grantAccessibilityPermission)
+            containerView.addSubview(accessibilityButton)
+        }
 
-        let inputLabel = NSTextField(labelWithString: L("permissions.status.inputMonitoring"))
-        inputLabel.frame = NSRect(x: 35, y: 15, width: 250, height: 20)
-        containerView.addSubview(inputLabel)
+        // Automation permissions header
+        let automationHeader = NSTextField(labelWithString: L("permissions.status.automation"))
+        automationHeader.frame = NSRect(x: 10, y: containerHeight - 55, width: 200, height: 20)
+        automationHeader.font = .boldSystemFont(ofSize: 12)
+        containerView.addSubview(automationHeader)
+
+        // Automation permission - show browser list
+        var yOffset = containerHeight - 80
+        for (name, hasPermission) in browserPermissions {
+            let browserIcon = NSImageView(frame: NSRect(x: 25, y: yOffset, width: 16, height: 16))
+            browserIcon.image = NSImage(named: hasPermission ? NSImage.statusAvailableName : NSImage.statusUnavailableName)
+            containerView.addSubview(browserIcon)
+
+            let browserLabel = NSTextField(labelWithString: name)
+            browserLabel.frame = NSRect(x: 45, y: yOffset, width: 150, height: 18)
+            containerView.addSubview(browserLabel)
+
+            if !hasPermission {
+                let grantButton = NSButton(frame: NSRect(x: 270, y: yOffset - 2, width: 100, height: 24))
+                grantButton.title = L("permissions.status.grant")
+                grantButton.bezelStyle = .rounded
+                grantButton.target = self
+                grantButton.action = #selector(grantBrowserAutomationPermission(_:))
+                browserGrantButtons[grantButton] = name
+                containerView.addSubview(grantButton)
+            }
+
+            yOffset -= 28
+        }
+
+        // Open Automation Settings button
+        let openSettingsButton = NSButton(frame: NSRect(x: 10, y: 5, width: 180, height: 24))
+        openSettingsButton.title = L("permissions.status.openAutomationSettings")
+        openSettingsButton.bezelStyle = .rounded
+        openSettingsButton.target = self
+        openSettingsButton.action = #selector(openAutomationSettings)
+        containerView.addSubview(openSettingsButton)
+
+        // Reset permissions button
+        let resetButton = NSButton(frame: NSRect(x: 200, y: 5, width: 170, height: 24))
+        resetButton.title = L("permissions.status.resetAutomation")
+        resetButton.bezelStyle = .rounded
+        resetButton.target = self
+        resetButton.action = #selector(resetAutomationPermissions)
+        containerView.addSubview(resetButton)
 
         alert.accessoryView = containerView
         alert.runModal()
+    }
+
+    @objc private func resetAutomationPermissions() {
+        PermissionManager.shared.resetAppleEventsPermission {
+            DispatchQueue.main.async {
+                // Refresh the permissions dialog after reset
+                self.showPermissionsStatus()
+            }
+        }
+    }
+
+    @objc private func grantBrowserAutomationPermission(_ sender: NSButton) {
+        guard let browserName = browserGrantButtons[sender] else { return }
+
+        // Get bundle ID for browser
+        let bundleId: String
+        switch browserName {
+        case "Safari":
+            bundleId = "com.apple.Safari"
+        case "Google Chrome":
+            bundleId = "com.google.Chrome"
+        case "Microsoft Edge":
+            bundleId = "com.microsoft.edgemac"
+        case "Arc":
+            bundleId = "company.thebrowser.Browser"
+        default:
+            return
+        }
+
+        // Request automation permission
+        PermissionManager.shared.requestAutomationPermission(for: bundleId) { [weak self] success in
+            DispatchQueue.main.async {
+                // Refresh the permissions dialog
+                self?.showPermissionsStatus()
+            }
+        }
+    }
+
+    @objc private func openAutomationSettings() {
+        PermissionManager.shared.openAutomationSettings()
+    }
+
+    @objc private func grantAccessibilityPermission() {
+        _ = AXIsProcessTrustedWithOptions([
+            kAXTrustedCheckOptionPrompt.takeRetainedValue(): true
+        ] as CFDictionary)
     }
 
     @objc private func closeWindow() {
@@ -418,6 +520,91 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setupStatusBar() {
         statusBarController = StatusBarController()
+    }
+
+    private func showAutomationPermissionDialog() {
+        // Get the frontmost browser
+        guard let frontmostApp = NSWorkspace.shared.frontmostApplication,
+              let bundleId = frontmostApp.bundleIdentifier else {
+            return
+        }
+
+        // Save the browser bundle ID for later use (after dialog, frontmost app will be Keystarter)
+        let savedBundleId = bundleId
+
+        // Find browser name
+        let browserName: String
+        switch bundleId {
+        case "com.apple.Safari":
+            browserName = "Safari"
+        case "com.google.Chrome":
+            browserName = "Google Chrome"
+        case "com.microsoft.edgemac":
+            browserName = "Microsoft Edge"
+        case "company.thebrowser.Browser":
+            browserName = "Arc"
+        default:
+            return
+        }
+
+        let alert = NSAlert()
+        alert.messageText = L("automation.permission.title")
+        alert.informativeText = String(format: L("automation.permission.howto"), browserName)
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: L("automation.permission.grant"))
+        alert.addButton(withTitle: L("automation.permission.adjust"))
+        alert.addButton(withTitle: L("permissions.status.close"))
+
+        let response = alert.runModal()
+
+        if response == .alertFirstButtonReturn {
+            // Grant: use osascript to trigger permission dialog (no reset)
+            if LogSettings.shared.readlaterLogEnabled {
+                LogSettings.write("[ReadLater] Attempting to get URL from \(savedBundleId) via osascript", to: LogSettings.shared.readlaterLogPath)
+            }
+
+            // Build AppleScript for the specific browser
+            let script: String
+            switch savedBundleId {
+            case "com.apple.Safari":
+                script = "tell application \"Safari\" to get {URL, name} of current tab of front window"
+            case "com.google.Chrome":
+                script = "tell application \"Google Chrome\" to get {URL, title} of active tab of front window"
+            case "com.microsoft.edgemac":
+                script = "tell application \"Microsoft Edge\" to get {URL, title} of active tab of front window"
+            case "company.thebrowser.Browser":
+                script = "tell application \"Arc\" to get {URL, title} of active tab of front window"
+            default:
+                return
+            }
+
+            ReadLaterManager.shared.runAppleScriptViaOSA(script: script) { result in
+                if let result = result {
+                    ReadLaterManager.shared.add(url: result.url, title: result.title)
+                    let content = UNMutableNotificationContent()
+                    content.title = L("readlater.saved")
+                    content.body = result.title
+                    content.sound = .default
+                    let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                    UNUserNotificationCenter.current().add(request)
+                } else {
+                    if let error = ReadLaterManager.shared.lastError, error.contains("Not authorized") {
+                        let content = UNMutableNotificationContent()
+                        content.title = L("readlater.error.title")
+                        content.body = L("automation.permission.retryHint")
+                        content.sound = .default
+                        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                        UNUserNotificationCenter.current().add(request)
+                    }
+                    if LogSettings.shared.readlaterLogEnabled {
+                        LogSettings.write("[ReadLater] osascript failed: \(ReadLaterManager.shared.lastError ?? "no error")", to: LogSettings.shared.readlaterLogPath)
+                    }
+                }
+            }
+        } else if response == .alertSecondButtonReturn {
+            // Adjust permissions: open System Settings
+            PermissionManager.shared.openAutomationSettings()
+        }
     }
 
     func showLauncher() {
