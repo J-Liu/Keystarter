@@ -243,6 +243,11 @@ final class ReadLaterManager {
                     return (url, title.isEmpty ? url : title)
                 }
             }
+        } else if let error = errorInfo {
+            // Log error for debugging
+            if let errorMsg = error[NSAppleScript.errorMessage] as? String {
+                print("[ReadLater] AppleScript error: \(errorMsg)")
+            }
         }
         return nil
     }
