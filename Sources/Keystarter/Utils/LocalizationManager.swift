@@ -197,6 +197,7 @@ final class LocalizationManager {
             "readlater.pluginDescription": "View and open saved URLs",
             "readlater.hotkey": "Hotkey:",
             "readlater.autoDelete": "Remove after opening",
+            "readlater.log.enable": "Enable Read Later log",
 
             // Menu Items
             "menu.about": "About Keystarter",
@@ -416,6 +417,7 @@ final class LocalizationManager {
             "readlater.pluginDescription": "查看并打开收藏的网址",
             "readlater.hotkey": "快捷键：",
             "readlater.autoDelete": "打开后删除",
+            "readlater.log.enable": "启用稍后再看日志",
 
             // Menu Items
             "menu.about": "关于 Keystarter",
@@ -622,6 +624,7 @@ final class LocalizationManager {
             "readlater.pluginDescription": "查看並開啟收藏的網址",
             "readlater.hotkey": "快速鍵：",
             "readlater.autoDelete": "開啟後刪除",
+            "readlater.log.enable": "啟用稍後再讀日誌",
 
             // Menu Items
             "menu.about": "關於 Keystarter",

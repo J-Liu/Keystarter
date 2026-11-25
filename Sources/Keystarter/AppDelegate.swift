@@ -123,9 +123,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
                     UNUserNotificationCenter.current().add(request)
                 }
-            } else {
-                // Debug: print when URL fetch fails
-                print("[ReadLater] Failed to get browser URL")
             }
         }
 

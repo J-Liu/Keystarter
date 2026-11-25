@@ -491,7 +491,30 @@ final class SettingsWindow: NSWindow, NSTabViewDelegate, NSTextFieldDelegate {
         autoDeleteCheckbox.state = autoDelete ? .on : .off
         stack.addArrangedSubview(makeRow(label: "", control: autoDeleteCheckbox))
 
+        // Section: Log
+        let logLabel = NSTextField(labelWithString: L("settings.log"))
+        logLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        stack.addArrangedSubview(logLabel)
+
+        // Row: Enable Read Later Log
+        let logCheckbox = NSButton(checkboxWithTitle: L("readlater.log.enable"), target: self, action: #selector(readlaterLogChanged(_:)))
+        logCheckbox.state = LogSettings.shared.readlaterLogEnabled ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: logCheckbox))
+
+        // Log path
+        let logPath = NSTextField()
+        logPath.stringValue = LogSettings.shared.readlaterLogPath
+        logPath.isEditable = false
+        logPath.isBezeled = true
+        logPath.bezelStyle = .roundedBezel
+        logPath.widthAnchor.constraint(equalToConstant: 400).isActive = true
+        stack.addArrangedSubview(makeRow(label: L("settings.log.path"), control: logPath))
+
         return wrapInTopAlignedContainer(stack)
+    }
+
+    @objc private func readlaterLogChanged(_ sender: NSButton) {
+        LogSettings.shared.readlaterLogEnabled = sender.state == .on
     }
 
     @objc private func readlaterHotkeyChanged(recorder: HotkeyRecorderButton) {

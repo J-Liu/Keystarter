@@ -55,6 +55,21 @@ final class LogSettings {
         set { UserDefaults.standard.set(newValue, forKey: "clipboard.log.path") }
     }
 
+    // MARK: - ReadLater Log
+
+    var readlaterLogEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "readlater.log.enabled") }
+        set { UserDefaults.standard.set(newValue, forKey: "readlater.log.enabled") }
+    }
+
+    var readlaterLogPath: String {
+        get {
+            let defaultPath = NSHomeDirectory() + "/Library/Application Support/Keystarter/readlater.log"
+            return UserDefaults.standard.string(forKey: "readlater.log.path") ?? defaultPath
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "readlater.log.path") }
+    }
+
     // MARK: - Helper
 
     /// Write log to file.

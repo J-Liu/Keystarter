@@ -22,6 +22,11 @@ final class ReadLaterManager {
         load()
     }
 
+    private func log(_ message: String) {
+        guard LogSettings.shared.readlaterLogEnabled else { return }
+        LogSettings.write("[ReadLater] \(message)", to: LogSettings.shared.readlaterLogPath)
+    }
+
     /// Load items from storage.
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
@@ -69,9 +74,11 @@ final class ReadLaterManager {
     func getCurrentBrowserURL() -> (url: String, title: String)? {
         // Get the frontmost application
         guard let frontmostApp = NSWorkspace.shared.frontmostApplication else {
+            log("No frontmost application")
             return nil
         }
         let bundleId = frontmostApp.bundleIdentifier ?? ""
+        log("Frontmost app: \(bundleId)")
 
         // Only try the browser that is currently frontmost
         switch bundleId {
@@ -86,6 +93,7 @@ final class ReadLaterManager {
         case "company.thebrowser.Browser":
             return getArcURL()
         default:
+            log("Not a supported browser: \(bundleId)")
             return nil
         }
     }
@@ -240,13 +248,14 @@ final class ReadLaterManager {
                 let url = urlDesc.stringValue ?? ""
                 let title = titleDesc.stringValue ?? ""
                 if !url.isEmpty {
+                    log("Got URL: \(url) title: \(title)")
                     return (url, title.isEmpty ? url : title)
                 }
             }
         } else if let error = errorInfo {
             // Log error for debugging
             if let errorMsg = error[NSAppleScript.errorMessage] as? String {
-                print("[ReadLater] AppleScript error: \(errorMsg)")
+                log("AppleScript error: \(errorMsg)")
             }
         }
         return nil
