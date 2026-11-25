@@ -17,6 +17,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var launcherModifiers: NSEvent.ModifierFlags = .command
     private var clipboardKeyCode: UInt16 = 9
     private var clipboardModifiers: NSEvent.ModifierFlags = [.command, .shift]
+    private var readlaterKeyCode: UInt16 = 1
+    private var readlaterModifiers: NSEvent.ModifierFlags = [.command, .option]
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenu()
@@ -99,8 +101,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Register read later hotkey (Cmd+Option+S = keyCode 1)
-        HotkeyManager.shared.register(keyCode: 1, modifiers: [.command, .option]) {
+        // Register read later hotkey with saved or default settings
+        let savedReadlaterKeyCode = UserDefaults.standard.integer(forKey: "readlater.hotkey.keyCode")
+        let savedReadlaterModifiers = UserDefaults.standard.integer(forKey: "readlater.hotkey.modifiers")
+        if savedReadlaterKeyCode > 0 {
+            readlaterKeyCode = UInt16(savedReadlaterKeyCode)
+        }
+        if savedReadlaterModifiers > 0 {
+            readlaterModifiers = NSEvent.ModifierFlags(rawValue: UInt(savedReadlaterModifiers))
+        }
+
+        HotkeyManager.shared.register(keyCode: readlaterKeyCode, modifiers: readlaterModifiers) {
             if let result = ReadLaterManager.shared.getCurrentBrowserURL() {
                 ReadLaterManager.shared.add(url: result.url, title: result.title)
                 // Show confirmation notification
@@ -161,6 +172,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         UserDefaults.standard.set(Int(keyCode), forKey: "clipboard.hotkey.keyCode")
         UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "clipboard.hotkey.modifiers")
+    }
+
+    /// Update the read later hotkey.
+    func updateReadLaterHotkey(keyCode: UInt16, modifiers: NSEvent.ModifierFlags) {
+        HotkeyManager.shared.unregister(keyCode: readlaterKeyCode)
+        readlaterKeyCode = keyCode
+        readlaterModifiers = modifiers
+        HotkeyManager.shared.register(keyCode: readlaterKeyCode, modifiers: readlaterModifiers) {
+            if let result = ReadLaterManager.shared.getCurrentBrowserURL() {
+                ReadLaterManager.shared.add(url: result.url, title: result.title)
+                DispatchQueue.main.async {
+                    let content = UNMutableNotificationContent()
+                    content.title = L("readlater.saved")
+                    content.body = result.title
+                    content.sound = .default
+                    let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                    UNUserNotificationCenter.current().add(request)
+                }
+            }
+        }
     }
 
     /// Update the status bar icon theme.

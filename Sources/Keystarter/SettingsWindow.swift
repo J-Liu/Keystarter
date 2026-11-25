@@ -20,10 +20,12 @@ final class SettingsWindow: NSWindow, NSTabViewDelegate, NSTextFieldDelegate {
     private var generalTab: NSView!
     private var monitorTab: NSView!
     private var clipboardTab: NSView!
+    private var readlaterTab: NSView!
     private var advancedTab: NSView!
     private var aboutTab: NSView!
     private var hotkeyRecorder: HotkeyRecorderButton!
     private var clipboardHotkeyRecorder: HotkeyRecorderButton!
+    private var readlaterHotkeyRecorder: HotkeyRecorderButton!
     private var maxCountField: NSTextField!
     private var maxDaysField: NSTextField!
     private var opacityValueLabel: NSTextField!
@@ -80,6 +82,12 @@ final class SettingsWindow: NSWindow, NSTabViewDelegate, NSTextFieldDelegate {
         clipboardItem.label = L("settings.tab.clipboard")
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
+
+        readlaterTab = createReadLaterTab()
+        let readlaterItem = NSTabViewItem(identifier: "readlater")
+        readlaterItem.label = L("settings.tab.readlater")
+        readlaterItem.view = readlaterTab
+        tabView.addTabViewItem(readlaterItem)
 
         advancedTab = createAdvancedTab()
         let advancedItem = NSTabViewItem(identifier: "advanced")
@@ -456,6 +464,53 @@ final class SettingsWindow: NSWindow, NSTabViewDelegate, NSTextFieldDelegate {
         return wrapInTopAlignedContainer(stack)
     }
 
+    // MARK: - Read Later Tab
+
+    private func createReadLaterTab() -> NSView {
+        let stack = makeVerticalStack()
+
+        // Row: Hotkey
+        readlaterHotkeyRecorder = HotkeyRecorderButton()
+        readlaterHotkeyRecorder.onKeyRecorded = { [weak self] recorder in
+            self?.readlaterHotkeyChanged(recorder: recorder)
+            recorder.window?.makeFirstResponder(nil)
+        }
+        let savedKeyCode = UserDefaults.standard.integer(forKey: "readlater.hotkey.keyCode")
+        let savedModifiers = UserDefaults.standard.integer(forKey: "readlater.hotkey.modifiers")
+        if savedKeyCode > 0 {
+            readlaterHotkeyRecorder.setShortcut(keyCode: UInt16(savedKeyCode), modifiers: NSEvent.ModifierFlags(rawValue: UInt(savedModifiers)))
+        } else {
+            // Default: Cmd+Option+S (keyCode 1)
+            readlaterHotkeyRecorder.setShortcut(keyCode: UInt16(1), modifiers: [.command, .option])
+        }
+        stack.addArrangedSubview(makeRow(label: L("readlater.hotkey"), control: readlaterHotkeyRecorder))
+
+        // Row: Auto delete after opening
+        let autoDelete = UserDefaults.standard.object(forKey: "readlater.autoDelete") as? Bool ?? true
+        let autoDeleteCheckbox = NSButton(checkboxWithTitle: L("readlater.autoDelete"), target: self, action: #selector(readlaterAutoDeleteChanged(_:)))
+        autoDeleteCheckbox.state = autoDelete ? .on : .off
+        stack.addArrangedSubview(makeRow(label: "", control: autoDeleteCheckbox))
+
+        return wrapInTopAlignedContainer(stack)
+    }
+
+    @objc private func readlaterHotkeyChanged(recorder: HotkeyRecorderButton) {
+        let keyCode = recorder.keyCode
+        let modifiers = recorder.modifiers
+
+        // Update hotkey
+        (NSApp.delegate as? AppDelegate)?.updateReadLaterHotkey(keyCode: keyCode, modifiers: modifiers)
+
+        // Save to UserDefaults
+        UserDefaults.standard.set(Int(keyCode), forKey: "readlater.hotkey.keyCode")
+        UserDefaults.standard.set(Int(modifiers.rawValue), forKey: "readlater.hotkey.modifiers")
+    }
+
+    @objc private func readlaterAutoDeleteChanged(_ sender: NSButton) {
+        let enabled = sender.state == .on
+        UserDefaults.standard.set(enabled, forKey: "readlater.autoDelete")
+    }
+
     // MARK: - Advanced Tab
 
     private func createAdvancedTab() -> NSView {
@@ -804,6 +859,12 @@ final class SettingsWindow: NSWindow, NSTabViewDelegate, NSTextFieldDelegate {
         clipboardItem.label = L("settings.tab.clipboard")
         clipboardItem.view = clipboardTab
         tabView.addTabViewItem(clipboardItem)
+
+        readlaterTab = createReadLaterTab()
+        let readlaterItem = NSTabViewItem(identifier: "readlater")
+        readlaterItem.label = L("settings.tab.readlater")
+        readlaterItem.view = readlaterTab
+        tabView.addTabViewItem(readlaterItem)
 
         advancedTab = createAdvancedTab()
         let advancedItem = NSTabViewItem(identifier: "advanced")

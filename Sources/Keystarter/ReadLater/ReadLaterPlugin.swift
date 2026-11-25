@@ -36,9 +36,13 @@ final class ReadLaterPlugin: Plugin {
                 icon: NSImage(systemSymbolName: "bookmark", accessibilityDescription: nil),
                 detailText: "\(item.title)\n\n\(item.url)\n\n\(L("readlater.saved")): \(formatDate(item.createdAt))",
                 action: {
-                    // Open URL and remove from list
+                    // Open URL
                     ReadLaterManager.shared.openURL(item.url)
-                    ReadLaterManager.shared.remove(url: item.url)
+                    // Remove from list if autoDelete is enabled (default: true)
+                    let autoDelete = UserDefaults.standard.object(forKey: "readlater.autoDelete") as? Bool ?? true
+                    if autoDelete {
+                        ReadLaterManager.shared.remove(url: item.url)
+                    }
                 }
             )
         }

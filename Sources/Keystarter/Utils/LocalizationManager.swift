@@ -81,6 +81,7 @@ final class LocalizationManager {
             "settings.tab.general": "General",
             "settings.tab.monitor": "Monitor",
             "settings.tab.clipboard": "Clipboard",
+            "settings.tab.readlater": "Read Later",
             "settings.tab.index": "Index",
             "settings.tab.contentIndex": "Content Index",
             "settings.tab.advanced": "Advanced",
@@ -194,6 +195,8 @@ final class LocalizationManager {
             "readlater.empty.hint": "Press Cmd+Option+S to save current browser tab",
             "readlater.saved": "Saved",
             "readlater.pluginDescription": "View and open saved URLs",
+            "readlater.hotkey": "Hotkey:",
+            "readlater.autoDelete": "Remove after opening",
 
             // Menu Items
             "menu.about": "About Keystarter",
@@ -304,6 +307,7 @@ final class LocalizationManager {
             "settings.tab.index": "索引",
             "settings.tab.contentIndex": "内容索引",
             "settings.tab.advanced": "高级",
+            "settings.tab.readlater": "稍后再看",
             "settings.tab.about": "关于",
 
             // General Tab
@@ -410,6 +414,8 @@ final class LocalizationManager {
             "readlater.empty.hint": "按 Cmd+Option+S 收藏当前浏览器标签页",
             "readlater.saved": "已收藏",
             "readlater.pluginDescription": "查看并打开收藏的网址",
+            "readlater.hotkey": "快捷键：",
+            "readlater.autoDelete": "打开后删除",
 
             // Menu Items
             "menu.about": "关于 Keystarter",
@@ -520,6 +526,7 @@ final class LocalizationManager {
             "settings.tab.index": "索引",
             "settings.tab.contentIndex": "內容索引",
             "settings.tab.advanced": "進階",
+            "settings.tab.readlater": "稍後再讀",
             "settings.tab.about": "關於",
 
             // General Tab
@@ -613,6 +620,8 @@ final class LocalizationManager {
             "readlater.empty.hint": "按 Cmd+Option+S 收藏目前瀏覽器分頁",
             "readlater.saved": "已收藏",
             "readlater.pluginDescription": "查看並開啟收藏的網址",
+            "readlater.hotkey": "快速鍵：",
+            "readlater.autoDelete": "開啟後刪除",
 
             // Menu Items
             "menu.about": "關於 Keystarter",
