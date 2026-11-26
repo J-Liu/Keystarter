@@ -15,6 +15,7 @@ I use it every day. It combines three things I need in the menu bar: an app laun
 - **App launcher** — `Cmd+Space` to summon, type to filter, Enter to launch
 - **Status bar monitor** — Real-time CPU, GPU, memory, disk, network, and sensor (temperature/fan/power) stats in the menu bar
 - **Clipboard history** — `Cmd+Shift+V` opens a grouped panel at the cursor, select to paste
+- **Read later** — `Cmd+Option+S` saves the current browser tab, `rl` in launcher to view and open saved URLs
 - **Dictionary lookup** — `dict <word>` queries the macOS system dictionary directly in the launcher
 - **Translation** — `tr <text>` translates without opening another app
 - **Calculator** — Math expressions with functions: `sin(pi/2)`, `ln(e)`, `sqrt(16)`, etc.
@@ -61,6 +62,8 @@ Requires Xcode command line tools and macOS 13+.
 |--------|----------|
 | Open launcher | `Cmd+Space` |
 | Open clipboard history | `Cmd+Shift+V` |
+| Save current browser tab | `Cmd+Option+S` |
+| View saved URLs | `rl` or `readlater` in launcher |
 | Launch selected app | `Enter` |
 | Close panel | `Esc` |
 | Dictionary lookup | `dict <word>` |
@@ -76,6 +79,7 @@ Requires Xcode command line tools and macOS 13+.
 - [x] File search via Spotlight
 - [x] Auto-update via Sparkle (silent background check, prompts only when update found)
 - [x] Power management (prevent sleep)
+- [x] Read later (save and open browser URLs)
 - [ ] Alfred workflow compatibility (implemented, untested)
 
 ## License
